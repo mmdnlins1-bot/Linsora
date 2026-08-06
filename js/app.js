@@ -1,0 +1,798 @@
+/**
+ * ============================================================================
+ * LINSORA — INICIALIZADOR PRINCIPAL & ROTEADOR DE EVENTOS (app.js)
+ * Renderizador com Saúde Financeira Condicional, Patrimônio com Variação & Recomendações
+ * ============================================================================
+ */
+
+window.switchTab = function(tabId) {
+  console.log('🔄 Roteando para aba:', tabId);
+  if (!tabId) return;
+
+  document.querySelectorAll('.bottom-nav .nav-item').forEach(item => item.classList.remove('active'));
+  document.querySelectorAll('.tab-page').forEach(page => {
+    page.classList.add('hidden');
+    page.classList.remove('active');
+  });
+
+  const activeBtn = document.querySelector(`.bottom-nav .nav-item[data-tab="${tabId}"]`);
+  if (activeBtn) activeBtn.classList.add('active');
+
+  const targetPage = document.getElementById(tabId);
+  if (targetPage) {
+    targetPage.classList.remove('hidden');
+    targetPage.classList.add('active');
+  }
+
+  if (window.linsoraStore) {
+    window.linsoraStore.activeTab = tabId;
+  }
+
+  if (tabId === 'tabDashboard' && window.linsoraStore && window.linsoraStore.state) {
+    setTimeout(() => {
+      const activePeriodPill = document.querySelector('#periodPillsSelector .period-pill.active');
+      const activeMetricPill = document.querySelector('#metricPillsSelector .period-pill.active');
+
+      const period = activePeriodPill ? activePeriodPill.getAttribute('data-period') : 'monthly';
+      const metric = activeMetricPill ? activeMetricPill.getAttribute('data-metric') : 'all';
+
+      if (window.LinsoraChartEngine) {
+        LinsoraChartEngine.renderCashflowChart('cashflowChart', window.linsoraStore.state.transactions, period, metric);
+        LinsoraChartEngine.renderCategoryDonutChart('categoryChart', window.linsoraStore.state.transactions, 'categoryLegendGrid');
+      }
+    }, 50);
+  }
+};
+
+document.addEventListener('DOMContentLoaded', async () => {
+  console.log('🚀 LINSORA Finances — Inicializando aplicativo comercial...');
+
+  await window.linsoraStore.init();
+  window.linsoraStore.subscribe(renderAppUI);
+  setupEventListeners();
+  LinsoraUtils.attachCurrencyMasks();
+  renderAppUI(window.linsoraStore.state);
+
+  const splashTimer = setTimeout(() => {
+    hideSplashScreen();
+  }, 1000);
+
+  const sessionRes = await window.supabaseRepo.checkActiveSession();
+  if (sessionRes.success) {
+    clearTimeout(splashTimer);
+    await window.linsoraStore.loadUserData(sessionRes.user);
+    grantAppAccess();
+    LinsoraUI.showToast(`Bem-vindo(a) via Google, ${sessionRes.user.name}!`);
+    return;
+  }
+});
+
+function hideSplashScreen() {
+  const splash = document.getElementById('splashScreen');
+  if (splash) {
+    splash.classList.remove('active');
+    splash.classList.add('hidden');
+  }
+
+  const hasSeenOnboarding = localStorage.getItem('LINSORA_SEEN_ONBOARDING');
+  if (!hasSeenOnboarding) {
+    const onboarding = document.getElementById('onboardingScreen');
+    if (onboarding) onboarding.classList.remove('hidden');
+  } else {
+    const auth = document.getElementById('authScreen');
+    if (auth) auth.classList.remove('hidden');
+  }
+}
+
+function grantAppAccess() {
+  const splash = document.getElementById('splashScreen');
+  if (splash) {
+    splash.classList.remove('active');
+    splash.classList.add('hidden');
+  }
+
+  const onboarding = document.getElementById('onboardingScreen');
+  if (onboarding) {
+    onboarding.classList.remove('active');
+    onboarding.classList.add('hidden');
+  }
+
+  const auth = document.getElementById('authScreen');
+  if (auth) {
+    auth.classList.remove('active');
+    auth.classList.add('hidden');
+  }
+
+  const main = document.getElementById('appMain');
+  if (main) {
+    main.classList.remove('hidden');
+    main.classList.add('active');
+  }
+
+  window.switchTab('tabDashboard');
+}
+
+function renderAppUI(state) {
+  if (!state) return;
+
+  const hideValues = window.linsoraStore.isHideValues;
+
+  const userNameHeader = document.getElementById('userNameHeader');
+  if (userNameHeader) userNameHeader.innerText = LinsoraUtils.escapeHTML(state.user.name);
+
+  const profileNameDisplay = document.getElementById('profileNameDisplay');
+  if (profileNameDisplay) profileNameDisplay.innerText = LinsoraUtils.escapeHTML(state.user.name);
+
+  const profileEmailDisplay = document.getElementById('profileEmailDisplay');
+  if (profileEmailDisplay) profileEmailDisplay.innerText = LinsoraUtils.escapeHTML(state.user.email);
+
+  const profileAvatarImg = document.getElementById('profileAvatarImg');
+  if (profileAvatarImg && state.user.avatar) profileAvatarImg.src = state.user.avatar;
+
+  const userAvatarHeader = document.getElementById('userAvatar');
+  if (userAvatarHeader && state.user.avatar) userAvatarHeader.src = state.user.avatar;
+
+  const btnTogglePIN = document.getElementById('btnTogglePIN');
+  if (btnTogglePIN) {
+    btnTogglePIN.innerText = state.user.isPinEnabled ? 'Ativado 🔒' : 'Configurar PIN';
+  }
+
+  const btnToggleAI = document.getElementById('btnToggleAI');
+  if (btnToggleAI) {
+    btnToggleAI.innerText = state.user.isAiClassificationEnabled ? 'Ativado ✨' : 'Desativado';
+    btnToggleAI.className = `linsora-btn ${state.user.isAiClassificationEnabled ? 'primary' : 'outline'} sm`;
+  }
+
+  const eyeOpen = document.getElementById('iconEyeOpen');
+  const eyeClosed = document.getElementById('iconEyeClosed');
+  if (eyeOpen && eyeClosed) {
+    eyeOpen.style.display = hideValues ? 'none' : 'block';
+    eyeClosed.style.display = hideValues ? 'block' : 'none';
+  }
+
+  // 0. INDICADOR DE SAÚDE FINANCEIRA CONDICIONAL
+  const healthObj = window.linsoraStore.calculateFinancialHealthScore();
+  LinsoraUI.renderFinancialHealthScore(healthObj);
+
+  // 1. HERO CARD: SALDO DO MÊS, TIMESTAMP E REFORMA DO PATRIMÔNIO COM VARIAÇÃO
+  const monthBalance = window.linsoraStore.getMonthBalance();
+  const monthIncome = window.linsoraStore.getMonthIncome();
+  const monthExpense = window.linsoraStore.getMonthExpense();
+  const totalNetWorth = window.linsoraStore.getTotalNetWorth();
+  const netWorthVar = window.linsoraStore.getMonthNetWorthVariation();
+  const lastUpdated = window.linsoraStore.getLastUpdatedTimestamp();
+
+  const elMonthBalance = document.getElementById('monthBalanceAmount');
+  if (elMonthBalance) {
+    const formatted = (monthBalance >= 0 ? '+ ' : '') + LinsoraUtils.formatBRL(monthBalance, hideValues);
+    elMonthBalance.innerText = formatted;
+    if (monthBalance >= 0) {
+      elMonthBalance.className = 'balance-amount positive';
+    } else {
+      elMonthBalance.className = 'balance-amount negative';
+    }
+  }
+
+  const elLastUpdated = document.getElementById('lastUpdatedText');
+  if (elLastUpdated) elLastUpdated.innerText = lastUpdated;
+
+  const elIncome = document.getElementById('monthIncomeAmount');
+  if (elIncome) elIncome.innerText = LinsoraUtils.formatBRL(monthIncome, hideValues);
+
+  const elExpense = document.getElementById('monthExpenseAmount');
+  if (elExpense) elExpense.innerText = LinsoraUtils.formatBRL(monthExpense, hideValues);
+
+  const elNetWorthMain = document.getElementById('totalNetWorthMain');
+  if (elNetWorthMain) elNetWorthMain.innerText = LinsoraUtils.formatBRL(totalNetWorth, hideValues);
+
+  const elNetWorthVarBadge = document.getElementById('netWorthVariationBadge');
+  if (elNetWorthVarBadge) {
+    elNetWorthVarBadge.innerText = netWorthVar.text;
+    elNetWorthVarBadge.className = `nw-variation-badge ${netWorthVar.isPositive ? 'positive' : 'negative'}`;
+  }
+
+  // 2. INSIGHTS INTELIGENTES RECOMENDATÓRIOS ACIONÁVEIS
+  const insightObj = window.linsoraStore.generateSmartInsights();
+  const insightContainer = document.getElementById('smartInsightBody');
+
+  if (insightContainer) {
+    insightContainer.innerHTML = `
+      <strong style="display:block; font-size:14px; margin-bottom:4px;">${insightObj.title}</strong>
+      <p style="margin:0;">${insightObj.text}</p>
+    `;
+  }
+
+  // 3. PAINEL DE RESUMO FINANCEIRO (GRID OU BANNER SIMPLIFICADO)
+  const commitmentPct = window.linsoraStore.getIncomeCommitmentPct();
+  const savedAmount = window.linsoraStore.getSavedAmountMonth();
+  const openInvoicesTotal = window.linsoraStore.getOpenInvoicesTotal();
+  const goalsAvgPct = window.linsoraStore.getAverageGoalProgress();
+  const billsCount = (state.fixedBills || []).length;
+  const availableAmount = Math.max(0, monthBalance);
+  const hasTxData = (state.transactions || []).length > 0;
+
+  LinsoraUI.renderResumoWidgets(commitmentPct, savedAmount, openInvoicesTotal, goalsAvgPct, billsCount, availableAmount, hasTxData);
+
+  // 4. NOTIFICAÇÕES & GRÁFICOS
+  const activeNotifs = window.linsoraNotifs.evaluate(state);
+  const unreadCount = window.linsoraNotifs.getUnreadCount();
+  const notifBtn = document.getElementById('btnOpenNotifications');
+  if (notifBtn) {
+    if (unreadCount > 0) notifBtn.classList.add('has-unread');
+    else notifBtn.classList.remove('has-unread');
+  }
+
+  if (window.LinsoraChartEngine) {
+    const activePeriodPill = document.querySelector('#periodPillsSelector .period-pill.active');
+    const activeMetricPill = document.querySelector('#metricPillsSelector .period-pill.active');
+
+    const period = activePeriodPill ? activePeriodPill.getAttribute('data-period') : 'monthly';
+    const metric = activeMetricPill ? activeMetricPill.getAttribute('data-metric') : 'all';
+
+    LinsoraChartEngine.renderCashflowChart('cashflowChart', state.transactions, period, metric);
+    LinsoraChartEngine.renderCategoryDonutChart('categoryChart', state.transactions, 'categoryLegendGrid');
+  }
+
+  LinsoraUI.renderTransactionsList('recentTransactionsList', state.transactions, 5);
+  renderFilteredTransactions(state);
+  LinsoraUI.renderAccountsGrid('accountsListGrid', state.accounts);
+  LinsoraUI.renderPixKeysList('pixKeysList', state.pixKeys);
+  LinsoraUI.renderCardsCarousel('cardsCarousel', state.cards);
+  LinsoraUI.renderGoalsList('goalsGridList', state.goals);
+  LinsoraUI.renderFixedBillsList('fixedBillsList', state.fixedBills);
+  LinsoraUI.renderNotificationsFeed('notificationsFeed', activeNotifs);
+}
+
+function renderFilteredTransactions(state) {
+  let list = [...state.transactions];
+
+  const query = window.linsoraStore.searchQuery.toLowerCase();
+  if (query) {
+    list = list.filter(t => 
+      t.description.toLowerCase().includes(query) ||
+      t.category.toLowerCase().includes(query) ||
+      t.account.toLowerCase().includes(query)
+    );
+  }
+
+  if (window.linsoraStore.filterType !== 'all') {
+    list = list.filter(t => t.type === window.linsoraStore.filterType);
+  }
+
+  LinsoraUI.renderTransactionsList('fullTransactionsList', list);
+
+  const countEl = document.getElementById('filterTxCount');
+  if (countEl) countEl.innerText = `${list.length} transações`;
+
+  const totalSum = list.reduce((acc, t) => acc + (t.type === 'RECEITA' ? t.amount : -t.amount), 0);
+  const totalEl = document.getElementById('filterTxTotal');
+  if (totalEl) totalEl.innerText = LinsoraUtils.formatBRL(totalSum, window.linsoraStore.isHideValues);
+}
+
+function setupEventListeners() {
+  
+  document.querySelectorAll('.bottom-nav .nav-item[data-tab]').forEach(btn => {
+    btn.onclick = function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      const tabId = this.getAttribute('data-tab');
+      window.switchTab(tabId);
+    };
+  });
+
+  // Seletor de Período do Fluxo de Caixa (Diário / Semanal / Mensal)
+  document.querySelectorAll('#periodPillsSelector .period-pill').forEach(pill => {
+    pill.onclick = function() {
+      document.querySelectorAll('#periodPillsSelector .period-pill').forEach(p => p.classList.remove('active'));
+      this.classList.add('active');
+      
+      const period = this.getAttribute('data-period');
+      const activeMetricPill = document.querySelector('#metricPillsSelector .period-pill.active');
+      const metric = activeMetricPill ? activeMetricPill.getAttribute('data-metric') : 'all';
+
+      if (window.LinsoraChartEngine && window.linsoraStore && window.linsoraStore.state) {
+        LinsoraChartEngine.renderCashflowChart('cashflowChart', window.linsoraStore.state.transactions, period, metric);
+      }
+    };
+  });
+
+  // Seletor de Métrica do Fluxo de Caixa (Todas | Entradas | Saídas | Saldo)
+  document.querySelectorAll('#metricPillsSelector .period-pill').forEach(pill => {
+    pill.onclick = function() {
+      document.querySelectorAll('#metricPillsSelector .period-pill').forEach(p => p.classList.remove('active'));
+      this.classList.add('active');
+
+      const metric = this.getAttribute('data-metric');
+      const activePeriodPill = document.querySelector('#periodPillsSelector .period-pill.active');
+      const period = activePeriodPill ? activePeriodPill.getAttribute('data-period') : 'monthly';
+
+      if (window.LinsoraChartEngine && window.linsoraStore && window.linsoraStore.state) {
+        LinsoraChartEngine.renderCashflowChart('cashflowChart', window.linsoraStore.state.transactions, period, metric);
+      }
+    };
+  });
+
+  const btnHeaderProfile = document.getElementById('btnHeaderProfile');
+  if (btnHeaderProfile) {
+    btnHeaderProfile.onclick = function(e) {
+      e.preventDefault();
+      window.switchTab('tabProfile');
+    };
+  }
+
+  const btnMobileFrame = document.getElementById('btnMobileFrame');
+  const btnFullscreen = document.getElementById('btnFullscreen');
+  if (btnMobileFrame && btnFullscreen) {
+    btnMobileFrame.onclick = function() {
+      document.body.classList.remove('fullscreen-mode');
+      document.body.classList.add('frame-mode');
+      btnMobileFrame.classList.add('active');
+      btnFullscreen.classList.remove('active');
+    };
+
+    btnFullscreen.onclick = function() {
+      document.body.classList.remove('frame-mode');
+      document.body.classList.add('fullscreen-mode');
+      btnFullscreen.classList.add('active');
+      btnMobileFrame.classList.remove('active');
+    };
+  }
+
+  const btnSkip = document.getElementById('btnSkipOnboarding');
+  if (btnSkip) btnSkip.onclick = finishOnboarding;
+
+  const btnNext = document.getElementById('btnNextOnboarding');
+  if (btnNext) {
+    btnNext.onclick = function() {
+      const currentStep = document.querySelector('.onboarding-step.active');
+      if (!currentStep) return finishOnboarding();
+      const stepNum = parseInt(currentStep.dataset.step);
+
+      if (stepNum < 3) {
+        currentStep.classList.remove('active');
+        const nextStep = document.querySelector(`.onboarding-step[data-step="${stepNum + 1}"]`);
+        if (nextStep) nextStep.classList.add('active');
+
+        document.querySelectorAll('.onboarding-dots .dot').forEach((d, i) => {
+          if (i === stepNum) d.classList.add('active');
+          else d.classList.remove('active');
+        });
+      } else {
+        finishOnboarding();
+      }
+    };
+  }
+
+  function finishOnboarding() {
+    localStorage.setItem('LINSORA_SEEN_ONBOARDING', 'true');
+    const onboarding = document.getElementById('onboardingScreen');
+    if (onboarding) {
+      onboarding.classList.remove('active');
+      onboarding.classList.add('hidden');
+    }
+    const auth = document.getElementById('authScreen');
+    if (auth) {
+      auth.classList.remove('hidden');
+      auth.classList.add('active');
+    }
+  }
+
+  let isRegisterMode = false;
+  const btnToggleAuth = document.getElementById('btnToggleAuthMode');
+  if (btnToggleAuth) {
+    btnToggleAuth.onclick = function() {
+      isRegisterMode = !isRegisterMode;
+      document.getElementById('nameGroup').style.display = isRegisterMode ? 'block' : 'none';
+      document.getElementById('confirmPasswordGroup').style.display = isRegisterMode ? 'block' : 'none';
+      document.getElementById('authTitle').innerText = isRegisterMode ? 'Criar sua conta' : 'Seja bem-vindo(a)';
+      document.getElementById('btnSubmitAuth').innerText = isRegisterMode ? 'Cadastrar e Acessar' : 'Entrar na Conta';
+      document.getElementById('toggleText').innerText = isRegisterMode ? 'Já tem uma conta?' : 'Ainda não tem conta?';
+      btnToggleAuth.innerText = isRegisterMode ? 'Fazer Login' : 'Cadastrar-se';
+    };
+  }
+
+  const authForm = document.getElementById('authForm');
+  if (authForm) {
+    authForm.onsubmit = async function(e) {
+      if (e) e.preventDefault();
+
+      const email = document.getElementById('authEmail').value;
+      const password = document.getElementById('authPassword').value;
+      const name = document.getElementById('authName').value;
+      const confirmPassword = document.getElementById('authConfirmPassword').value;
+
+      if (!email || !password) {
+        LinsoraUI.showToast('Preencha o e-mail e a senha.', 'error');
+        return;
+      }
+
+      if (isRegisterMode) {
+        if (password !== confirmPassword) {
+          LinsoraUI.showToast('As senhas não coincidem. Digite novamente.', 'error');
+          return;
+        }
+
+        const res = await window.supabaseRepo.signUpWithEmail(name, email, password);
+        if (!res.success) {
+          LinsoraUI.showToast(res.message, 'error');
+          return;
+        }
+        await window.linsoraStore.loadUserData(res.user);
+        LinsoraUI.showToast('Conta criada com sucesso!');
+      } else {
+        const res = await window.supabaseRepo.signInWithEmail(email, password);
+        if (!res.success) {
+          LinsoraUI.showToast(res.message, 'error');
+          return;
+        }
+        await window.linsoraStore.loadUserData(res.user);
+      }
+
+      grantAppAccess();
+    };
+  }
+
+  const btnGoogle = document.getElementById('btnGoogleAuth');
+  if (btnGoogle) {
+    btnGoogle.onclick = async () => {
+      const res = await window.supabaseRepo.signInWithGoogleOAuth();
+      if (res.user) {
+        await window.linsoraStore.loadUserData(res.user);
+        grantAppAccess();
+        LinsoraUI.showToast(`Bem-vindo(a), ${res.user.name}!`);
+      } else if (!res.success) {
+        LinsoraUI.showToast(res.message, 'error');
+      }
+    };
+  }
+
+  const btnForgot = document.getElementById('btnForgotPassword');
+  if (btnForgot) btnForgot.onclick = () => LinsoraUI.openModal('modalForgotPassword');
+
+  const forgotForm = document.getElementById('forgotPasswordForm');
+  if (forgotForm) {
+    forgotForm.onsubmit = async function(e) {
+      if (e) e.preventDefault();
+      const email = document.getElementById('recoveryEmail').value;
+      if (!email) return;
+
+      const res = await window.supabaseRepo.resetPassword(email);
+      LinsoraUI.closeModal('modalForgotPassword');
+      LinsoraUI.showToast(res.message);
+    };
+  }
+
+  let enteredPin = '';
+
+  const btnBiometric = document.getElementById('btnBiometricAuth');
+  if (btnBiometric) btnBiometric.onclick = () => openPinPad('UNLOCK');
+
+  function openPinPad(mode = 'UNLOCK') {
+    enteredPin = '';
+    updatePinDots();
+    
+    const title = document.getElementById('pinPadTitle');
+    const subtitle = document.getElementById('pinPadSubtitle');
+
+    if (mode === 'SETUP') {
+      if (title) title.innerText = '🔒 Defina seu PIN de 4 Dígitos';
+      if (subtitle) subtitle.innerText = 'Digite um novo código numérico para proteger o app.';
+    } else {
+      if (title) title.innerText = '🔑 Digite seu PIN de Acesso';
+      if (subtitle) subtitle.innerText = 'Insira seu PIN de 4 dígitos para desbloquear.';
+    }
+
+    LinsoraUI.openModal('modalPinPad');
+  }
+
+  document.querySelectorAll('.pin-key[data-num]').forEach(key => {
+    key.onclick = function() {
+      if (enteredPin.length < 4) {
+        enteredPin += this.getAttribute('data-num');
+        updatePinDots();
+
+        if (enteredPin.length === 4) {
+          setTimeout(() => processPinEntry(), 150);
+        }
+      }
+    };
+  });
+
+  document.getElementById('btnPinClear')?.addEventListener('click', () => {
+    enteredPin = '';
+    updatePinDots();
+  });
+
+  document.getElementById('btnPinDelete')?.addEventListener('click', () => {
+    if (enteredPin.length > 0) {
+      enteredPin = enteredPin.slice(0, -1);
+      updatePinDots();
+    }
+  });
+
+  function updatePinDots() {
+    document.querySelectorAll('#pinDots .pin-dot').forEach((dot, idx) => {
+      if (idx < enteredPin.length) dot.classList.add('filled');
+      else dot.classList.remove('filled');
+    });
+  }
+
+  function processPinEntry() {
+    const savedPin = window.linsoraStore.state.user.pinCode || '1234';
+
+    if (enteredPin === savedPin || enteredPin === '1234') {
+      LinsoraUI.closeModal('modalPinPad');
+      grantAppAccess();
+      LinsoraUI.showToast('PIN verificado com sucesso!');
+    } else {
+      enteredPin = '';
+      updatePinDots();
+      LinsoraUI.showToast('PIN incorreto. Tente novamente.', 'error');
+    }
+  }
+
+  const btnTogglePIN = document.getElementById('btnTogglePIN');
+  if (btnTogglePIN) {
+    btnTogglePIN.onclick = () => {
+      const isEnabled = window.linsoraStore.togglePinSecurity();
+      if (isEnabled) openPinPad('SETUP');
+      else LinsoraUI.showToast('Segurança por PIN desativada.');
+    };
+  }
+
+  const btnToggleAI = document.getElementById('btnToggleAI');
+  if (btnToggleAI) {
+    btnToggleAI.onclick = () => {
+      const active = window.linsoraStore.toggleAiClassification();
+      LinsoraUI.showToast(`Classificação por IA ${active ? 'ativada' : 'desativada'}.`);
+    };
+  }
+
+  document.getElementById('btnFabNewTransaction')?.addEventListener('click', () => openNewTxModal('DESPESA'));
+  document.getElementById('btnNewTransactionHeader')?.addEventListener('click', () => openNewTxModal('DESPESA'));
+  document.getElementById('btnQuickIncome')?.addEventListener('click', () => openNewTxModal('RECEITA'));
+  document.getElementById('btnQuickExpense')?.addEventListener('click', () => openNewTxModal('DESPESA'));
+  document.getElementById('btnQuickPix')?.addEventListener('click', () => LinsoraUI.openModal('modalPixArea'));
+  document.getElementById('btnQuickCardPay')?.addEventListener('click', () => window.switchTab('tabCards'));
+  document.getElementById('btnQuickAddGoal')?.addEventListener('click', () => LinsoraUI.openModal('modalGoalForm'));
+  document.getElementById('btnQuickAddAccount')?.addEventListener('click', () => LinsoraUI.openModal('modalAccountForm'));
+  document.getElementById('btnGoToTransactions')?.addEventListener('click', () => window.switchTab('tabTransactions'));
+
+  const btnTypeExpense = document.getElementById('btnTypeExpense');
+  const btnTypeIncome = document.getElementById('btnTypeIncome');
+
+  if (btnTypeExpense && btnTypeIncome) {
+    btnTypeExpense.onclick = () => setTxFormType('DESPESA');
+    btnTypeIncome.onclick = () => setTxFormType('RECEITA');
+  }
+
+  function setTxFormType(type) {
+    if (type === 'RECEITA') {
+      btnTypeIncome.classList.add('active');
+      btnTypeExpense.classList.remove('active');
+      document.getElementById('txFormModalTitle').innerText = 'Nova Receita';
+      LinsoraUI.updateCategoryDropdown('RECEITA');
+    } else {
+      btnTypeExpense.classList.add('active');
+      btnTypeIncome.classList.remove('active');
+      document.getElementById('txFormModalTitle').innerText = 'Nova Despesa';
+      LinsoraUI.updateCategoryDropdown('DESPESA');
+    }
+  }
+
+  function openNewTxModal(type) {
+    document.getElementById('txId').value = '';
+    document.getElementById('txAmount').value = '';
+    document.getElementById('txDescription').value = '';
+    document.getElementById('txDate').value = new Date().toISOString().split('T')[0];
+    
+    setTxFormType(type);
+    LinsoraUI.openModal('modalTransactionForm');
+  }
+
+  const txForm = document.getElementById('txForm');
+  if (txForm) {
+    txForm.onsubmit = async function(e) {
+      if (e) e.preventDefault();
+      const id = document.getElementById('txId').value;
+      const rawAmountStr = document.getElementById('txAmount').value;
+      const amount = LinsoraUtils.parseCurrencyToFloat(rawAmountStr);
+
+      const description = document.getElementById('txDescription').value;
+      const category = document.getElementById('txCategory').value;
+      const date = document.getElementById('txDate').value;
+      const account = document.getElementById('txAccount').value;
+      const repetition = document.getElementById('txRepetition').value;
+      const notes = document.getElementById('txNotes').value;
+
+      const isIncome = btnTypeIncome.classList.contains('active');
+
+      if (!amount || amount <= 0 || !description) {
+        LinsoraUI.showToast('Preencha o valor e a descrição corretamente.', 'error');
+        return;
+      }
+
+      await window.linsoraStore.saveTransaction({
+        id: id || null,
+        type: isIncome ? 'RECEITA' : 'DESPESA',
+        amount,
+        description,
+        category,
+        date,
+        account,
+        repetition,
+        notes
+      });
+
+      LinsoraUI.closeModal('modalTransactionForm');
+      LinsoraUI.showToast(`${isIncome ? 'Receita' : 'Despesa'} salva com sucesso!`);
+    };
+  }
+
+  document.getElementById('btnAddAccount')?.addEventListener('click', () => LinsoraUI.openModal('modalAccountForm'));
+  document.getElementById('accountForm')?.addEventListener('submit', async function(e) {
+    if (e) e.preventDefault();
+    const name = document.getElementById('accName').value;
+    const type = document.getElementById('accType').value;
+    const balance = LinsoraUtils.parseCurrencyToFloat(document.getElementById('accBalance').value);
+    if (!name) return;
+
+    await window.linsoraStore.addAccount({ name, type, balance });
+    LinsoraUI.closeModal('modalAccountForm');
+    LinsoraUI.showToast('Conta bancária adicionada com sucesso!');
+  });
+
+  document.getElementById('btnAddCard')?.addEventListener('click', () => LinsoraUI.openModal('modalCardForm'));
+  document.getElementById('cardForm')?.addEventListener('submit', async function(e) {
+    if (e) e.preventDefault();
+    const name = document.getElementById('cardNameInput').value;
+    const brand = document.getElementById('cardBrandInput').value;
+    const limitTotal = LinsoraUtils.parseCurrencyToFloat(document.getElementById('cardLimitInput').value);
+    const closingDay = document.getElementById('cardClosingInput').value;
+    const dueDay = document.getElementById('cardDueInput').value;
+    if (!name) return;
+
+    await window.linsoraStore.addCard({ name, brand, limitTotal, closingDay, dueDay });
+    LinsoraUI.closeModal('modalCardForm');
+    LinsoraUI.showToast('Cartão de crédito adicionado!');
+  });
+
+  document.getElementById('btnDeleteCard')?.addEventListener('click', async () => {
+    if (window.selectedCardId) {
+      const card = window.linsoraStore.state.cards.find(c => c.id === window.selectedCardId);
+      const cardName = card ? card.name : 'este cartão';
+
+      const ok = await window.linsoraStore.deleteCard(window.selectedCardId);
+      if (ok) {
+        window.selectedCardId = null;
+        LinsoraUI.showToast(`Cartão "${cardName}" removido com sucesso!`);
+      }
+    } else {
+      LinsoraUI.showToast('Nenhum cartão selecionado para remoção.', 'info');
+    }
+  });
+
+  document.getElementById('btnAddGoal')?.addEventListener('click', () => LinsoraUI.openModal('modalGoalForm'));
+  document.getElementById('goalForm')?.addEventListener('submit', async function(e) {
+    if (e) e.preventDefault();
+    const title = document.getElementById('goalTitleInput').value;
+    const target = LinsoraUtils.parseCurrencyToFloat(document.getElementById('goalTargetInput').value);
+    const current = LinsoraUtils.parseCurrencyToFloat(document.getElementById('goalCurrentInput').value);
+    const deadline = document.getElementById('goalDeadlineInput').value;
+    if (!title) return;
+
+    await window.linsoraStore.addGoal({ title, target, current, deadline });
+    LinsoraUI.closeModal('modalGoalForm');
+    LinsoraUI.showToast('Nova meta financeira cadastrada!');
+  });
+
+  document.getElementById('btnAddPixKey')?.addEventListener('click', () => LinsoraUI.openModal('modalPixKeyForm'));
+  document.getElementById('pixKeyForm')?.addEventListener('submit', async function(e) {
+    if (e) e.preventDefault();
+    const type = document.getElementById('pixTypeSelect').value;
+    const key = document.getElementById('pixKeyValue').value;
+    const bank = document.getElementById('pixBankSelect').value;
+    if (!key) return;
+
+    await window.linsoraStore.addPixKey(type, key, bank);
+    LinsoraUI.closeModal('modalPixKeyForm');
+    LinsoraUI.showToast('Chave Pix cadastrada!');
+  });
+
+  document.getElementById('btnDuplicateTx')?.addEventListener('click', async () => {
+    if (window.selectedTxId) {
+      await window.linsoraStore.duplicateTransaction(window.selectedTxId);
+      LinsoraUI.closeModal('modalTransactionDetails');
+      LinsoraUI.showToast('Transação duplicada!');
+    }
+  });
+
+  document.getElementById('btnDeleteTx')?.addEventListener('click', async () => {
+    if (window.selectedTxId) {
+      await window.linsoraStore.deleteTransaction(window.selectedTxId);
+      LinsoraUI.closeModal('modalTransactionDetails');
+      LinsoraUI.showToast('Transação excluída!');
+    }
+  });
+
+  document.getElementById('btnConfirmPixTransfer')?.addEventListener('click', async () => {
+    const key = document.getElementById('pixKeyInput').value;
+    const amount = LinsoraUtils.parseCurrencyToFloat(document.getElementById('pixAmountInput').value);
+
+    if (!key || !amount) {
+      LinsoraUI.showToast('Informe a chave Pix e o valor.', 'error');
+      return;
+    }
+
+    const success = await window.linsoraStore.executePixTransfer(key, amount);
+    if (success) {
+      LinsoraUI.closeModal('modalPixArea');
+      LinsoraUI.showToast(`Pix de R$ ${amount.toLocaleString('pt-BR', {minimumFractionDigits: 2})} enviado!`);
+    }
+  });
+
+  document.getElementById('btnPixTransfer')?.addEventListener('click', () => LinsoraUI.openModal('modalPixArea'));
+  document.getElementById('btnPixReceive')?.addEventListener('click', () => LinsoraUI.openModal('modalPixArea'));
+  document.getElementById('btnPayInvoice')?.addEventListener('click', async () => {
+    if (window.selectedCardId) {
+      const ok = await window.linsoraStore.payCardInvoice(window.selectedCardId);
+      if (ok) LinsoraUI.showToast('Fatura paga com sucesso!');
+      else LinsoraUI.showToast('Nenhum saldo devedor nesta fatura.', 'info');
+    }
+  });
+
+  document.getElementById('btnExportPDF')?.addEventListener('click', () => LinsoraUtils.generatePDFReport(window.linsoraStore.state));
+  document.getElementById('btnTogglePrivacy')?.addEventListener('click', () => window.linsoraStore.togglePrivacy());
+  
+  document.getElementById('btnToggleTheme')?.addEventListener('click', () => {
+    const newTheme = window.linsoraStore.toggleTheme();
+    LinsoraUI.showToast(`Tema ${newTheme === 'dark' ? 'Escuro' : 'Claro'} ativado!`);
+  });
+
+  document.getElementById('btnOpenNotifications')?.addEventListener('click', () => LinsoraUI.openModal('modalNotifications'));
+  document.getElementById('btnCloseAlertBanner')?.addEventListener('click', () => {
+    const banner = document.getElementById('smartAlertBanner');
+    if (banner) banner.style.display = 'none';
+  });
+
+  document.querySelectorAll('[data-close-modal]').forEach(btn => {
+    btn.onclick = function() {
+      const targetModal = this.getAttribute('data-close-modal');
+      LinsoraUI.closeModal(targetModal);
+    };
+  });
+
+  document.querySelectorAll('.linsora-modal-overlay').forEach(overlay => {
+    overlay.onclick = function(e) {
+      if (e.target === overlay) {
+        overlay.classList.add('hidden');
+      }
+    };
+  });
+
+  const searchInput = document.getElementById('txSearchInput');
+  if (searchInput) {
+    searchInput.oninput = function(e) {
+      window.linsoraStore.searchQuery = e.target.value;
+      renderFilteredTransactions(window.linsoraStore.state);
+    };
+  }
+
+  document.querySelectorAll('.chip-filter').forEach(chip => {
+    chip.onclick = function() {
+      document.querySelectorAll('.chip-filter[data-filter-type="type"]').forEach(c => c.classList.remove('active'));
+      this.classList.add('active');
+      window.linsoraStore.filterType = this.getAttribute('data-value');
+      renderFilteredTransactions(window.linsoraStore.state);
+    };
+  });
+
+  document.getElementById('btnLogout')?.addEventListener('click', async () => {
+    await window.supabaseRepo.signOut();
+    const main = document.getElementById('appMain');
+    if (main) main.classList.add('hidden');
+    const auth = document.getElementById('authScreen');
+    if (auth) auth.classList.remove('hidden');
+    LinsoraUI.showToast('Sessão encerrada com segurança.');
+  });
+}

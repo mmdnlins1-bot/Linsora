@@ -1,0 +1,1027 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>LINSORA — Gestão Financeira Pessoal Inteligente</title>
+  
+  <!-- Fontes do Google: Plus Jakarta Sans -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  
+  <!-- Supabase JS SDK & Chart.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <!-- Estilos Globais & Design System Unificado -->
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+  <!-- Toggle de Visualização Desktop (Moldura de Celular vs Tela Cheia) -->
+  <div class="view-mode-toggle" id="viewModeToggle">
+    <button type="button" class="mode-btn active" id="btnMobileFrame" title="Visualização Smartphone">📱 Celular</button>
+    <button type="button" class="mode-btn" id="btnFullscreen" title="Visualização Tela Cheia">🖥️ Tela Cheia</button>
+  </div>
+
+  <!-- App Wrapper Principal (Suporta Moldura de Smartphone no Desktop) -->
+  <div class="app-frame" id="appFrame">
+    <div class="device-notch"></div>
+    
+    <div class="app-viewport">
+      
+      <!-- ========================================== -->
+      <!-- 1. SPLASH SCREEN (Tela de Carregamento) -->
+      <!-- ========================================== -->
+      <section class="screen splash-screen active" id="splashScreen">
+        <div class="splash-content">
+          <div class="splash-logo-wrapper">
+            <div class="splash-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+              </svg>
+            </div>
+            <h1 class="splash-brand">LINSORA</h1>
+            <span class="splash-tagline">Finanças com Inteligência & Clareza</span>
+          </div>
+          <div class="splash-loader">
+            <div class="loader-bar"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ========================================== -->
+      <!-- 2. ONBOARDING ( Apresentação em 3 Etapas ) -->
+      <!-- ========================================== -->
+      <section class="screen onboarding-screen hidden" id="onboardingScreen">
+        <div class="onboarding-container">
+          <div class="onboarding-slider" id="onboardingSlider">
+            
+            <!-- Card 1 -->
+            <div class="onboarding-step active" data-step="1">
+              <div class="onboarding-illustration">
+                <div class="illus-glow"></div>
+                <div class="illus-badge green">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+                </div>
+              </div>
+              <h2>Gestão Financeira Sem Complicação</h2>
+              <p>Organize suas receitas, despesas e fluxo de caixa com visão clara do seu saldo consolidado.</p>
+            </div>
+
+            <!-- Card 2 -->
+            <div class="onboarding-step" data-step="2">
+              <div class="onboarding-illustration">
+                <div class="illus-glow turquoise"></div>
+                <div class="illus-badge turquoise">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+                </div>
+              </div>
+              <h2>Contas, Cartões & Pix Unificados</h2>
+              <p>Gerencie todos os seus bancos, chaves Pix e faturas de cartão de crédito em um só ambiente seguro.</p>
+            </div>
+
+            <!-- Card 3 -->
+            <div class="onboarding-step" data-step="3">
+              <div class="onboarding-illustration">
+                <div class="illus-glow emerald"></div>
+                <div class="illus-badge emerald">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+                </div>
+              </div>
+              <h2>Alertas & Notificações Inteligentes</h2>
+              <p>Receba avisos de contas prestes a vencer, metas atingidas e detecção de gastos fora do seu padrão.</p>
+            </div>
+
+          </div>
+
+          <div class="onboarding-dots">
+            <span class="dot active" data-index="0"></span>
+            <span class="dot" data-index="1"></span>
+            <span class="dot" data-index="2"></span>
+          </div>
+
+          <div class="onboarding-actions">
+            <button type="button" class="btn-skip" id="btnSkipOnboarding">Pular</button>
+            <button type="button" class="linsora-btn primary block" id="btnNextOnboarding">Continuar</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- ========================================== -->
+      <!-- 3. TELA DE AUTENTICAÇÃO (GOOGLE OAUTH + EMAIL) -->
+      <!-- ========================================== -->
+      <section class="screen auth-screen hidden" id="authScreen">
+        <div class="auth-container">
+          <div class="auth-header">
+            <div class="brand-logo-small">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+              <span>LINSORA</span>
+            </div>
+            <h2 id="authTitle">Seja bem-vindo(a)</h2>
+            <p id="authSubtitle">Entre na sua conta para gerenciar seu patrimônio com inteligência.</p>
+          </div>
+
+          <form id="authForm" class="auth-form" onsubmit="return false;">
+            <div class="form-group" id="nameGroup" style="display: none;">
+              <label for="authName">Nome Completo</label>
+              <div class="input-icon-wrapper">
+                <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                <input type="text" id="authName" class="linsora-input" placeholder="Seu nome">
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label for="authEmail">E-mail</label>
+              <div class="input-icon-wrapper">
+                <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+                <input type="email" id="authEmail" class="linsora-input" placeholder="seu@email.com" required>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <div class="label-row">
+                <label for="authPassword">Senha</label>
+                <button type="button" class="link-btn" id="btnForgotPassword">Esqueceu a senha?</button>
+              </div>
+              <div class="input-icon-wrapper">
+                <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                <input type="password" id="authPassword" class="linsora-input" placeholder="••••••••" required>
+              </div>
+            </div>
+
+            <div class="form-group" id="confirmPasswordGroup" style="display: none;">
+              <label for="authConfirmPassword">Confirmar Senha</label>
+              <div class="input-icon-wrapper">
+                <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                <input type="password" id="authConfirmPassword" class="linsora-input" placeholder="••••••••">
+              </div>
+            </div>
+
+            <button type="submit" class="linsora-btn primary block lg" id="btnSubmitAuth">Entrar na Conta</button>
+          </form>
+
+          <div class="auth-divider">
+            <span>ou entre com</span>
+          </div>
+
+          <div class="social-auth-single">
+            <button type="button" class="social-btn google-full-btn" id="btnGoogleAuth">
+              <svg viewBox="0 0 24 24" width="22" height="22"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/></svg>
+              Entrar com o Google
+            </button>
+          </div>
+
+          <div style="margin-top: 12px;">
+            <button type="button" class="linsora-btn secondary outline block sm" id="btnBiometricAuth">
+              ⚡ Acesso Rápido por PIN / Biometria
+            </button>
+          </div>
+
+          <div class="auth-toggle">
+            <span id="toggleText">Ainda não tem conta?</span>
+            <button type="button" class="link-btn-bold" id="btnToggleAuthMode">Cadastrar-se</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- ========================================== -->
+      <!-- 4. CONTEÚDO PRINCIPAL DAS ABAS (APP MAIN)  -->
+      <!-- ========================================== -->
+      <main class="app-main hidden" id="appMain">
+        
+        <!-- HEADER TOP DA APLICAÇÃO -->
+        <header class="app-header">
+          <div class="header-user" id="btnHeaderProfile" style="cursor: pointer;" title="Ir para o Perfil">
+            <div class="avatar-ring">
+              <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80" alt="Avatar" id="userAvatar" class="user-avatar">
+            </div>
+            <div class="user-info">
+              <span class="greeting-text" id="greetingText">Boa noite,</span>
+              <h3 class="user-name" id="userNameHeader">Usuário</h3>
+            </div>
+          </div>
+
+          <div class="header-actions">
+            <button type="button" class="icon-btn" id="btnTogglePrivacy" title="Ocultar/Exibir Valores">
+              <svg id="iconEyeOpen" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+              <svg id="iconEyeClosed" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none;"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+            </button>
+
+            <button type="button" class="icon-btn notification-badge-btn" id="btnOpenNotifications" title="Notificações Inteligentes">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+              <span class="unread-dot" id="unreadDot"></span>
+            </button>
+          </div>
+        </header>
+
+        <!-- CONTAINER DE TELAS ATIVAS DA NAVEGAÇÃO POR ABAS -->
+        <div class="tabs-container">
+          
+          <!-- TAB 1: DASHBOARD REFINADO -->
+          <section class="tab-page active" id="tabDashboard">
+            
+            <!-- 0. INDICADOR DE SAÚDE FINANCEIRA CONDICIONAL -->
+            <div class="financial-health-banner" id="healthScoreWidget">
+              <!-- Renderizado dinamicamente -->
+            </div>
+
+            <!-- 1. HERO CARD: SALDO DO MÊS, TIMESTAMP E REFORMA DO PATRIMÔNIO TOTAL -->
+            <div class="linsora-card main-balance-card month-balance-hero">
+              <div class="card-bg-glow"></div>
+              
+              <div class="balance-header">
+                <div>
+                  <span class="balance-label">Saldo do Mês (Entradas - Saídas)</span>
+                  <span class="badge-status-chip success" id="monthBalanceBadge">Mês Atual</span>
+                </div>
+              </div>
+
+              <div class="balance-amount positive" id="monthBalanceAmount">R$ 0,00</div>
+              
+              <div class="last-updated-row">
+                <span class="last-updated-text" id="lastUpdatedText">🔄 Atualizado agora</span>
+              </div>
+
+              <div class="net-worth-full-banner">
+                <div class="nw-col">
+                  <span class="nw-title">Patrimônio Total</span>
+                  <strong class="nw-main-val" id="totalNetWorthMain">R$ 0,00</strong>
+                </div>
+                <div class="nw-col align-right">
+                  <span class="nw-title">Variação no Mês</span>
+                  <span class="nw-variation-badge" id="netWorthVariationBadge">+ R$ 0,00</span>
+                </div>
+              </div>
+
+              <div class="balance-stats-grid">
+                <div class="stat-item income">
+                  <div class="stat-icon">↓</div>
+                  <div class="stat-details">
+                    <span class="stat-title">Receitas do Mês</span>
+                    <span class="stat-value" id="monthIncomeAmount">R$ 0,00</span>
+                  </div>
+                </div>
+                <div class="stat-item expense">
+                  <div class="stat-icon">↑</div>
+                  <div class="stat-details">
+                    <span class="stat-title">Despesas do Mês</span>
+                    <span class="stat-value" id="monthExpenseAmount">R$ 0,00</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 2. CARD DE INSIGHT INTELIGENTE ORIENTADO A AÇÕES -->
+            <div class="smart-insights-card actionable-insight-card" id="smartInsightsCard">
+              <div class="insight-header">
+                <div class="insight-badge">💡 Recomendação Inteligente</div>
+                <span class="insight-timestamp">Análise em tempo real</span>
+              </div>
+              <div class="insight-content" id="smartInsightBody">
+                <p>Cadastre sua primeira movimentação para receber recomendações acionáveis de economia.</p>
+              </div>
+            </div>
+
+            <!-- 3. RESUMO FINANCEIRO -->
+            <div class="section-block">
+              <div class="section-header-row">
+                <h3>Resumo Financeiro</h3>
+                <span class="total-fixed-badge" id="resumoStatusBadge">Visão Geral</span>
+              </div>
+              <div class="resumo-widgets-container" id="resumoWidgetsContainer">
+                <!-- Injetado dinamicamente -->
+              </div>
+            </div>
+
+            <!-- 4. AÇÕES RÁPIDAS -->
+            <div class="section-block">
+              <div class="section-header-row">
+                <h3>Ações Rápidas</h3>
+              </div>
+              <div class="quick-actions-bar scrollable-actions">
+                <button type="button" class="action-tile" id="btnQuickIncome">
+                  <div class="tile-icon income-bg">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                  </div>
+                  <span>+ Receita</span>
+                </button>
+
+                <button type="button" class="action-tile" id="btnQuickExpense">
+                  <div class="tile-icon expense-bg">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                  </div>
+                  <span>- Despesa</span>
+                </button>
+
+                <button type="button" class="action-tile" id="btnQuickPix">
+                  <div class="tile-icon pix-bg">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+                  </div>
+                  <span>Área Pix</span>
+                </button>
+
+                <button type="button" class="action-tile" id="btnQuickCardPay">
+                  <div class="tile-icon card-bg">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+                  </div>
+                  <span>Faturas</span>
+                </button>
+
+                <button type="button" class="action-tile" id="btnQuickAddGoal">
+                  <div class="tile-icon goal-bg">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
+                  </div>
+                  <span>+ Meta</span>
+                </button>
+
+                <button type="button" class="action-tile" id="btnQuickAddAccount">
+                  <div class="tile-icon bank-bg">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+                  </div>
+                  <span>+ Conta</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- 5. FLUXO DE CAIXA -->
+            <div class="dashboard-charts-grid">
+              <div class="linsora-card chart-card">
+                <div class="chart-header-row">
+                  <div>
+                    <h3>Fluxo de Caixa Real</h3>
+                    <span class="chart-subtitle" id="cashflowMetricLabel">Entradas, Saídas e Saldo Líquido</span>
+                  </div>
+                  
+                  <div class="chart-controls-wrapper">
+                    <div class="period-pills-selector" id="metricPillsSelector">
+                      <button type="button" class="period-pill active" data-metric="all">Todas</button>
+                      <button type="button" class="period-pill" data-metric="incomes">Entradas</button>
+                      <button type="button" class="period-pill" data-metric="expenses">Saídas</button>
+                    </div>
+
+                    <div class="period-pills-selector" id="periodPillsSelector">
+                      <button type="button" class="period-pill" data-period="daily">Diário</button>
+                      <button type="button" class="period-pill" data-period="weekly">Semanal</button>
+                      <button type="button" class="period-pill active" data-period="monthly">Mensal</button>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="canvas-container">
+                  <canvas id="cashflowChart"></canvas>
+                </div>
+              </div>
+
+              <!-- 6. GASTOS POR CATEGORIA -->
+              <div class="linsora-card chart-card">
+                <div class="chart-header">
+                  <h3>Gastos por Categoria</h3>
+                  <span class="chart-subtitle">Distribuição do Mês</span>
+                </div>
+                <div class="category-chart-split-view">
+                  <div class="canvas-container donut-wrapper">
+                    <canvas id="categoryChart"></canvas>
+                  </div>
+                  <div class="category-readable-list" id="categoryLegendGrid"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 7. ÚLTIMAS MOVIMENTAÇÕES -->
+            <div class="section-block">
+              <div class="section-header-row">
+                <h3>Últimas Movimentações</h3>
+                <button type="button" class="link-btn-bold" id="btnGoToTransactions">Ver extrato completo</button>
+              </div>
+              <div class="transactions-list-container" id="recentTransactionsList"></div>
+            </div>
+
+          </section>
+
+          <!-- TAB 2: TRANSAÇÕES / EXTRATO (PADRONIZADO VISUALMENTE) -->
+          <section class="tab-page hidden" id="tabTransactions">
+            <div class="page-title-bar">
+              <h2>Extrato & Transações</h2>
+              <button type="button" class="linsora-btn primary sm" id="btnNewTransactionHeader">+ Nova Transação</button>
+            </div>
+
+            <div class="filter-toolbar">
+              <div class="search-input-wrapper">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                <input type="text" id="txSearchInput" class="linsora-input search-input" placeholder="Buscar por descrição, valor ou tag...">
+              </div>
+
+              <div class="filter-chips-scroll">
+                <button type="button" class="chip-filter active" data-filter-type="type" data-value="all">Todas</button>
+                <button type="button" class="chip-filter" data-filter-type="type" data-value="RECEITA">Receitas</button>
+                <button type="button" class="chip-filter" data-filter-type="type" data-value="DESPESA">Despesas</button>
+                <button type="button" class="chip-filter" data-filter-type="period" data-value="THIS_MONTH">Este Mês</button>
+                <button type="button" class="chip-filter" data-filter-type="period" data-value="ALL">Todo Período</button>
+              </div>
+            </div>
+
+            <!-- CARD DE RESUMO DO EXTRATO PADRONIZADO COM GLASSMORPHISM -->
+            <div class="linsora-card filtered-summary-card" id="filteredSummaryBar">
+              <div class="summary-card-col">
+                <span class="summary-label">Itens Filtrados</span>
+                <strong class="summary-val" id="filterTxCount">0 transações</strong>
+              </div>
+              <div class="summary-card-col align-right">
+                <span class="summary-label">Balanço do Filtro</span>
+                <strong class="summary-val positive" id="filterTxTotal">R$ 0,00</strong>
+              </div>
+            </div>
+
+            <div class="transactions-full-list" id="fullTransactionsList"></div>
+          </section>
+
+          <!-- TAB 3: CONTAS BANCÁRIAS & PIX (PADRONIZADO VISUALMENTE) -->
+          <section class="tab-page hidden" id="tabAccounts">
+            <div class="page-title-bar">
+              <h2>Contas Bancárias & Pix</h2>
+              <button type="button" class="linsora-btn secondary sm" id="btnAddAccount">+ Nova Conta</button>
+            </div>
+
+            <div class="linsora-card account-summary-card">
+              <div class="card-bg-glow"></div>
+              <span class="card-label">Saldo Total em Contas</span>
+              <div class="card-large-num" id="accountsTotalBalance">R$ 0,00</div>
+              <div class="pix-quick-badge">
+                <span id="pixKeysCountText">✨ Chaves Pix Ativas: <strong>0 cadastradas</strong></span>
+              </div>
+            </div>
+
+            <div class="pix-actions-grid">
+              <button type="button" class="pix-action-card" id="btnPixTransfer">
+                <div class="pix-icon-circle pix-transfer-glow">💸</div>
+                <div class="pix-action-info">
+                  <strong>Pagar / Transferir Pix</strong>
+                  <span>Por chave, copia e cola ou dados</span>
+                </div>
+              </button>
+
+              <button type="button" class="pix-action-card" id="btnPixReceive">
+                <div class="pix-icon-circle pix-receive-glow">📥</div>
+                <div class="pix-action-info">
+                  <strong>Cobrar / Receber Pix</strong>
+                  <span>Gerar QR Code instantâneo</span>
+                </div>
+              </button>
+            </div>
+
+            <div class="section-block">
+              <div class="section-header-row">
+                <h3>Suas Instituições Bancárias</h3>
+              </div>
+              <div class="accounts-grid" id="accountsListGrid"></div>
+            </div>
+
+            <div class="section-block">
+              <div class="section-header-row">
+                <h3>Minhas Chaves Pix</h3>
+                <button type="button" class="link-btn-bold" id="btnAddPixKey">+ Cadastrar Chave</button>
+              </div>
+              <div class="pix-keys-list" id="pixKeysList"></div>
+            </div>
+          </section>
+
+          <!-- TAB 4: CARTÕES & FATURAS (PADRONIZADO VISUALMENTE) -->
+          <section class="tab-page hidden" id="tabCards">
+            <div class="page-title-bar">
+              <h2>Cartões de Crédito</h2>
+              <button type="button" class="linsora-btn secondary sm" id="btnAddCard">+ Novo Cartão</button>
+            </div>
+
+            <div class="cards-carousel-container" id="cardsCarousel"></div>
+
+            <div class="linsora-card fatura-details-card" id="faturaDetailsCard">
+              <div class="fatura-header">
+                <div>
+                  <span class="fatura-label">Fatura Atual</span>
+                  <h3 class="fatura-card-name" id="faturaCardName">Nenhum cartão selecionado</h3>
+                </div>
+                <span class="badge-status-chip warning" id="faturaStatusBadge">Sem Limite</span>
+              </div>
+
+              <div class="fatura-amount-row">
+                <div class="fatura-main-val" id="faturaTotalValue">R$ 0,00</div>
+                <div style="display: flex; gap: 8px;">
+                  <button type="button" class="linsora-btn primary sm" id="btnPayInvoice">Pagar Fatura</button>
+                  <button type="button" class="linsora-btn danger sm" id="btnDeleteCard">🗑️ Excluir</button>
+                </div>
+              </div>
+
+              <div class="limit-progress-wrapper">
+                <div class="limit-labels">
+                  <span>Limite Usado: <strong id="limitUsedText">R$ 0,00</strong></span>
+                  <span>Limite Disponível: <strong id="limitAvailText">R$ 0,00</strong></span>
+                </div>
+                <div class="limit-progress-bar">
+                  <div class="limit-progress-fill" id="limitProgressFill" style="width: 0%;"></div>
+                </div>
+              </div>
+
+              <div class="fatura-dates-grid">
+                <div>
+                  <span class="date-label">Fechamento</span>
+                  <strong id="faturaClosingDate">--</strong>
+                </div>
+                <div>
+                  <span class="date-label">Vencimento</span>
+                  <strong id="faturaDueDate">--</strong>
+                </div>
+                <div>
+                  <span class="date-label">Melhor dia</span>
+                  <strong id="faturaBestDay">--</strong>
+                </div>
+              </div>
+            </div>
+
+            <div class="section-block">
+              <h3>Lançamentos nesta Fatura</h3>
+              <div class="fatura-items-list" id="faturaItemsList"></div>
+            </div>
+          </section>
+
+          <!-- TAB 5: METAS (PADRONIZADO VISUALMENTE) -->
+          <section class="tab-page hidden" id="tabGoals">
+            <div class="page-title-bar">
+              <h2>Metas & Economia</h2>
+              <button type="button" class="linsora-btn primary sm" id="btnAddGoal">+ Nova Meta</button>
+            </div>
+
+            <div class="section-block">
+              <div class="goals-grid-list" id="goalsGridList"></div>
+            </div>
+
+            <div class="section-block margin-top-md">
+              <div class="section-header-row">
+                <h3>Contas Fixas Mensais</h3>
+                <span class="total-fixed-badge" id="fixedBillsTotalBadge">Total: R$ 0,00/mês</span>
+              </div>
+              <div class="fixed-bills-list" id="fixedBillsList"></div>
+            </div>
+          </section>
+
+          <!-- TAB 6: PERFIL & CONFIGURAÇÕES (PADRONIZADO VISUALMENTE) -->
+          <section class="tab-page hidden" id="tabProfile">
+            <div class="page-title-bar">
+              <h2>Perfil & Configurações</h2>
+            </div>
+
+            <div class="linsora-card user-profile-card">
+              <div class="profile-card-header">
+                <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80" alt="Avatar" class="profile-avatar-lg" id="profileAvatarImg">
+                <div>
+                  <h3 id="profileNameDisplay">Usuário</h3>
+                  <span style="font-size: 13px; color: var(--text-muted);" id="profileEmailDisplay">usuario@linsora.com.br</span>
+                  <div style="margin-top: 6px;">
+                    <span class="badge-status-chip success">Conta PRO Premium</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="linsora-card report-export-card">
+              <div class="report-info">
+                <h3>📄 Relatório Financeiro PDF</h3>
+                <p>Gere um demonstrativo completo com entradas, saídas, patrimônio e análise de hábitos pronto para imprimir ou arquivar.</p>
+              </div>
+              <button type="button" class="linsora-btn primary block" id="btnExportPDF">
+                Exportar Relatório PDF
+              </button>
+            </div>
+
+            <div class="section-block profile-settings-block">
+              <h3>Preferências & Segurança</h3>
+              
+              <div class="settings-list">
+                <div class="setting-item">
+                  <div class="setting-icon">🌓</div>
+                  <div class="setting-text">
+                    <strong>Aparência & Tema</strong>
+                    <span>Alternar entre tema Claro e Escuro</span>
+                  </div>
+                  <button type="button" class="linsora-btn secondary sm" id="btnToggleTheme">Alternar Tema</button>
+                </div>
+
+                <div class="setting-item">
+                  <div class="setting-icon">🔒</div>
+                  <div class="setting-text">
+                    <strong>Segurança por PIN</strong>
+                    <span>Exigir código PIN de 4 dígitos ao abrir</span>
+                  </div>
+                  <button type="button" class="linsora-btn outline sm" id="btnTogglePIN">Configurar PIN</button>
+                </div>
+
+                <div class="setting-item">
+                  <div class="setting-icon">🤖</div>
+                  <div class="setting-text">
+                    <strong>Classificação Automática por IA</strong>
+                    <span>Categorizar lançamentos de forma inteligente</span>
+                  </div>
+                  <button type="button" class="linsora-btn outline sm" id="btnToggleAI">Ativado</button>
+                </div>
+
+                <div class="setting-item danger-item">
+                  <div class="setting-icon">🚪</div>
+                  <div class="setting-text">
+                    <strong>Sair da Conta</strong>
+                    <span>Encerrar sessão com segurança</span>
+                  </div>
+                  <button type="button" class="linsora-btn danger sm" id="btnLogout">Sair</button>
+                </div>
+              </div>
+            </div>
+
+          </section>
+
+        </div>
+
+        <!-- BARRA DE NAVEGAÇÃO INFERIOR -->
+        <nav class="bottom-nav">
+          <button type="button" class="nav-item active" data-tab="tabDashboard">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+            <span>Início</span>
+          </button>
+
+          <button type="button" class="nav-item" data-tab="tabTransactions">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+            <span>Extrato</span>
+          </button>
+
+          <button type="button" class="nav-item" data-tab="tabAccounts">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+            <span>Contas</span>
+          </button>
+
+          <button type="button" class="nav-item" data-tab="tabCards">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+            <span>Cartões</span>
+          </button>
+
+          <button type="button" class="nav-item" data-tab="tabGoals">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
+            <span>Metas</span>
+          </button>
+
+          <button type="button" class="nav-item" data-tab="tabProfile">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+            <span>Perfil</span>
+          </button>
+        </nav>
+
+        <button type="button" class="nav-fab-btn floating-fab" id="btnFabNewTransaction" title="Nova Transação">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        </button>
+
+      </main>
+
+      <!-- MODAIS REUTILIZÁVEIS -->
+      <div class="linsora-modal-overlay hidden" id="modalNotifications">
+        <div class="linsora-modal-content drawer-bottom">
+          <div class="modal-header">
+            <h3>🔔 Notificações Inteligentes</h3>
+            <button type="button" class="modal-close" data-close-modal="modalNotifications">✕</button>
+          </div>
+          <div class="notifications-feed" id="notificationsFeed"></div>
+        </div>
+      </div>
+
+      <div class="linsora-modal-overlay hidden" id="modalTransactionForm">
+        <div class="linsora-modal-content drawer-bottom">
+          <div class="modal-header">
+            <h3 id="txFormModalTitle">Nova Transação</h3>
+            <button type="button" class="modal-close" data-close-modal="modalTransactionForm">✕</button>
+          </div>
+
+          <form id="txForm" onsubmit="return false;">
+            <input type="hidden" id="txId" value="">
+
+            <div class="segmented-control margin-bottom-md">
+              <button type="button" class="seg-btn active" id="btnTypeExpense" data-type="DESPESA">💸 Despesa</button>
+              <button type="button" class="seg-btn" id="btnTypeIncome" data-type="RECEITA">💰 Receita</button>
+            </div>
+
+            <div class="form-group">
+              <label for="txAmount">Valor (R$)</label>
+              <div class="input-amount-huge">
+                <span>R$</span>
+                <input type="text" id="txAmount" class="linsora-input amount-field currency-mask" placeholder="0,00" required>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label for="txDescription">Descrição</label>
+              <input type="text" id="txDescription" class="linsora-input" placeholder="Ex: Supermercado, Salário, Internet" required>
+            </div>
+
+            <div class="form-row-2">
+              <div class="form-group">
+                <label for="txCategory">Categoria</label>
+                <select id="txCategory" class="linsora-input select-input"></select>
+              </div>
+
+              <div class="form-group">
+                <label for="txDate">Data</label>
+                <input type="date" id="txDate" class="linsora-input">
+              </div>
+            </div>
+
+            <div class="form-row-2">
+              <div class="form-group">
+                <label for="txAccount">Conta / Cartão</label>
+                <select id="txAccount" class="linsora-input select-input">
+                  <!-- Injetado dinamicamente com as contas do usuário -->
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label for="txRepetition">Repetição</label>
+                <select id="txRepetition" class="linsora-input select-input">
+                  <option value="SINGLE">Única</option>
+                  <option value="MONTHLY">Mensal Recorrente</option>
+                  <option value="PARCELED">Parcelada (Nx)</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label for="txNotes">Observações (Opcional)</label>
+              <input type="text" id="txNotes" class="linsora-input" placeholder="Detalhes adicionais...">
+            </div>
+
+            <button type="submit" class="linsora-btn primary block lg margin-top-md" id="btnSaveTransaction">Salvar Transação</button>
+          </form>
+        </div>
+      </div>
+
+      <div class="linsora-modal-overlay hidden" id="modalTransactionDetails">
+        <div class="linsora-modal-content drawer-bottom">
+          <div class="modal-header">
+            <h3>Detalhes da Transação</h3>
+            <button type="button" class="modal-close" data-close-modal="modalTransactionDetails">✕</button>
+          </div>
+
+          <div class="tx-detail-view" id="txDetailViewContent"></div>
+
+          <div class="tx-detail-actions-grid">
+            <button type="button" class="linsora-btn secondary outline" id="btnDuplicateTx">📋 Duplicar</button>
+            <button type="button" class="linsora-btn secondary" id="btnEditTx">✏️ Editar</button>
+            <button type="button" class="linsora-btn danger" id="btnDeleteTx">🗑️ Excluir</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="linsora-modal-overlay hidden" id="modalPixArea">
+        <div class="linsora-modal-content drawer-bottom">
+          <div class="modal-header">
+            <h3>⚡ Área Pix Linsora</h3>
+            <button type="button" class="modal-close" data-close-modal="modalPixArea">✕</button>
+          </div>
+
+          <div class="pix-modal-body">
+            <div class="form-group">
+              <label for="pixKeyInput">Chave Pix ou Código Copia e Cola</label>
+              <div class="input-icon-wrapper">
+                <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+                <input type="text" id="pixKeyInput" class="linsora-input" placeholder="CPF, E-mail, Celular ou Código QR">
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label for="pixAmountInput">Valor a Transferir (R$)</label>
+              <input type="text" id="pixAmountInput" class="linsora-input amount-field currency-mask" placeholder="0,00">
+            </div>
+
+            <div class="qr-code-simulator" id="qrCodeSim">
+              <div class="qr-box">
+                <svg viewBox="0 0 100 100" width="120" height="120">
+                  <rect x="0" y="0" width="100" height="100" fill="#ffffff"/>
+                  <path d="M10 10h30v30h-30zM20 20h10v10h-10zM60 10h30v30h-30zM70 20h10v10h-10zM10 60h30v30h-30zM20 70h10v10h-10zM50 50h10v10h-10zM70 50h20v10h-20zM50 70h20v20h-20zM80 80h10v10h-10z" fill="#0F172A"/>
+                </svg>
+              </div>
+              <span>Leitor de QR Code Pix Ativo</span>
+            </div>
+
+            <button type="button" class="linsora-btn primary block lg margin-top-md" id="btnConfirmPixTransfer">
+              Confirmar Transferência Pix
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="linsora-modal-overlay hidden" id="modalForgotPassword">
+        <div class="linsora-modal-content drawer-bottom">
+          <div class="modal-header">
+            <h3>🔑 Recuperar Senha</h3>
+            <button type="button" class="modal-close" data-close-modal="modalForgotPassword">✕</button>
+          </div>
+
+          <p style="font-size: 14px; color: var(--text-muted); margin-bottom: 16px;">
+            Digite o seu e-mail cadastrado e enviaremos um link de redefinição de senha com segurança.
+          </p>
+
+          <form id="forgotPasswordForm" onsubmit="return false;">
+            <div class="form-group">
+              <label for="recoveryEmail">Seu E-mail Cadastrado</label>
+              <div class="input-icon-wrapper">
+                <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+                <input type="email" id="recoveryEmail" class="linsora-input" placeholder="seu@email.com" required>
+              </div>
+            </div>
+
+            <button type="submit" class="linsora-btn primary block lg margin-top-md" id="btnSendRecoveryEmail">
+              Enviar Link de Redefinição
+            </button>
+          </form>
+        </div>
+      </div>
+
+      <div class="linsora-modal-overlay hidden" id="modalPinPad">
+        <div class="linsora-modal-content drawer-bottom" style="text-align: center;">
+          <div class="modal-header">
+            <h3 id="pinPadTitle">🔒 Digite seu PIN de 4 Dígitos</h3>
+            <button type="button" class="modal-close" data-close-modal="modalPinPad">✕</button>
+          </div>
+
+          <p id="pinPadSubtitle" style="font-size: 13px; color: var(--text-muted); margin-bottom: 20px;">
+            Proteja suas finanças com um código de segurança.
+          </p>
+
+          <div class="pin-dots" id="pinDots">
+            <span class="pin-dot"></span>
+            <span class="pin-dot"></span>
+            <span class="pin-dot"></span>
+            <span class="pin-dot"></span>
+          </div>
+
+          <div class="pin-keypad">
+            <button type="button" class="pin-key" data-num="1">1</button>
+            <button type="button" class="pin-key" data-num="2">2</button>
+            <button type="button" class="pin-key" data-num="3">3</button>
+            <button type="button" class="pin-key" data-num="4">4</button>
+            <button type="button" class="pin-key" data-num="5">5</button>
+            <button type="button" class="pin-key" data-num="6">6</button>
+            <button type="button" class="pin-key" data-num="7">7</button>
+            <button type="button" class="pin-key" data-num="8">8</button>
+            <button type="button" class="pin-key" data-num="9">9</button>
+            <button type="button" class="pin-key action" id="btnPinClear">C</button>
+            <button type="button" class="pin-key" data-num="0">0</button>
+            <button type="button" class="pin-key action" id="btnPinDelete">⌫</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- MODAIS DE CRIAÇÃO -->
+      <div class="linsora-modal-overlay hidden" id="modalAccountForm">
+        <div class="linsora-modal-content drawer-bottom">
+          <div class="modal-header">
+            <h3>+ Nova Conta Bancária</h3>
+            <button type="button" class="modal-close" data-close-modal="modalAccountForm">✕</button>
+          </div>
+          <form id="accountForm" onsubmit="return false;">
+            <div class="form-group">
+              <label for="accName">Nome da Conta / Banco</label>
+              <input type="text" id="accName" class="linsora-input" placeholder="Ex: C6 Bank, Santander, Caixa" required>
+            </div>
+            <div class="form-row-2">
+              <div class="form-group">
+                <label for="accType">Tipo de Conta</label>
+                <select id="accType" class="linsora-input select-input">
+                  <option value="CORRENTE">Conta Corrente</option>
+                  <option value="POUPANCA">Poupança</option>
+                  <option value="INVESTIMENTO">Investimentos</option>
+                  <option value="CARTEIRA">Carteira Física</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label for="accBalance">Saldo Inicial (R$)</label>
+                <input type="text" id="accBalance" class="linsora-input currency-mask" placeholder="0,00" required>
+              </div>
+            </div>
+            <button type="submit" class="linsora-btn primary block margin-top-md" id="btnSaveAccount">Salvar Conta Bancária</button>
+          </form>
+        </div>
+      </div>
+
+      <div class="linsora-modal-overlay hidden" id="modalCardForm">
+        <div class="linsora-modal-content drawer-bottom">
+          <div class="modal-header">
+            <h3>+ Novo Cartão de Crédito</h3>
+            <button type="button" class="modal-close" data-close-modal="modalCardForm">✕</button>
+          </div>
+          <form id="cardForm" onsubmit="return false;">
+            <div class="form-group">
+              <label for="cardNameInput">Nome do Cartão</label>
+              <input type="text" id="cardNameInput" class="linsora-input" placeholder="Ex: C6 Carbon Black, Santander Unique" required>
+            </div>
+            <div class="form-row-2">
+              <div class="form-group">
+                <label for="cardBrandInput">Bandeira</label>
+                <select id="cardBrandInput" class="linsora-input select-input">
+                  <option value="Mastercard">Mastercard</option>
+                  <option value="Visa">Visa</option>
+                  <option value="Elo">Elo</option>
+                  <option value="Amex">American Express</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label for="cardLimitInput">Limite Total (R$)</label>
+                <input type="text" id="cardLimitInput" class="linsora-input currency-mask" placeholder="5.000,00" required>
+              </div>
+            </div>
+            <div class="form-row-2">
+              <div class="form-group">
+                <label for="cardClosingInput">Dia Fechamento</label>
+                <input type="number" id="cardClosingInput" class="linsora-input" placeholder="15" min="1" max="31" required>
+              </div>
+              <div class="form-group">
+                <label for="cardDueInput">Dia Vencimento</label>
+                <input type="number" id="cardDueInput" class="linsora-input" placeholder="22" min="1" max="31" required>
+              </div>
+            </div>
+            <button type="submit" class="linsora-btn primary block margin-top-md" id="btnSaveCard">Salvar Cartão</button>
+          </form>
+        </div>
+      </div>
+
+      <div class="linsora-modal-overlay hidden" id="modalGoalForm">
+        <div class="linsora-modal-content drawer-bottom">
+          <div class="modal-header">
+            <h3>+ Nova Meta Financeira</h3>
+            <button type="button" class="modal-close" data-close-modal="modalGoalForm">✕</button>
+          </div>
+          <form id="goalForm" onsubmit="return false;">
+            <div class="form-group">
+              <label for="goalTitleInput">Título da Meta</label>
+              <input type="text" id="goalTitleInput" class="linsora-input" placeholder="Ex: Entrada do Apê, Viagem Europa" required>
+            </div>
+            <div class="form-row-2">
+              <div class="form-group">
+                <label for="goalTargetInput">Valor Alvo (R$)</label>
+                <input type="text" id="goalTargetInput" class="linsora-input currency-mask" placeholder="10.000,00" required>
+              </div>
+              <div class="form-group">
+                <label for="goalCurrentInput">Já Guardado (R$)</label>
+                <input type="text" id="goalCurrentInput" class="linsora-input currency-mask" placeholder="0,00" value="0,00">
+              </div>
+            </div>
+            <div class="form-group">
+              <label for="goalDeadlineInput">Data Limite Desejada</label>
+              <input type="date" id="goalDeadlineInput" class="linsora-input" required>
+            </div>
+            <button type="submit" class="linsora-btn primary block margin-top-md" id="btnSaveGoal">Salvar Meta</button>
+          </form>
+        </div>
+      </div>
+
+      <div class="linsora-modal-overlay hidden" id="modalPixKeyForm">
+        <div class="linsora-modal-content drawer-bottom">
+          <div class="modal-header">
+            <h3>+ Nova Chave Pix</h3>
+            <button type="button" class="modal-close" data-close-modal="modalPixKeyForm">✕</button>
+          </div>
+          <form id="pixKeyForm" onsubmit="return false;">
+            <div class="form-group">
+              <label for="pixTypeSelect">Tipo de Chave</label>
+              <select id="pixTypeSelect" class="linsora-input select-input">
+                <option value="CPF">CPF</option>
+                <option value="EMAIL">E-mail</option>
+                <option value="CELULAR">Celular</option>
+                <option value="RANDOM">Chave Aleatória (EVP)</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="pixKeyValue">Valor da Chave</label>
+              <input type="text" id="pixKeyValue" class="linsora-input" placeholder="Digite a chave..." required>
+            </div>
+            <div class="form-group">
+              <label for="pixBankSelect">Vincular ao Banco</label>
+              <select id="pixBankSelect" class="linsora-input select-input">
+                <!-- Injetado dinamicamente com as contas do usuário -->
+              </select>
+            </div>
+            <button type="submit" class="linsora-btn primary block margin-top-md" id="btnSavePixKey">Cadastrar Chave Pix</button>
+          </form>
+        </div>
+      </div>
+
+      <div class="toast-container" id="toastContainer"></div>
+
+    </div>
+  </div>
+
+  <div id="pdfPrintTemplate" class="pdf-print-template" style="display: none;"></div>
+
+  <script src="js/supabase-client.js"></script>
+  <script src="js/store.js"></script>
+  <script src="js/utils.js"></script>
+  <script src="js/charts.js"></script>
+  <script src="js/notifications.js"></script>
+  <script src="js/components.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
