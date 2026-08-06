@@ -400,7 +400,7 @@
 
           </section>
 
-          <!-- TAB 2: TRANSAÇÕES / EXTRATO (PADRONIZADO VISUALMENTE) -->
+          <!-- TAB 2: TRANSAÇÕES / EXTRATO -->
           <section class="tab-page hidden" id="tabTransactions">
             <div class="page-title-bar">
               <h2>Extrato & Transações</h2>
@@ -422,7 +422,6 @@
               </div>
             </div>
 
-            <!-- CARD DE RESUMO DO EXTRATO PADRONIZADO COM GLASSMORPHISM -->
             <div class="linsora-card filtered-summary-card" id="filteredSummaryBar">
               <div class="summary-card-col">
                 <span class="summary-label">Itens Filtrados</span>
@@ -437,7 +436,7 @@
             <div class="transactions-full-list" id="fullTransactionsList"></div>
           </section>
 
-          <!-- TAB 3: CONTAS BANCÁRIAS & PIX (PADRONIZADO VISUALMENTE) -->
+          <!-- TAB 3: CONTAS BANCÁRIAS & PIX -->
           <section class="tab-page hidden" id="tabAccounts">
             <div class="page-title-bar">
               <h2>Contas Bancárias & Pix</h2>
@@ -487,7 +486,7 @@
             </div>
           </section>
 
-          <!-- TAB 4: CARTÕES & FATURAS (PADRONIZADO VISUALMENTE) -->
+          <!-- TAB 4: CARTÕES & FATURAS -->
           <section class="tab-page hidden" id="tabCards">
             <div class="page-title-bar">
               <h2>Cartões de Crédito</h2>
@@ -545,7 +544,7 @@
             </div>
           </section>
 
-          <!-- TAB 5: METAS (PADRONIZADO VISUALMENTE) -->
+          <!-- TAB 5: METAS -->
           <section class="tab-page hidden" id="tabGoals">
             <div class="page-title-bar">
               <h2>Metas & Economia</h2>
@@ -565,7 +564,7 @@
             </div>
           </section>
 
-          <!-- TAB 6: PERFIL & CONFIGURAÇÕES (PADRONIZADO VISUALMENTE) -->
+          <!-- TAB 6: PERFIL & CONFIGURAÇÕES -->
           <section class="tab-page hidden" id="tabProfile">
             <div class="page-title-bar">
               <h2>Perfil & Configurações</h2>
@@ -679,9 +678,9 @@
 
       </main>
 
-      <!-- MODAIS REUTILIZÁVEIS -->
+      <!-- MODAIS REUTILIZÁVEIS UNIFICADOS -->
       <div class="linsora-modal-overlay hidden" id="modalNotifications">
-        <div class="linsora-modal-content drawer-bottom">
+        <div class="linsora-modal-content floating-center-card">
           <div class="modal-header">
             <h3>🔔 Notificações Inteligentes</h3>
             <button type="button" class="modal-close" data-close-modal="modalNotifications">✕</button>
@@ -690,10 +689,11 @@
         </div>
       </div>
 
+      <!-- MODAL TRANSAÇÃO FLUTUANTE -->
       <div class="linsora-modal-overlay hidden" id="modalTransactionForm">
-        <div class="linsora-modal-content drawer-bottom">
+        <div class="linsora-modal-content floating-center-card">
           <div class="modal-header">
-            <h3 id="txFormModalTitle">Nova Transação</h3>
+            <h3 id="txFormModalTitle">Nova Despesa</h3>
             <button type="button" class="modal-close" data-close-modal="modalTransactionForm">✕</button>
           </div>
 
@@ -715,42 +715,58 @@
 
             <div class="form-group">
               <label for="txDescription">Descrição</label>
-              <input type="text" id="txDescription" class="linsora-input" placeholder="Ex: Supermercado, Salário, Internet" required>
+              <div class="input-icon-wrapper">
+                <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+                <input type="text" id="txDescription" class="linsora-input" placeholder="Ex: Salário mensal, Mercado" required>
+              </div>
             </div>
 
             <div class="form-row-2">
               <div class="form-group">
                 <label for="txCategory">Categoria</label>
-                <select id="txCategory" class="linsora-input select-input"></select>
+                <div class="input-icon-wrapper">
+                  <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a10 10 0 1 0 10 10c0-2-2-2-4-2h-1c-.6 0-1-.4-1-1v-1c0-2.2-1.8-4-4-4z"/><circle cx="7.5" cy="11.5" r="1.5"/><circle cx="12" cy="7.5" r="1.5"/><circle cx="16.5" cy="11.5" r="1.5"/></svg>
+                  <select id="txCategory" class="linsora-input select-input"></select>
+                </div>
               </div>
 
               <div class="form-group">
                 <label for="txDate">Data</label>
-                <input type="date" id="txDate" class="linsora-input">
+                <div class="input-icon-wrapper">
+                  <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                  <input type="date" id="txDate" class="linsora-input">
+                </div>
               </div>
             </div>
 
             <div class="form-row-2">
               <div class="form-group">
                 <label for="txAccount">Conta / Cartão</label>
-                <select id="txAccount" class="linsora-input select-input">
-                  <!-- Injetado dinamicamente com as contas do usuário -->
-                </select>
+                <div class="input-icon-wrapper">
+                  <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+                  <select id="txAccount" class="linsora-input select-input"></select>
+                </div>
               </div>
 
               <div class="form-group">
                 <label for="txRepetition">Repetição</label>
-                <select id="txRepetition" class="linsora-input select-input">
-                  <option value="SINGLE">Única</option>
-                  <option value="MONTHLY">Mensal Recorrente</option>
-                  <option value="PARCELED">Parcelada (Nx)</option>
-                </select>
+                <div class="input-icon-wrapper">
+                  <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+                  <select id="txRepetition" class="linsora-input select-input">
+                    <option value="SINGLE">Única</option>
+                    <option value="MONTHLY">Mensal Recorrente</option>
+                    <option value="PARCELED">Parcelada (Nx)</option>
+                  </select>
+                </div>
               </div>
             </div>
 
             <div class="form-group">
               <label for="txNotes">Observações (Opcional)</label>
-              <input type="text" id="txNotes" class="linsora-input" placeholder="Detalhes adicionais...">
+              <div class="input-icon-wrapper">
+                <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+                <input type="text" id="txNotes" class="linsora-input" placeholder="Ex: detalhe opcional...">
+              </div>
             </div>
 
             <button type="submit" class="linsora-btn primary block lg margin-top-md" id="btnSaveTransaction">Salvar Transação</button>
@@ -759,7 +775,7 @@
       </div>
 
       <div class="linsora-modal-overlay hidden" id="modalTransactionDetails">
-        <div class="linsora-modal-content drawer-bottom">
+        <div class="linsora-modal-content floating-center-card">
           <div class="modal-header">
             <h3>Detalhes da Transação</h3>
             <button type="button" class="modal-close" data-close-modal="modalTransactionDetails">✕</button>
@@ -776,7 +792,7 @@
       </div>
 
       <div class="linsora-modal-overlay hidden" id="modalPixArea">
-        <div class="linsora-modal-content drawer-bottom">
+        <div class="linsora-modal-content floating-center-card">
           <div class="modal-header">
             <h3>⚡ Área Pix Linsora</h3>
             <button type="button" class="modal-close" data-close-modal="modalPixArea">✕</button>
@@ -793,7 +809,10 @@
 
             <div class="form-group">
               <label for="pixAmountInput">Valor a Transferir (R$)</label>
-              <input type="text" id="pixAmountInput" class="linsora-input amount-field currency-mask" placeholder="0,00">
+              <div class="input-amount-huge">
+                <span>R$</span>
+                <input type="text" id="pixAmountInput" class="linsora-input amount-field currency-mask" placeholder="0,00">
+              </div>
             </div>
 
             <div class="qr-code-simulator" id="qrCodeSim">
@@ -814,13 +833,13 @@
       </div>
 
       <div class="linsora-modal-overlay hidden" id="modalForgotPassword">
-        <div class="linsora-modal-content drawer-bottom">
+        <div class="linsora-modal-content floating-center-card">
           <div class="modal-header">
             <h3>🔑 Recuperar Senha</h3>
             <button type="button" class="modal-close" data-close-modal="modalForgotPassword">✕</button>
           </div>
 
-          <p style="font-size: 14px; color: var(--text-muted); margin-bottom: 16px;">
+          <p style="font-size: 13.5px; color: var(--text-muted); margin-bottom: 16px;">
             Digite o seu e-mail cadastrado e enviaremos um link de redefinição de senha com segurança.
           </p>
 
@@ -841,7 +860,7 @@
       </div>
 
       <div class="linsora-modal-overlay hidden" id="modalPinPad">
-        <div class="linsora-modal-content drawer-bottom" style="text-align: center;">
+        <div class="linsora-modal-content floating-center-card" style="text-align: center;">
           <div class="modal-header">
             <h3 id="pinPadTitle">🔒 Digite seu PIN de 4 Dígitos</h3>
             <button type="button" class="modal-close" data-close-modal="modalPinPad">✕</button>
@@ -875,52 +894,26 @@
         </div>
       </div>
 
-      <!-- MODAIS DE CRIAÇÃO -->
-      <div class="linsora-modal-overlay hidden" id="modalAccountForm">
-        <div class="linsora-modal-content drawer-bottom">
-          <div class="modal-header">
-            <h3>+ Nova Conta Bancária</h3>
-            <button type="button" class="modal-close" data-close-modal="modalAccountForm">✕</button>
-          </div>
-          <form id="accountForm" onsubmit="return false;">
-            <div class="form-group">
-              <label for="accName">Nome da Conta / Banco</label>
-              <input type="text" id="accName" class="linsora-input" placeholder="Ex: C6 Bank, Santander, Caixa" required>
-            </div>
-            <div class="form-row-2">
-              <div class="form-group">
-                <label for="accType">Tipo de Conta</label>
-                <select id="accType" class="linsora-input select-input">
-                  <option value="CORRENTE">Conta Corrente</option>
-                  <option value="POUPANCA">Poupança</option>
-                  <option value="INVESTIMENTO">Investimentos</option>
-                  <option value="CARTEIRA">Carteira Física</option>
-                </select>
-              </div>
-              <div class="form-group">
-                <label for="accBalance">Saldo Inicial (R$)</label>
-                <input type="text" id="accBalance" class="linsora-input currency-mask" placeholder="0,00" required>
-              </div>
-            </div>
-            <button type="submit" class="linsora-btn primary block margin-top-md" id="btnSaveAccount">Salvar Conta Bancária</button>
-          </form>
-        </div>
-      </div>
-
+      <!-- MODAL NOVO CARTÃO DE CRÉDITO -->
       <div class="linsora-modal-overlay hidden" id="modalCardForm">
-        <div class="linsora-modal-content drawer-bottom">
+        <div class="linsora-modal-content floating-center-card">
           <div class="modal-header">
             <h3>+ Novo Cartão de Crédito</h3>
             <button type="button" class="modal-close" data-close-modal="modalCardForm">✕</button>
           </div>
-          <form id="cardForm" onsubmit="return false;">
+          <form id="cardForm" class="modal-form-unified" onsubmit="return false;">
             <div class="form-group">
-              <label for="cardNameInput">Nome do Cartão</label>
-              <input type="text" id="cardNameInput" class="linsora-input" placeholder="Ex: C6 Carbon Black, Santander Unique" required>
+              <label for="cardNameInput">Nome do Cartão (e.g., para identificação)</label>
+              <div class="input-icon-wrapper">
+                <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+                <input type="text" id="cardNameInput" class="linsora-input" placeholder="Ex: C6 Carbon Black, Santander Unique" required>
+              </div>
             </div>
-            <div class="form-row-2">
-              <div class="form-group">
-                <label for="cardBrandInput">Bandeira</label>
+            
+            <div class="form-group">
+              <label for="cardBrandInput">Bandeira do Cartão</label>
+              <div class="input-icon-wrapper">
+                <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="12" r="6"/><circle cx="15" cy="12" r="6"/></svg>
                 <select id="cardBrandInput" class="linsora-input select-input">
                   <option value="Mastercard">Mastercard</option>
                   <option value="Visa">Visa</option>
@@ -928,87 +921,169 @@
                   <option value="Amex">American Express</option>
                 </select>
               </div>
-              <div class="form-group">
-                <label for="cardLimitInput">Limite Total (R$)</label>
-                <input type="text" id="cardLimitInput" class="linsora-input currency-mask" placeholder="5.000,00" required>
+            </div>
+
+            <div class="form-group">
+              <label for="cardLimitInput">Limite Total (R$)</label>
+              <div class="input-icon-wrapper">
+                <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+                <input type="text" id="cardLimitInput" class="linsora-input currency-mask" placeholder="R$ 5.000,00" required>
               </div>
             </div>
-            <div class="form-row-2">
-              <div class="form-group">
-                <label for="cardClosingInput">Dia Fechamento</label>
+
+            <div class="form-group">
+              <label for="cardClosingInput">Dia de Fechamento</label>
+              <div class="input-icon-wrapper">
+                <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
                 <input type="number" id="cardClosingInput" class="linsora-input" placeholder="15" min="1" max="31" required>
               </div>
-              <div class="form-group">
-                <label for="cardDueInput">Dia Vencimento</label>
+            </div>
+
+            <div class="form-group">
+              <label for="cardDueInput">Dia de Vencimento</label>
+              <div class="input-icon-wrapper">
+                <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
                 <input type="number" id="cardDueInput" class="linsora-input" placeholder="22" min="1" max="31" required>
               </div>
             </div>
-            <button type="submit" class="linsora-btn primary block margin-top-md" id="btnSaveCard">Salvar Cartão</button>
+
+            <button type="submit" class="linsora-btn primary block lg margin-top-md" id="btnSaveCard">Salvar Cartão</button>
           </form>
         </div>
       </div>
 
+      <!-- MODAL NOVA CONTA BANCÁRIA -->
+      <div class="linsora-modal-overlay hidden" id="modalAccountForm">
+        <div class="linsora-modal-content floating-center-card">
+          <div class="modal-header">
+            <h3>+ Nova Conta Bancária</h3>
+            <button type="button" class="modal-close" data-close-modal="modalAccountForm">✕</button>
+          </div>
+          <form id="accountForm" class="modal-form-unified" onsubmit="return false;">
+            <div class="form-group">
+              <label for="accName">Nome da Conta / Banco</label>
+              <div class="input-icon-wrapper">
+                <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18M3 10h18M5 6l7-3 7 3M4 10v11M20 10v11M8 14v3M12 14v3M16 14v3"/></svg>
+                <input type="text" id="accName" class="linsora-input" placeholder="Ex: C6 Bank, Santander, Caixa" required>
+              </div>
+            </div>
+            
+            <div class="form-group">
+              <label for="accType">Tipo de Conta</label>
+              <div class="input-icon-wrapper">
+                <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
+                <select id="accType" class="linsora-input select-input">
+                  <option value="CORRENTE">Conta Corrente</option>
+                  <option value="POUPANCA">Poupança</option>
+                  <option value="INVESTIMENTO">Investimentos</option>
+                  <option value="CARTEIRA">Carteira Física</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label for="accBalance">Saldo Inicial (R$)</label>
+              <div class="input-icon-wrapper">
+                <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+                <input type="text" id="accBalance" class="linsora-input currency-mask" placeholder="R$ 0,00" required>
+              </div>
+            </div>
+
+            <button type="submit" class="linsora-btn primary block lg margin-top-md" id="btnSaveAccount">Salvar Conta Bancária</button>
+          </form>
+        </div>
+      </div>
+
+      <!-- MODAL NOVA META -->
       <div class="linsora-modal-overlay hidden" id="modalGoalForm">
-        <div class="linsora-modal-content drawer-bottom">
+        <div class="linsora-modal-content floating-center-card">
           <div class="modal-header">
             <h3>+ Nova Meta Financeira</h3>
             <button type="button" class="modal-close" data-close-modal="modalGoalForm">✕</button>
           </div>
-          <form id="goalForm" onsubmit="return false;">
+          <form id="goalForm" class="modal-form-unified" onsubmit="return false;">
             <div class="form-group">
               <label for="goalTitleInput">Título da Meta</label>
-              <input type="text" id="goalTitleInput" class="linsora-input" placeholder="Ex: Entrada do Apê, Viagem Europa" required>
-            </div>
-            <div class="form-row-2">
-              <div class="form-group">
-                <label for="goalTargetInput">Valor Alvo (R$)</label>
-                <input type="text" id="goalTargetInput" class="linsora-input currency-mask" placeholder="10.000,00" required>
-              </div>
-              <div class="form-group">
-                <label for="goalCurrentInput">Já Guardado (R$)</label>
-                <input type="text" id="goalCurrentInput" class="linsora-input currency-mask" placeholder="0,00" value="0,00">
+              <div class="input-icon-wrapper">
+                <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
+                <input type="text" id="goalTitleInput" class="linsora-input" placeholder="Ex: Entrada do Apê, Viagem Europa" required>
               </div>
             </div>
+            
+            <div class="form-group">
+              <label for="goalTargetInput">Valor Alvo (R$)</label>
+              <div class="input-icon-wrapper">
+                <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+                <input type="text" id="goalTargetInput" class="linsora-input currency-mask" placeholder="R$ 10.000,00" required>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label for="goalCurrentInput">Já Guardado (R$)</label>
+              <div class="input-icon-wrapper">
+                <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 5H5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2z"/><path d="M12 12v3"/><path d="M12 9h.01"/></svg>
+                <input type="text" id="goalCurrentInput" class="linsora-input currency-mask" placeholder="R$ 0,00" value="0,00">
+              </div>
+            </div>
+
             <div class="form-group">
               <label for="goalDeadlineInput">Data Limite Desejada</label>
-              <input type="date" id="goalDeadlineInput" class="linsora-input" required>
+              <div class="input-icon-wrapper">
+                <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                <input type="date" id="goalDeadlineInput" class="linsora-input" required>
+              </div>
             </div>
-            <button type="submit" class="linsora-btn primary block margin-top-md" id="btnSaveGoal">Salvar Meta</button>
+
+            <button type="submit" class="linsora-btn primary block lg margin-top-md" id="btnSaveGoal">Salvar Meta</button>
           </form>
         </div>
       </div>
 
+      <!-- MODAL NOVA CHAVE PIX -->
       <div class="linsora-modal-overlay hidden" id="modalPixKeyForm">
-        <div class="linsora-modal-content drawer-bottom">
+        <div class="linsora-modal-content floating-center-card">
           <div class="modal-header">
             <h3>+ Nova Chave Pix</h3>
             <button type="button" class="modal-close" data-close-modal="modalPixKeyForm">✕</button>
           </div>
-          <form id="pixKeyForm" onsubmit="return false;">
+          <form id="pixKeyForm" class="modal-form-unified" onsubmit="return false;">
             <div class="form-group">
               <label for="pixTypeSelect">Tipo de Chave</label>
-              <select id="pixTypeSelect" class="linsora-input select-input">
-                <option value="CPF">CPF</option>
-                <option value="EMAIL">E-mail</option>
-                <option value="CELULAR">Celular</option>
-                <option value="RANDOM">Chave Aleatória (EVP)</option>
-              </select>
+              <div class="input-icon-wrapper">
+                <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.778-7.778zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
+                <select id="pixTypeSelect" class="linsora-input select-input">
+                  <option value="CPF">CPF</option>
+                  <option value="EMAIL">E-mail</option>
+                  <option value="CELULAR">Celular</option>
+                  <option value="RANDOM">Chave Aleatória (EVP)</option>
+                </select>
+              </div>
             </div>
+
             <div class="form-group">
               <label for="pixKeyValue">Valor da Chave</label>
-              <input type="text" id="pixKeyValue" class="linsora-input" placeholder="Digite a chave..." required>
+              <div class="input-icon-wrapper">
+                <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                <input type="text" id="pixKeyValue" class="linsora-input" placeholder="Digite a chave..." required>
+              </div>
             </div>
+
             <div class="form-group">
               <label for="pixBankSelect">Vincular ao Banco</label>
-              <select id="pixBankSelect" class="linsora-input select-input">
-                <!-- Injetado dinamicamente com as contas do usuário -->
-              </select>
+              <div class="input-icon-wrapper">
+                <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18M3 10h18M5 6l7-3 7 3M4 10v11M20 10v11M8 14v3M12 14v3M16 14v3"/></svg>
+                <select id="pixBankSelect" class="linsora-input select-input">
+                  <!-- Injetado dinamicamente com as contas do usuário -->
+                </select>
+              </div>
             </div>
-            <button type="submit" class="linsora-btn primary block margin-top-md" id="btnSavePixKey">Cadastrar Chave Pix</button>
+
+            <button type="submit" class="linsora-btn primary block lg margin-top-md" id="btnSavePixKey">Cadastrar Chave Pix</button>
           </form>
         </div>
       </div>
 
+      <!-- TOAST NOTIFICATION FLOATING BANNER (POSICIONAMENTO PERFEITO NO TOPO) -->
       <div class="toast-container" id="toastContainer"></div>
 
     </div>
