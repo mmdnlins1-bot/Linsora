@@ -25,6 +25,32 @@ test.describe('05. Módulo de Planejamento, Metas & Área Pix', () => {
     await expect(page.locator('#goalsGridList')).toContainText('25%'); // 5.000 / 20.000
   });
 
+  test('Deve realizar um aporte adicional em uma Meta existente', async ({ page }) => {
+    await page.click('.bottom-nav .nav-item[data-tab="tabGoals"]');
+    await expect(page.locator('#tabGoals')).toBeVisible();
+
+    // Cadastrar meta inicial
+    await page.click('#btnAddGoal');
+    await page.fill('#goalTitleInput', 'Disney World');
+    await page.fill('#goalTargetInput', '2000000'); // 20.000,00
+    await page.fill('#goalCurrentInput', '30000'); // 300,00
+    await page.fill('#goalDeadlineInput', '2027-06-30');
+    await page.click('#btnSaveGoal');
+
+    await expect(page.locator('#goalsGridList')).toContainText('Disney World');
+
+    // Clicar em + Adicionar valor
+    await page.click('.btn-deposit-goal[data-deposit-title="Disney World"]');
+    await expect(page.locator('#modalDepositGoal')).toBeVisible();
+
+    // Preencher aporte de 3.000,00 (300000) e confirmar
+    await page.fill('#depositAmountInput', '300000');
+    await page.click('#btnSaveGoalDeposit');
+
+    await expect(page.locator('#modalDepositGoal')).toHaveClass(/hidden/);
+    await expect(page.locator('#goalsGridList')).toContainText('Guardado: R$ 3.300,00');
+  });
+
   test('Deve cadastrar uma Chave Pix e realizar uma transferência Pix', async ({ page }) => {
     await page.click('.bottom-nav .nav-item[data-tab="tabAccounts"]');
     

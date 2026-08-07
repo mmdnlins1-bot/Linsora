@@ -710,6 +710,32 @@ function setupEventListeners() {
     LinsoraUI.showToast('Nova meta financeira cadastrada!');
   });
 
+  document.getElementById('depositGoalForm')?.addEventListener('submit', async function(e) {
+    if (e) e.preventDefault();
+    const goalId = document.getElementById('depositGoalId').value;
+    const amountRaw = document.getElementById('depositAmountInput').value;
+    const amount = LinsoraUtils.parseCurrencyToFloat(amountRaw);
+
+    if (!goalId) {
+      LinsoraUI.showToast('Meta não identificada.', 'error');
+      return;
+    }
+
+    if (isNaN(amount) || amount <= 0) {
+      LinsoraUI.showToast('Informe um valor válido para o aporte.', 'warning');
+      return;
+    }
+
+    const success = await window.linsoraStore.depositToGoal(goalId, amount);
+    if (success) {
+      document.getElementById('depositAmountInput').value = '';
+      LinsoraUI.closeModal('modalDepositGoal');
+      LinsoraUI.showToast('Aporte realizado com sucesso! 🎯');
+    } else {
+      LinsoraUI.showToast('Não foi possível registrar o aporte.', 'error');
+    }
+  });
+
   document.getElementById('btnAddPixKey')?.addEventListener('click', () => LinsoraUI.openModal('modalPixKeyForm'));
   document.getElementById('pixKeyForm')?.addEventListener('submit', async function(e) {
     if (e) e.preventDefault();

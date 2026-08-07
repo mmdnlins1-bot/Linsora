@@ -306,7 +306,9 @@ class LinsoraStore {
 
     const goal = this.state.goals.find(g => g.id === goalId);
     if (goal) {
-      goal.current = Math.min(goal.target, goal.current + numericAmount);
+      const currentVal = parseFloat(goal.current) || 0;
+      const targetVal = parseFloat(goal.target) || 999999999;
+      goal.current = Math.min(targetVal, currentVal + numericAmount);
       this.notify();
       return true;
     }
