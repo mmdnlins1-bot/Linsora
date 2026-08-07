@@ -40,21 +40,28 @@ class LinsoraGoogleAuthManager {
     try {
       // 1. Tentar Login Nativo via Capacitor no Android
       if (this.isNative && this.googleAuthPlugin) {
-        const googleUser = await this.googleAuthPlugin.signIn();
-        if (googleUser) {
-          const userProfile = {
-            id: googleUser.id || 'usr_g_' + btoa(googleUser.email).replace(/=/g, ''),
-            email: googleUser.email,
-            name: googleUser.name || (googleUser.givenName ? `${googleUser.givenName} ${googleUser.familyName || ''}`.trim() : googleUser.email.split('@')[0]),
-            avatar: googleUser.imageUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80',
-            idToken: googleUser.authentication ? googleUser.authentication.idToken : null,
-            accessToken: googleUser.authentication ? googleUser.authentication.accessToken : null,
-            provider: 'google',
-            authenticatedAt: new Date().toISOString()
-          };
+        try {
+          const googleUser = await this.googleAuthPlugin.signIn();
+          if (googleUser) {
+            const userProfile = {
+              id: googleUser.id || 'usr_g_' + btoa(googleUser.email).replace(/=/g, ''),
+              email: googleUser.email,
+              name: googleUser.name || (googleUser.givenName ? `${googleUser.givenName} ${googleUser.familyName || ''}`.trim() : googleUser.email.split('@')[0]),
+              avatar: googleUser.imageUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80',
+              idToken: googleUser.authentication ? googleUser.authentication.idToken : null,
+              accessToken: googleUser.authentication ? googleUser.authentication.accessToken : null,
+              provider: 'google',
+              authenticatedAt: new Date().toISOString()
+            };
 
-          this.saveSession(userProfile);
-          return { success: true, user: userProfile };
+            this.saveSession(userProfile);
+            return { success: true, user: userProfile };
+          }
+        } catch (nativeErr) {
+          console.warn('Google Auth Nativo lançou exceção, acionando fallback:', nativeErr);
+          if (nativeErr && (nativeErr.error === 'userCanceled' || nativeErr.message?.includes('canceled') || nativeErr.code === '12501')) {
+            return { success: false, isCanceled: true, message: 'Login com Google cancelado pelo usuário.' };
+          }
         }
       }
 
@@ -103,8 +110,16 @@ class LinsoraGoogleAuthManager {
         return { success: false, isCanceled: true, message: 'Login com Google cancelado pelo usuário.' };
       }
 
-      return { success: false, message: error.message || 'Falha ao autenticar com o Google.' };
+      return { success: false, message: this.mapGoogleErrorMessage(error?.message) };
     }
+  }
+
+  mapGoogleErrorMessage(msg) {
+    if (!msg) return 'Não foi possível completar o login com o Google.';
+    if (msg.includes('Something went wrong') || msg.includes('10') || msg.includes('12500')) {
+      return 'Configuração do Google Play Services pendente. Cadastre a chave SHA-1 no Google Cloud Console ou utilize o login por e-mail.';
+    }
+    return msg;
   }
 
   /**
