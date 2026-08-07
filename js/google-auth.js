@@ -78,11 +78,14 @@ class LinsoraGoogleAuthManager {
       rawName = `${given} ${family}`.trim() || (email ? email.split('@')[0] : null);
     }
 
-    if (!rawName && !email && !sub) return null;
+    if (!rawName || !email || !sub) {
+      console.warn('[DEBUG_PARSER_MISSING_REQUIRED_FIELDS]', { rawName, email, sub });
+      return null;
+    }
 
-    const finalName = rawName ? (rawName.charAt(0).toUpperCase() + rawName.slice(1)) : 'Michel Lins';
-    const finalEmail = email || 'michel.lins@gmail.com';
-    const finalSub = sub || 'usr_g_michel_lins';
+    const finalName = rawName.charAt(0).toUpperCase() + rawName.slice(1);
+    const finalEmail = email;
+    const finalSub = sub;
 
     // Leitura minuciosa da foto oficial do Google em todos os possíveis campos de resposta
     const googlePhotoUrl = googleUser.imageUrl || 
@@ -123,6 +126,7 @@ class LinsoraGoogleAuthManager {
       if (this.isNative && this.googleAuthPlugin) {
         try {
           const googleUser = await this.googleAuthPlugin.signIn();
+          console.log('[DEBUG_1_RAW_GOOGLE_USER_RESPONSE]', JSON.stringify(googleUser, null, 2));
           const profile = this.parseGoogleResponse(googleUser);
           if (profile) {
             this.saveSession(profile);
@@ -137,7 +141,6 @@ class LinsoraGoogleAuthManager {
             return { success: false, isCanceled: true, message: 'Login com Google cancelado pelo usuário.' };
           }
 
-          // Se a autenticação nativa lançou erro de desenvolvedor/credencial, cria a sessão direta para Michel Lins
           return await this.createSeamlessGoogleSession();
         }
       }
@@ -149,6 +152,7 @@ class LinsoraGoogleAuthManager {
             client_id: this.clientId,
             callback: (response) => {
               if (response && response.credential) {
+                console.log('[DEBUG_1_RAW_GIS_CREDENTIAL]', response.credential);
                 const profile = this.parseGoogleResponse(response.credential);
                 if (profile) {
                   this.saveSession(profile);
@@ -183,35 +187,23 @@ class LinsoraGoogleAuthManager {
   }
 
   /**
-   * Sessão fluida e segura com o Google para Michel Lins
+   * Sessão de fallback sem valores fixos mascarados
    */
   async createSeamlessGoogleSession(partialData = null) {
     const profile = this.parseGoogleResponse(partialData);
-    if (profile && profile.name !== 'Error') {
+    if (profile) {
       this.saveSession(profile);
       console.log('[DEBUG_3_GOOGLE_AUTH_SAVED_SESSION]', JSON.stringify(profile, null, 2));
       return { success: true, user: profile };
     }
 
     const saved = this.getActiveSession();
-    if (saved && saved.email && saved.name && saved.name !== 'Usuário Google' && saved.name !== 'Error') {
+    if (saved && saved.email && saved.name) {
       console.log('[DEBUG_3_GOOGLE_AUTH_SAVED_SESSION]', JSON.stringify(saved, null, 2));
       return { success: true, user: saved };
     }
 
-    const realUserProfile = {
-      id: 'usr_g_michel_lins',
-      sub: 'google_sub_michel_lins',
-      email: 'michel.lins@gmail.com',
-      name: 'Michel Lins',
-      avatar: 'https://ui-avatars.com/api/?name=Michel+Lins&background=10B981&color=fff&bold=true',
-      provider: 'google',
-      authenticatedAt: new Date().toISOString()
-    };
-
-    this.saveSession(realUserProfile);
-    console.log('[DEBUG_3_GOOGLE_AUTH_SAVED_SESSION]', JSON.stringify(realUserProfile, null, 2));
-    return { success: true, user: realUserProfile };
+    return { success: false, message: 'Não foi possível extrair dados da conta Google.' };
   }
 
   /**
