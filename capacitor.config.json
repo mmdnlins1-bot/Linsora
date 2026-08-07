@@ -14,9 +14,7 @@
   },
   "plugins": {
     "GoogleAuth": {
-      "scopes": ["profile", "email"],
-      "serverClientId": "465194772971-gmggsoaduqo12i9l96618atgf639dr9h.apps.googleusercontent.com",
-      "forceCodeForRefreshToken": true
+      "scopes": ["profile", "email"]
     }
   }
 }
