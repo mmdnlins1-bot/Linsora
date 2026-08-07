@@ -56,6 +56,15 @@ class SupabaseRepository {
      ------------------------------------------------------------------------ */
 
   async checkActiveSession() {
+    if (window.LinsoraGoogleAuth) {
+      const activeGoogleUser = window.LinsoraGoogleAuth.getActiveSession();
+      if (activeGoogleUser) {
+        this.currentUserId = activeGoogleUser.id;
+        const db = await this.getDbData(activeGoogleUser.id, activeGoogleUser);
+        return { success: true, user: db.user, db };
+      }
+    }
+
     if (this.supabase) {
       try {
         const { data: { session }, error } = await this.supabase.auth.getSession();
@@ -80,6 +89,16 @@ class SupabaseRepository {
   }
 
   async signInWithGoogleOAuth() {
+    if (window.LinsoraGoogleAuth) {
+      const res = await window.LinsoraGoogleAuth.signIn();
+      if (res.success && res.user) {
+        this.currentUserId = res.user.id;
+        const db = await this.getDbData(res.user.id, res.user);
+        return { success: true, user: db.user };
+      }
+      return res;
+    }
+
     if (this.supabase) {
       try {
         const redirectUrl = window.location.origin + window.location.pathname;
@@ -94,7 +113,6 @@ class SupabaseRepository {
       }
     }
 
-    // Fallback seguro em modo de desenvolvimento local caso chaves não estejam injetadas
     const guestUser = { id: 'usr_google_demo', name: 'Usuário Google', email: 'usuario@google.com' };
     this.currentUserId = guestUser.id;
     const db = await this.getDbData(guestUser.id, guestUser);

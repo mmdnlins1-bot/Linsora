@@ -28,6 +28,15 @@ window.switchTab = function(tabId) {
     window.linsoraStore.activeTab = tabId;
   }
 
+  const fabBtn = document.getElementById('btnFabNewTransaction');
+  if (fabBtn) {
+    if (tabId === 'tabProfile') {
+      fabBtn.classList.add('hidden');
+    } else {
+      fabBtn.classList.remove('hidden');
+    }
+  }
+
   if (tabId === 'tabDashboard' && window.linsoraStore && window.linsoraStore.state) {
     setTimeout(() => {
       const activePeriodPill = document.querySelector('#periodPillsSelector .period-pill.active');
@@ -148,6 +157,16 @@ function renderAppUI(state) {
   if (eyeOpen && eyeClosed) {
     eyeOpen.style.display = hideValues ? 'none' : 'block';
     eyeClosed.style.display = hideValues ? 'block' : 'none';
+  }
+
+  // SAUDAÇÃO DINÂMICA (Bom dia / Boa tarde / Boa noite)
+  const elGreeting = document.getElementById('greetingText');
+  if (elGreeting) {
+    const hour = new Date().getHours();
+    let text = 'Boa noite,';
+    if (hour >= 5 && hour < 12) text = 'Bom dia,';
+    else if (hour >= 12 && hour < 18) text = 'Boa tarde,';
+    elGreeting.innerText = text;
   }
 
   // 0. INDICADOR DE SAÚDE FINANCEIRA CONDICIONAL
@@ -435,13 +454,16 @@ function setupEventListeners() {
   const btnGoogle = document.getElementById('btnGoogleAuth');
   if (btnGoogle) {
     btnGoogle.onclick = async () => {
+      LinsoraUI.showToast('Abrindo seleção de conta Google...');
       const res = await window.supabaseRepo.signInWithGoogleOAuth();
       if (res.user) {
         await window.linsoraStore.loadUserData(res.user);
         grantAppAccess();
         LinsoraUI.showToast(`Bem-vindo(a), ${res.user.name}!`);
+      } else if (res.isCanceled) {
+        LinsoraUI.showToast(res.message || 'Login com Google cancelado.', 'warning');
       } else if (!res.success) {
-        LinsoraUI.showToast(res.message, 'error');
+        LinsoraUI.showToast(res.message || 'Falha ao autenticar com o Google.', 'error');
       }
     };
   }
@@ -612,8 +634,7 @@ function setupEventListeners() {
         return;
       }
 
-      await window.linsoraStore.saveTransaction({
-        id: id || null,
+      const txPayload = {
         type: isIncome ? 'RECEITA' : 'DESPESA',
         amount,
         description,
@@ -622,7 +643,10 @@ function setupEventListeners() {
         account,
         repetition,
         notes
-      });
+      };
+      if (id) txPayload.id = id;
+
+      await window.linsoraStore.saveTransaction(txPayload);
 
       LinsoraUI.closeModal('modalTransactionForm');
       LinsoraUI.showToast(`${isIncome ? 'Receita' : 'Despesa'} salva com sucesso!`);
@@ -707,6 +731,25 @@ function setupEventListeners() {
     }
   });
 
+  document.getElementById('btnEditTx')?.addEventListener('click', () => {
+    if (window.selectedTxId) {
+      const tx = window.linsoraStore.state.transactions.find(t => t.id === window.selectedTxId);
+      if (tx) {
+        LinsoraUI.closeModal('modalTransactionDetails');
+        document.getElementById('txId').value = tx.id;
+        document.getElementById('txAmount').value = LinsoraUtils.formatCurrencyInput((tx.amount * 100).toString());
+        document.getElementById('txDescription').value = tx.description;
+        document.getElementById('txDate').value = tx.date;
+        document.getElementById('txAccount').value = tx.account;
+        document.getElementById('txRepetition').value = tx.repetition || 'SINGLE';
+        document.getElementById('txNotes').value = tx.notes || '';
+        
+        setTxFormType(tx.type);
+        LinsoraUI.openModal('modalTransactionForm');
+      }
+    }
+  });
+
   document.getElementById('btnDeleteTx')?.addEventListener('click', async () => {
     if (window.selectedTxId) {
       await window.linsoraStore.deleteTransaction(window.selectedTxId);
@@ -715,18 +758,119 @@ function setupEventListeners() {
     }
   });
 
-  document.getElementById('btnConfirmPixTransfer')?.addEventListener('click', async () => {
-    const key = document.getElementById('pixKeyInput').value;
-    const amount = LinsoraUtils.parseCurrencyToFloat(document.getElementById('pixAmountInput').value);
+  // LÓGICA DE MODOS & VALIDAÇÃO DA ÁREA PIX
+  let currentPixMode = 'KEY'; // 'KEY' ou 'QR'
 
-    if (!key || !amount) {
-      LinsoraUI.showToast('Informe a chave Pix e o valor.', 'error');
+  const updatePixFormValidation = () => {
+    const keyInput = document.getElementById('pixKeyInput');
+    const amountInput = document.getElementById('pixAmountInput');
+    const btnConfirm = document.getElementById('btnConfirmPixTransfer');
+    const highlightCard = document.getElementById('pixAmountHighlightCard');
+    const highlightVal = document.getElementById('pixAmountHighlightVal');
+
+    const keyText = keyInput ? keyInput.value.trim() : '';
+    const rawAmountStr = amountInput ? amountInput.value : '';
+    const amountVal = LinsoraUtils.parseCurrencyToFloat(rawAmountStr);
+
+    const isKeyValid = currentPixMode === 'QR' || keyText.length > 0;
+    const isAmountValid = amountVal > 0;
+    const isValid = isKeyValid && isAmountValid;
+
+    if (btnConfirm) {
+      btnConfirm.disabled = !isValid;
+    }
+
+    if (highlightCard && highlightVal) {
+      if (amountVal > 0) {
+        highlightCard.classList.remove('hidden');
+        highlightVal.innerText = LinsoraUtils.formatBRL(amountVal, false);
+      } else {
+        highlightCard.classList.add('hidden');
+      }
+    }
+  };
+
+  // Alternar modos (Chave Pix vs QR Code)
+  document.getElementById('btnPixModeKey')?.addEventListener('click', () => {
+    currentPixMode = 'KEY';
+    document.getElementById('btnPixModeKey')?.classList.add('active');
+    document.getElementById('btnPixModeQr')?.classList.remove('active');
+    const keySec = document.getElementById('pixKeyModeSection');
+    const qrSec = document.getElementById('pixQrModeSection');
+    if (keySec) keySec.style.display = 'block';
+    if (qrSec) qrSec.style.display = 'none';
+    updatePixFormValidation();
+  });
+
+  document.getElementById('btnPixModeQr')?.addEventListener('click', () => {
+    currentPixMode = 'QR';
+    document.getElementById('btnPixModeQr')?.classList.add('active');
+    document.getElementById('btnPixModeKey')?.classList.remove('active');
+    const keySec = document.getElementById('pixKeyModeSection');
+    const qrSec = document.getElementById('pixQrModeSection');
+    if (keySec) keySec.style.display = 'none';
+    if (qrSec) qrSec.style.display = 'block';
+    updatePixFormValidation();
+  });
+
+  // Ouvintes de digitação para validação em tempo real
+  document.getElementById('pixKeyInput')?.addEventListener('input', updatePixFormValidation);
+  document.getElementById('pixAmountInput')?.addEventListener('input', updatePixFormValidation);
+
+  // Avançar para a Etapa 2: Resumo Pré-Confirmação
+  document.getElementById('btnConfirmPixTransfer')?.addEventListener('click', () => {
+    const keyInput = document.getElementById('pixKeyInput');
+    const amountInput = document.getElementById('pixAmountInput');
+    const amount = LinsoraUtils.parseCurrencyToFloat(amountInput ? amountInput.value : '0');
+    const keyText = currentPixMode === 'QR' ? 'Leitor de QR Code Pix' : (keyInput ? keyInput.value.trim() : '');
+
+    if (!amount || amount <= 0) {
+      LinsoraUI.showToast('Informe um valor maior que zero.', 'error');
       return;
     }
 
-    const success = await window.linsoraStore.executePixTransfer(key, amount);
+    // Preencher resumo
+    const summaryAmount = document.getElementById('summaryPixAmount');
+    const summaryKey = document.getElementById('summaryPixKey');
+    const summaryDateTime = document.getElementById('summaryPixDateTime');
+
+    if (summaryAmount) summaryAmount.innerText = LinsoraUtils.formatBRL(amount, false);
+    if (summaryKey) summaryKey.innerText = keyText || 'Chave Padrão';
+    if (summaryDateTime) {
+      const now = new Date();
+      summaryDateTime.innerText = `${now.toLocaleDateString('pt-BR')} às ${now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
+    }
+
+    // Alternar visibilidade das etapas
+    document.getElementById('pixFormStep')?.classList.add('hidden');
+    document.getElementById('pixSummaryStep')?.classList.remove('hidden');
+  });
+
+  // Voltar da etapa de resumo para o formulário
+  document.getElementById('btnBackPixStep')?.addEventListener('click', () => {
+    document.getElementById('pixSummaryStep')?.classList.add('hidden');
+    document.getElementById('pixFormStep')?.classList.remove('hidden');
+  });
+
+  // Efetivar Envio Final do Pix
+  document.getElementById('btnFinalConfirmPix')?.addEventListener('click', async () => {
+    const keyInput = document.getElementById('pixKeyInput');
+    const amountInput = document.getElementById('pixAmountInput');
+    const amount = LinsoraUtils.parseCurrencyToFloat(amountInput ? amountInput.value : '0');
+    const keyText = currentPixMode === 'QR' ? 'QR Code Pix' : (keyInput ? keyInput.value.trim() : 'Chave Padrão');
+
+    const success = await window.linsoraStore.executePixTransfer(keyText, amount);
     if (success) {
       LinsoraUI.closeModal('modalPixArea');
+      
+      // Resetar form do modal Pix para o estado inicial
+      document.getElementById('pixSummaryStep')?.classList.add('hidden');
+      document.getElementById('pixFormStep')?.classList.remove('hidden');
+      if (keyInput) keyInput.value = '';
+      if (amountInput) amountInput.value = '';
+      document.getElementById('pixAmountHighlightCard')?.classList.add('hidden');
+      updatePixFormValidation();
+
       LinsoraUI.showToast(`Pix de R$ ${amount.toLocaleString('pt-BR', {minimumFractionDigits: 2})} enviado!`);
     }
   });
@@ -788,6 +932,9 @@ function setupEventListeners() {
   });
 
   document.getElementById('btnLogout')?.addEventListener('click', async () => {
+    if (window.LinsoraGoogleAuth) {
+      await window.LinsoraGoogleAuth.signOut();
+    }
     await window.supabaseRepo.signOut();
     const main = document.getElementById('appMain');
     if (main) main.classList.add('hidden');

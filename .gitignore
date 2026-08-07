@@ -1,0 +1,25 @@
+# Dependencies
+node_modules/
+
+# Build artifacts
+dist/
+build/
+android/app/build/
+android/.gradle/
+android/build/
+www/
+
+# Playwright test reports & cache
+playwright-report/
+test-results/
+
+# Binaries
+*.apk
+*.aab
+
+# OS & IDE metadata
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.log

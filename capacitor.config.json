@@ -1,0 +1,13 @@
+{
+  "appId": "com.linsora.app",
+  "appName": "LINSORA",
+  "webDir": "www",
+  "bundledWebRuntime": false,
+  "plugins": {
+    "GoogleAuth": {
+      "scopes": ["profile", "email"],
+      "serverClientId": "1058204917417-linsora.apps.googleusercontent.com",
+      "forceCodeForRefreshToken": true
+    }
+  }
+}

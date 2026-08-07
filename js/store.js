@@ -82,11 +82,33 @@ class LinsoraStore {
   /* ------------------------------------------------------------------------
      OPERAÇÕES DE TRANSAÇÕES
      ------------------------------------------------------------------------ */
+  applyTransactionImpact(tx, isRevert = false) {
+    if (!tx || !tx.amount) return;
+    const factor = isRevert ? -1 : 1;
+    if (tx.type === 'RECEITA') {
+      this.adjustAccountBalance(tx.account, tx.amount * factor);
+    } else if (tx.type === 'DESPESA') {
+      if (tx.account && tx.account.includes('Cartão')) {
+        const card = this.state.cards.find(c => tx.account.includes(c.name));
+        if (card) {
+          card.limitUsed = Math.max(0, card.limitUsed + (tx.amount * factor));
+        }
+      } else {
+        this.adjustAccountBalance(tx.account, -tx.amount * factor);
+      }
+    }
+  }
+
   async saveTransaction(txData) {
     if (txData.id) {
       const index = this.state.transactions.findIndex(t => t.id === txData.id);
       if (index !== -1) {
-        this.state.transactions[index] = { ...this.state.transactions[index], ...txData };
+        const oldTx = this.state.transactions[index];
+        this.applyTransactionImpact(oldTx, true); // Reverte o impacto antigo
+
+        const updatedTx = { ...oldTx, ...txData };
+        this.state.transactions[index] = updatedTx;
+        this.applyTransactionImpact(updatedTx, false); // Aplica o novo impacto
       }
     } else {
       const newTx = {
@@ -96,27 +118,19 @@ class LinsoraStore {
         status: txData.status || 'CONCLUIDO'
       };
       this.state.transactions.unshift(newTx);
-      
-      if (newTx.type === 'RECEITA') {
-        this.adjustAccountBalance(newTx.account, newTx.amount);
-      } else if (newTx.type === 'DESPESA') {
-        if (newTx.account.includes('Cartão')) {
-          const card = this.state.cards.find(c => newTx.account.includes(c.name));
-          if (card) {
-            card.limitUsed += newTx.amount;
-          }
-        } else {
-          this.adjustAccountBalance(newTx.account, -newTx.amount);
-        }
-      }
+      this.applyTransactionImpact(newTx, false);
     }
 
     this.notify();
   }
 
   async deleteTransaction(txId) {
-    this.state.transactions = this.state.transactions.filter(t => t.id !== txId);
-    this.notify();
+    const tx = this.state.transactions.find(t => t.id === txId);
+    if (tx) {
+      this.applyTransactionImpact(tx, true); // Reverte o saldo ao excluir
+      this.state.transactions = this.state.transactions.filter(t => t.id !== txId);
+      this.notify();
+    }
   }
 
   async duplicateTransaction(txId) {
@@ -129,13 +143,7 @@ class LinsoraStore {
         date: new Date().toISOString().split('T')[0]
       };
       this.state.transactions.unshift(copy);
-
-      if (copy.type === 'RECEITA') {
-        this.adjustAccountBalance(copy.account, copy.amount);
-      } else if (copy.type === 'DESPESA' && !copy.account.includes('Cartão')) {
-        this.adjustAccountBalance(copy.account, -copy.amount);
-      }
-
+      this.applyTransactionImpact(copy, false);
       this.notify();
     }
   }
@@ -144,6 +152,7 @@ class LinsoraStore {
      OPERAÇÕES DE CONTAS & PIX
      ------------------------------------------------------------------------ */
   adjustAccountBalance(accountName, deltaAmount) {
+    if (!accountName) return;
     let acc = this.state.accounts.find(a => a.name.toLowerCase().includes(accountName.toLowerCase()));
     if (!acc && this.state.accounts.length > 0) {
       acc = this.state.accounts[0];
@@ -168,6 +177,13 @@ class LinsoraStore {
     };
     this.state.accounts.push(newAcc);
     this.notify();
+  }
+
+  async deleteAccount(accId) {
+    if (!accId) return false;
+    this.state.accounts = this.state.accounts.filter(a => a.id !== accId);
+    this.notify();
+    return true;
   }
 
   async executePixTransfer(pixKey, amount, accountName) {
@@ -272,7 +288,7 @@ class LinsoraStore {
     const icons = ['🎯', '✈️', '🚗', '🏠', '💎', '📈'];
     const newGoal = {
       id: 'goal_' + Date.now(),
-      userId: this.state.user.id,
+      userId: (this.state && this.state.user) ? this.state.user.id : 'guest',
       title: goalData.title,
       target: parseFloat(goalData.target) || 1000,
       current: parseFloat(goalData.current) || 0,
@@ -282,6 +298,19 @@ class LinsoraStore {
     };
     this.state.goals.push(newGoal);
     this.notify();
+  }
+
+  async depositToGoal(goalId, amount) {
+    const numericAmount = parseFloat(amount);
+    if (!goalId || isNaN(numericAmount) || numericAmount <= 0) return false;
+
+    const goal = this.state.goals.find(g => g.id === goalId);
+    if (goal) {
+      goal.current = Math.min(goal.target, goal.current + numericAmount);
+      this.notify();
+      return true;
+    }
+    return false;
   }
 
   /* ------------------------------------------------------------------------

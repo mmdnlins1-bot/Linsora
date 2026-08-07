@@ -342,39 +342,172 @@ class LinsoraUIComponentEngine {
 
   renderGoalsList(containerId, goals = []) {
     const container = document.getElementById(containerId);
+    const overviewContainer = document.getElementById('goalsOverviewContainer');
+    const insightsContainer = document.getElementById('goalsSmartInsights');
     if (!container) return;
 
+    const hideValues = window.linsoraStore.isHideValues;
+
+    // 1. ESTADO VAZIO INSPIRADOR
     if (!goals || goals.length === 0) {
+      if (overviewContainer) overviewContainer.innerHTML = '';
+      if (insightsContainer) insightsContainer.innerHTML = '';
+
       container.innerHTML = `
-        <div class="empty-state-card">
-          <div class="empty-icon">🎯</div>
-          <p>Nenhuma meta financeira cadastrada</p>
-          <span class="empty-sub">Clique em **+ Nova Meta** para acompanhar seus objetivos de economia.</span>
+        <div class="inspired-empty-state">
+          <div class="inspired-empty-icon">🎯</div>
+          <h3 class="inspired-empty-title">Dê o primeiro passo para realizar seus objetivos!</h3>
+          <p class="inspired-empty-desc">
+            Crie metas para sua reserva de emergência, uma viagem dos sonhos ou a compra do seu primeiro veículo. 
+            Defina o valor e prazo e o Linsora calcula exatamente quanto você precisa guardar por mês.
+          </p>
+          <button type="button" class="linsora-btn primary lg margin-top-xs" onclick="LinsoraUI.openModal('modalGoalForm')">
+            🚀 Criar Minha Primeira Meta
+          </button>
         </div>
       `;
       return;
     }
 
-    const hideValues = window.linsoraStore.isHideValues;
+    // 2. VISÃO GERAL DE METAS (OVERVIEW CARD GLOBAL)
+    const totalCurrent = goals.reduce((acc, g) => acc + (parseFloat(g.current) || 0), 0);
+    const totalTarget = goals.reduce((acc, g) => acc + (parseFloat(g.target) || 0), 0);
+    const overallPct = totalTarget > 0 ? Math.min(100, Math.round((totalCurrent / totalTarget) * 100)) : 0;
 
+    if (overviewContainer) {
+      overviewContainer.innerHTML = `
+        <div class="goals-overview-card">
+          <div class="goals-overview-header">
+            <h3><span>🎯</span> Progresso Global das Metas</h3>
+            <span class="badge-status-chip success">${overallPct}% Concluído</span>
+          </div>
+
+          <div class="limit-progress-bar" style="height: 12px; margin: 8px 0 14px 0;">
+            <div class="limit-progress-fill" style="width: ${overallPct}%; background: linear-gradient(90deg, #10B981, #06B6D4, #6366F1);"></div>
+          </div>
+
+          <div class="goals-overview-grid">
+            <div class="overview-metric-item">
+              <span>Guardado Total</span>
+              <strong style="color: var(--accent-green-neon);">${LinsoraUtils.formatBRL(totalCurrent, hideValues)}</strong>
+            </div>
+            <div class="overview-metric-item">
+              <span>Objetivo Acumulado</span>
+              <strong>${LinsoraUtils.formatBRL(totalTarget, hideValues)}</strong>
+            </div>
+            <div class="overview-metric-item">
+              <span>Metas Ativas</span>
+              <strong style="color: var(--accent-cyan);">${goals.length} metas</strong>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    // 3. CARDS DAS METAS INDIVIDUAIS COM APORTE RÁPIDO & CÁLCULOS
+    const now = new Date();
     container.innerHTML = goals.map(g => {
-      const pct = g.target > 0 ? Math.min(100, Math.round((g.current / g.target) * 100)) : 0;
+      const currentVal = parseFloat(g.current) || 0;
+      const targetVal = parseFloat(g.target) || 0;
+      const remainingVal = Math.max(0, targetVal - currentVal);
+      const pct = targetVal > 0 ? Math.min(100, Math.round((currentVal / targetVal) * 100)) : 0;
+
+      // Calcular meses restantes até o deadline
+      let monthsLeft = 1;
+      if (g.deadline) {
+        const d = new Date(g.deadline);
+        const yearDiff = d.getFullYear() - now.getFullYear();
+        const monthDiff = d.getMonth() - now.getMonth();
+        monthsLeft = Math.max(1, (yearDiff * 12) + monthDiff);
+      }
+
+      const suggestedMonthly = remainingVal > 0 ? (remainingVal / monthsLeft) : 0;
+      const formattedDate = g.deadline ? new Date(g.deadline).toLocaleDateString('pt-BR') : 'Sem prazo';
+
       return `
-        <div class="goal-item-card">
+        <div class="goal-item-card-enhanced">
           <div class="goal-top">
             <span class="goal-title">${g.icon || '🎯'} ${LinsoraUtils.escapeHTML(g.title)}</span>
             <span class="cat-pct-chip">${pct}%</span>
           </div>
-          <div class="limit-progress-bar" style="margin: 10px 0;">
-            <div class="limit-progress-fill" style="width: ${pct}%; background: linear-gradient(90deg, #10B981, #06B6D4);"></div>
+
+          <div class="limit-progress-bar">
+            <div class="limit-progress-fill" style="width: ${pct}%; background: ${pct >= 100 ? '#10B981' : 'linear-gradient(90deg, #10B981, #06B6D4)'};"></div>
           </div>
+
           <div class="goal-values">
-            <span>Guardado: <strong>${LinsoraUtils.formatBRL(g.current, hideValues)}</strong></span>
-            <span>Alvo: <strong>${LinsoraUtils.formatBRL(g.target, hideValues)}</strong></span>
+            <span>Guardado: <strong>${LinsoraUtils.formatBRL(currentVal, hideValues)}</strong></span>
+            <span>Alvo: <strong>${LinsoraUtils.formatBRL(targetVal, hideValues)}</strong></span>
           </div>
+
+          ${pct >= 100 ? `
+            <div class="goal-monthly-suggestion" style="background: rgba(16,185,129,0.12); border-color: rgba(16,185,129,0.3); color: var(--accent-green-neon);">
+              🎉 Meta Concluída! Parabéns pelo seu objetivo alcançado!
+            </div>
+          ` : `
+            <div class="goal-monthly-suggestion">
+              💡 Guarde <strong>${LinsoraUtils.formatBRL(suggestedMonthly, hideValues)}/mês</strong> até ${formattedDate}
+            </div>
+          `}
+
+          <div class="goal-time-rhythm">
+            <span>⏱️ Ritmo estimado: ~${monthsLeft} ${monthsLeft === 1 ? 'mês restante' : 'meses restantes'}</span>
+            <span>Faltam: ${LinsoraUtils.formatBRL(remainingVal, hideValues)}</span>
+          </div>
+
+          ${pct < 100 ? `
+            <button type="button" class="linsora-btn secondary sm btn-deposit-goal" data-deposit-goal="${g.id}" data-deposit-title="${LinsoraUtils.escapeHTML(g.title)}">
+              ➕ Adicionar valor
+            </button>
+          ` : ''}
         </div>
       `;
     }).join('');
+
+    // Adicionar eventos nos botões de aporte rápido
+    container.querySelectorAll('.btn-deposit-goal').forEach(btn => {
+      btn.onclick = () => {
+        const goalId = btn.getAttribute('data-deposit-goal');
+        const goalTitle = btn.getAttribute('data-deposit-title');
+        const inputId = document.getElementById('depositGoalId');
+        const titleEl = document.getElementById('depositGoalTitle');
+        if (inputId) inputId.value = goalId;
+        if (titleEl) titleEl.innerText = `Meta: "${goalTitle}"`;
+        LinsoraUI.openModal('modalDepositGoal');
+      };
+    });
+
+    // 4. INSIGHTS INTELIGENTES & RITMO DE ECONOMIA
+    if (insightsContainer) {
+      const monthBalance = window.linsoraStore ? window.linsoraStore.getMonthBalance() : 0;
+      const totalSuggestedMonthly = goals.reduce((acc, g) => {
+        const remaining = Math.max(0, (g.target || 0) - (g.current || 0));
+        let months = 1;
+        if (g.deadline) {
+          const d = new Date(g.deadline);
+          months = Math.max(1, ((d.getFullYear() - now.getFullYear()) * 12) + (d.getMonth() - now.getMonth()));
+        }
+        return acc + (remaining / months);
+      }, 0);
+
+      const isBalanced = monthBalance >= totalSuggestedMonthly;
+
+      insightsContainer.innerHTML = `
+        <div class="goals-smart-insights-card">
+          <div class="insights-icon">💡</div>
+          <div class="insights-body">
+            <strong>Inteligência de Metas Linsora</strong>
+            <p>
+              Para atingir todas as suas ${goals.length} metas ativas nos prazos estipulados, o aporte mensal sugerido é de 
+              <strong>${LinsoraUtils.formatBRL(totalSuggestedMonthly, hideValues)}/mês</strong>. 
+              ${isBalanced ? 
+                'Seu saldo mensal atual cobre confortavelmente seus aportes! Continue no mesmo ritmo.' : 
+                'Dica: Reavalie algumas despesas não essenciais para manter seus aportes no prazo.'}
+            </p>
+          </div>
+        </div>
+      `;
+    }
   }
 
   renderFixedBillsList(containerId, bills = []) {

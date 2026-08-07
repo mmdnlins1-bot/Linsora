@@ -61,11 +61,21 @@ const LinsoraUtils = {
   },
 
   /**
-   * Converte valor formatado em pt-BR (ex: "1.500,50") de volta para float limpo (1500.5)
+   * Converte valor formatado em pt-BR (ex: "1.500,50" ou 1500.5) de volta para float limpo (1500.5)
    */
   parseCurrencyToFloat(value) {
+    if (typeof value === 'number') return isNaN(value) ? 0 : value;
     if (!value) return 0;
-    const digits = String(value).replace(/\D/g, '');
+    const str = String(value).trim();
+    if (!str) return 0;
+
+    // Se já for uma string numérica limpa com ponto decimal (ex: "150.5" ou "1500")
+    if (/^\d+(\.\d+)?$/.test(str)) {
+      return parseFloat(str);
+    }
+
+    // Se contiver vírgula ou formato brasileiro (ex: "1.500,50" ou "150,00")
+    const digits = str.replace(/\D/g, '');
     if (!digits) return 0;
     return parseInt(digits, 10) / 100;
   },
