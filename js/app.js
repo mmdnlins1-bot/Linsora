@@ -71,7 +71,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     clearTimeout(splashTimer);
     await window.linsoraStore.loadUserData(sessionRes.user);
     grantAppAccess();
-    LinsoraUI.showToast(`Bem-vindo(a) via Google, ${sessionRes.user.name}!`);
     return;
   }
 });

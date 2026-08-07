@@ -84,9 +84,22 @@ class LinsoraGoogleAuthManager {
     const finalEmail = email || 'michel.lins@gmail.com';
     const finalSub = sub || 'usr_g_michel_lins';
 
-    // Leitura resiliente da foto de perfil / avatar
-    const avatar = googleUser.imageUrl || googleUser.photoUrl || googleUser.picture || googleUser.user?.imageUrl || jwtPayload.picture || 
-      `https://ui-avatars.com/api/?name=${encodeURIComponent(finalName)}&background=10B981&color=fff&bold=true`;
+    // Leitura minuciosa da foto oficial do Google em todos os possíveis campos de resposta
+    const googlePhotoUrl = googleUser.imageUrl || 
+                          googleUser.photoUrl || 
+                          googleUser.picture || 
+                          googleUser.user?.imageUrl || 
+                          googleUser.user?.picture || 
+                          googleUser.user?.photoUrl || 
+                          googleUser.account?.imageUrl || 
+                          googleUser.account?.photoUrl || 
+                          jwtPayload.picture || 
+                          jwtPayload.avatar_url || 
+                          null;
+
+    console.log('[DEBUG_PHOTO_URL_FOUND]', googlePhotoUrl);
+
+    const avatar = googlePhotoUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(finalName)}&background=10B981&color=fff&bold=true`;
 
     const profile = {
       id: finalSub.startsWith('usr_g_') ? finalSub : 'usr_g_' + finalSub,
