@@ -21,11 +21,19 @@ class LinsoraGoogleAuthManager {
         this.isNative = true;
         if (window.Capacitor.Plugins && window.Capacitor.Plugins.GoogleAuth) {
           this.googleAuthPlugin = window.Capacitor.Plugins.GoogleAuth;
-          this.googleAuthPlugin.initialize({
-            clientId: this.clientId,
+          
+          const initConfig = {
             scopes: ['profile', 'email'],
-            grantOfflineAccess: true
-          }).catch(err => console.log('Capacitor GoogleAuth Init Warning:', err));
+            grantOfflineAccess: false
+          };
+
+          // Adiciona serverClientId apenas se configurado especificamente
+          if (this.clientId && !this.clientId.includes('android')) {
+            initConfig.serverClientId = this.clientId;
+            initConfig.clientId = this.clientId;
+          }
+
+          this.googleAuthPlugin.initialize(initConfig).catch(err => console.log('Capacitor GoogleAuth Init Warning:', err));
         }
       }
     } catch (e) {

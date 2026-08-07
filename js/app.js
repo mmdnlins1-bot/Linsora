@@ -454,14 +454,12 @@ function setupEventListeners() {
   const btnGoogle = document.getElementById('btnGoogleAuth');
   if (btnGoogle) {
     btnGoogle.onclick = async () => {
-      LinsoraUI.showToast('Abrindo seleção de conta Google...');
       const res = await window.supabaseRepo.signInWithGoogleOAuth();
       if (res.user) {
         await window.linsoraStore.loadUserData(res.user);
         grantAppAccess();
-        LinsoraUI.showToast(`Bem-vindo(a), ${res.user.name}!`);
       } else if (res.isCanceled) {
-        LinsoraUI.showToast(res.message || 'Login com Google cancelado.', 'warning');
+        // Seleção cancelada pelo usuário (sem toast intrusivo)
       } else if (!res.success) {
         LinsoraUI.showToast(res.message || 'Falha ao autenticar com o Google.', 'error');
       }
@@ -966,6 +964,5 @@ function setupEventListeners() {
     if (main) main.classList.add('hidden');
     const auth = document.getElementById('authScreen');
     if (auth) auth.classList.remove('hidden');
-    LinsoraUI.showToast('Sessão encerrada com segurança.');
   });
 }
