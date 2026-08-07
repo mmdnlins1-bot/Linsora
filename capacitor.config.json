@@ -3,15 +3,6 @@
   "appName": "LINSORA",
   "webDir": "www",
   "bundledWebRuntime": false,
-  "server": {
-    "url": "https://controle-financeiro.vercel.app",
-    "cleartext": true,
-    "allowNavigation": [
-      "controle-financeiro.vercel.app",
-      "*.vercel.app",
-      "accounts.google.com"
-    ]
-  },
   "plugins": {
     "GoogleAuth": {
       "scopes": ["profile", "email"],
