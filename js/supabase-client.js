@@ -55,10 +55,29 @@ class SupabaseRepository {
      AUTENTICAÇÃO E SESSÃO DO USUÁRIO
      ------------------------------------------------------------------------ */
 
+  saveActiveLocalSession(userProfile) {
+    try {
+      if (userProfile && userProfile.id) {
+        localStorage.setItem('LINSORA_ACTIVE_LOCAL_SESSION', JSON.stringify(userProfile));
+      }
+    } catch (e) {
+      console.warn('Falha ao salvar sessão local:', e);
+    }
+  }
+
+  getActiveLocalSession() {
+    try {
+      const raw = localStorage.getItem('LINSORA_ACTIVE_LOCAL_SESSION');
+      return raw ? JSON.parse(raw) : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
   async checkActiveSession() {
     if (window.LinsoraGoogleAuth) {
       const activeGoogleUser = window.LinsoraGoogleAuth.getActiveSession();
-      if (activeGoogleUser) {
+      if (activeGoogleUser && activeGoogleUser.email) {
         this.currentUserId = activeGoogleUser.id;
         const db = await this.getDbData(activeGoogleUser.id, activeGoogleUser);
         return { success: true, user: db.user, db };
@@ -68,9 +87,7 @@ class SupabaseRepository {
     if (this.supabase) {
       try {
         const { data: { session }, error } = await this.supabase.auth.getSession();
-        if (error) throw error;
-        
-        if (session && session.user) {
+        if (!error && session && session.user) {
           this.currentUserId = session.user.id;
           const userMeta = session.user.user_metadata || {};
           const db = await this.getDbData(session.user.id, {
@@ -79,12 +96,21 @@ class SupabaseRepository {
             email: session.user.email,
             avatar: userMeta.avatar_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80'
           });
+          this.saveActiveLocalSession(db.user);
           return { success: true, user: db.user, db };
         }
       } catch (e) {
-        console.warn('Sessão ativa não encontrada:', e);
+        console.warn('Sessão ativa Supabase não encontrada:', e);
       }
     }
+
+    const localSession = this.getActiveLocalSession();
+    if (localSession && localSession.id) {
+      this.currentUserId = localSession.id;
+      const db = await this.getDbData(localSession.id, localSession);
+      return { success: true, user: db.user, db };
+    }
+
     return { success: false };
   }
 
@@ -94,6 +120,7 @@ class SupabaseRepository {
       if (res.success && res.user) {
         this.currentUserId = res.user.id;
         const db = await this.getDbData(res.user.id, res.user);
+        this.saveActiveLocalSession(db.user);
         return { success: true, user: db.user };
       }
       return res;
@@ -113,10 +140,7 @@ class SupabaseRepository {
       }
     }
 
-    const guestUser = { id: 'usr_google_demo', name: 'Usuário Google', email: 'usuario@google.com' };
-    this.currentUserId = guestUser.id;
-    const db = await this.getDbData(guestUser.id, guestUser);
-    return { success: true, user: db.user, isDemoNotice: true };
+    return { success: false, message: 'Não foi possível extrair dados da conta Google.' };
   }
 
   async signInWithEmail(email, password) {
@@ -126,6 +150,7 @@ class SupabaseRepository {
         if (error) throw error;
         this.currentUserId = data.user.id;
         const db = await this.getDbData(data.user.id, { id: data.user.id, email: data.user.email, name: email.split('@')[0] });
+        this.saveActiveLocalSession(db.user);
         return { success: true, user: db.user };
       } catch (err) {
         return { success: false, message: this.mapAuthErrorMessage(err.message) };
@@ -135,6 +160,7 @@ class SupabaseRepository {
     const userId = 'usr_' + btoa(email).replace(/=/g, '').slice(0, 10);
     this.currentUserId = userId;
     const db = await this.getDbData(userId, { id: userId, email, name: email.split('@')[0] });
+    this.saveActiveLocalSession(db.user);
     return { success: true, user: db.user };
   }
 
@@ -149,6 +175,7 @@ class SupabaseRepository {
         if (error) throw error;
         this.currentUserId = data.user.id;
         const db = await this.getDbData(data.user.id, { id: data.user.id, email, name });
+        this.saveActiveLocalSession(db.user);
         return { success: true, user: db.user };
       } catch (err) {
         return { success: false, message: this.mapAuthErrorMessage(err.message) };
@@ -158,16 +185,19 @@ class SupabaseRepository {
     const userId = 'usr_' + btoa(email).replace(/=/g, '').slice(0, 10);
     this.currentUserId = userId;
     const db = await this.getDbData(userId, { id: userId, email, name: name || email.split('@')[0] });
+    this.saveActiveLocalSession(db.user);
     return { success: true, user: db.user };
   }
 
   async signOut() {
-    if (this.supabase) {
-      try {
+    try {
+      localStorage.removeItem('LINSORA_ACTIVE_LOCAL_SESSION');
+      localStorage.removeItem('linsora_google_session');
+      if (this.supabase) {
         await this.supabase.auth.signOut();
-      } catch (e) {
-        console.warn('Erro ao encerrar sessão Supabase:', e);
       }
+    } catch (e) {
+      console.warn('Erro ao encerrar sessão:', e);
     }
     this.currentUserId = 'guest';
   }

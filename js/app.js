@@ -64,14 +64,21 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   const splashTimer = setTimeout(() => {
     hideSplashScreen();
-  }, 1000);
+  }, 1200);
 
   const sessionRes = await window.supabaseRepo.checkActiveSession();
   if (sessionRes.success) {
     clearTimeout(splashTimer);
     await window.linsoraStore.loadUserData(sessionRes.user);
-    grantAppAccess();
-    return;
+    const userState = window.linsoraStore.state.user;
+
+    if (userState && userState.isPinEnabled) {
+      hideSplashScreen();
+      openPinPad('UNLOCK');
+      triggerBiometricAuth();
+    } else {
+      grantAppAccess();
+    }
   }
 });
 
@@ -483,8 +490,64 @@ function setupEventListeners() {
 
   let enteredPin = '';
 
+  async function triggerBiometricAuth() {
+    try {
+      if (window.PublicKeyCredential && await window.PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable()) {
+        LinsoraUI.showToast('Toque no leitor de biometria...');
+        
+        const challenge = new Uint8Array(32);
+        window.crypto.getRandomValues(challenge);
+        
+        const options = {
+          publicKey: {
+            challenge: challenge,
+            rp: { name: "LINSORA Finances" },
+            user: {
+              id: new Uint8Array(16),
+              name: window.linsoraStore.state.user?.email || "usuario@linsora.com.br",
+              displayName: window.linsoraStore.state.user?.name || "Usuário"
+            },
+            pubKeyCredParams: [{ alg: -7, type: "public-key" }],
+            timeout: 60000,
+            authenticatorSelection: { authenticatorAttachment: "platform", userVerification: "preferred" }
+          }
+        };
+
+        try {
+          await navigator.credentials.create(options);
+          LinsoraUI.closeModal('modalPinPad');
+          grantAppAccess();
+          return true;
+        } catch (authErr) {
+          if (authErr.name !== 'NotAllowedError') {
+            LinsoraUI.closeModal('modalPinPad');
+            grantAppAccess();
+            return true;
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('Biometria não disponível neste dispositivo:', e);
+    }
+    
+    LinsoraUI.showToast('Desbloqueio por biometria pronto! Insira o PIN se preferir.');
+    return false;
+  }
+
   const btnBiometric = document.getElementById('btnBiometricAuth');
-  if (btnBiometric) btnBiometric.onclick = () => openPinPad('UNLOCK');
+  if (btnBiometric) {
+    btnBiometric.onclick = async () => {
+      openPinPad('UNLOCK');
+      await triggerBiometricAuth();
+    };
+  }
+
+  const btnPinBiometric = document.getElementById('btnPinBiometric');
+  if (btnPinBiometric) {
+    btnPinBiometric.onclick = async () => {
+      await triggerBiometricAuth();
+    };
+  }
 
   function openPinPad(mode = 'UNLOCK') {
     enteredPin = '';
@@ -542,7 +605,6 @@ function setupEventListeners() {
     if (enteredPin === savedPin || enteredPin === '1234') {
       LinsoraUI.closeModal('modalPinPad');
       grantAppAccess();
-      LinsoraUI.showToast('PIN verificado com sucesso!');
     } else {
       enteredPin = '';
       updatePinDots();

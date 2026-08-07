@@ -25,9 +25,20 @@ async function login(page, options = {}) {
 
   await page.goto('/');
 
+  // Se a sessão já estiver restaurada automaticamente e o appMain visível, encerra o helper
+  const isAppVisible = await page.locator('#appMain').isVisible();
+  if (isAppVisible) {
+    return;
+  }
+
   if (skipOnboarding) {
     await page.evaluate(() => localStorage.setItem('LINSORA_SEEN_ONBOARDING', 'true'));
     await page.reload();
+  }
+
+  const isAppVisibleAfterReload = await page.locator('#appMain').isVisible();
+  if (isAppVisibleAfterReload) {
+    return;
   }
 
   // Garantir que a tela de auth esteja pronta e visível

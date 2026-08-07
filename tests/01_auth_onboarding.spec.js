@@ -6,7 +6,10 @@ test.describe('01. Fluxo de Autenticação & Onboarding', () => {
   test.beforeEach(async ({ page }) => {
     // Limpar armazenamento para simular primeiro acesso
     await page.goto('/');
-    await page.evaluate(() => localStorage.clear());
+    await page.evaluate(() => {
+      localStorage.clear();
+      sessionStorage.clear();
+    });
     await page.reload();
   });
 
