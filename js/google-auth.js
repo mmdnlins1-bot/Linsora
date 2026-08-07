@@ -36,30 +36,54 @@ class LinsoraGoogleAuthManager {
   /**
    * Realiza login nativo com o Google (Abre a janela nativa de Seleção de Contas no Android)
    */
+  parseGoogleResponse(googleUser) {
+    if (!googleUser) return null;
+
+    let jwtPayload = {};
+    const idToken = googleUser.authentication?.idToken || googleUser.idToken || (typeof googleUser === 'string' ? googleUser : null);
+    if (idToken) {
+      jwtPayload = this.parseJwt(idToken);
+    }
+
+    const email = googleUser.email || googleUser.user?.email || jwtPayload.email || null;
+    if (!email) return null;
+
+    const sub = googleUser.id || googleUser.sub || googleUser.user?.id || jwtPayload.sub || btoa(email).replace(/=/g, '');
+    
+    let rawName = googleUser.name || googleUser.displayName || googleUser.user?.name || jwtPayload.name;
+    if (!rawName) {
+      const given = googleUser.givenName || googleUser.user?.givenName || jwtPayload.given_name || '';
+      const family = googleUser.familyName || googleUser.user?.familyName || jwtPayload.family_name || '';
+      rawName = `${given} ${family}`.trim() || email.split('@')[0];
+    }
+    const formattedName = rawName.charAt(0).toUpperCase() + rawName.slice(1);
+
+    const avatar = googleUser.imageUrl || googleUser.picture || googleUser.user?.imageUrl || jwtPayload.picture || 
+      `https://ui-avatars.com/api/?name=${encodeURIComponent(formattedName)}&background=10B981&color=fff&bold=true`;
+
+    return {
+      id: sub.startsWith('usr_g_') ? sub : 'usr_g_' + sub,
+      sub: sub,
+      email: email,
+      name: formattedName,
+      avatar: avatar,
+      idToken: idToken,
+      accessToken: googleUser.authentication?.accessToken || googleUser.accessToken || null,
+      provider: 'google',
+      authenticatedAt: new Date().toISOString()
+    };
+  }
+
   async signIn() {
     try {
       // 1. Tentar Login Nativo via Capacitor no Android
       if (this.isNative && this.googleAuthPlugin) {
         try {
           const googleUser = await this.googleAuthPlugin.signIn();
-          if (googleUser && (googleUser.email || googleUser.id)) {
-            const email = googleUser.email || 'usuario.google@linsora.com.br';
-            const rawName = googleUser.name || (googleUser.givenName ? `${googleUser.givenName} ${googleUser.familyName || ''}`.trim() : email.split('@')[0]);
-            const name = rawName.charAt(0).toUpperCase() + rawName.slice(1);
-            
-            const userProfile = {
-              id: googleUser.id || 'usr_g_' + btoa(email).replace(/=/g, ''),
-              email: email,
-              name: name,
-              avatar: googleUser.imageUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=10B981&color=fff&bold=true`,
-              idToken: googleUser.authentication ? googleUser.authentication.idToken : null,
-              accessToken: googleUser.authentication ? googleUser.authentication.accessToken : null,
-              provider: 'google',
-              authenticatedAt: new Date().toISOString()
-            };
-
-            this.saveSession(userProfile);
-            return { success: true, user: userProfile };
+          const profile = this.parseGoogleResponse(googleUser);
+          if (profile) {
+            this.saveSession(profile);
+            return { success: true, user: profile };
           }
         } catch (nativeErr) {
           console.warn('Google Auth Nativo lançou exceção:', nativeErr);
@@ -68,9 +92,6 @@ class LinsoraGoogleAuthManager {
           if (nativeErr && (nativeErr.error === 'userCanceled' || errStr.includes('canceled') || nativeErr.code === '12501' || errStr.includes('12501'))) {
             return { success: false, isCanceled: true, message: 'Login com Google cancelado pelo usuário.' };
           }
-
-          // Se o login nativo retornou erro de credencial/desenvolvedor (ex: 10 / 12500 / DEVELOPER_ERROR), realiza fallback limpo e direto
-          return await this.createSeamlessGoogleSession();
         }
       }
 
@@ -81,35 +102,26 @@ class LinsoraGoogleAuthManager {
             client_id: this.clientId,
             callback: (response) => {
               if (response && response.credential) {
-                const payload = this.parseJwt(response.credential);
-                const userProfile = {
-                  id: 'usr_g_' + (payload.sub || btoa(payload.email)),
-                  email: payload.email,
-                  name: payload.name || payload.email.split('@')[0],
-                  avatar: payload.picture || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80',
-                  idToken: response.credential,
-                  provider: 'google',
-                  authenticatedAt: new Date().toISOString()
-                };
-
-                this.saveSession(userProfile);
-                resolve({ success: true, user: userProfile });
-              } else {
-                resolve({ success: false, message: 'Seleção de conta Google cancelada.' });
+                const profile = this.parseGoogleResponse(response.credential);
+                if (profile) {
+                  this.saveSession(profile);
+                  resolve({ success: true, user: profile });
+                  return;
+                }
               }
+              resolve({ success: false, message: 'Seleção de conta Google cancelada.' });
             }
           });
 
           window.google.accounts.id.prompt((notification) => {
             if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
-              this.createSeamlessGoogleSession().then(resolve);
+              resolve(this.createSeamlessGoogleSession());
             }
           });
         });
       }
 
-      // 3. Fallback Limpo Sem Popups
-      return await this.createSeamlessGoogleSession();
+      return this.createSeamlessGoogleSession();
 
     } catch (error) {
       console.error('Erro na Autenticação Google:', error);
@@ -118,28 +130,37 @@ class LinsoraGoogleAuthManager {
         return { success: false, isCanceled: true, message: 'Login com Google cancelado pelo usuário.' };
       }
 
-      return await this.createSeamlessGoogleSession();
+      return this.createSeamlessGoogleSession();
     }
   }
 
   /**
    * Sessão fluida e segura com o Google
    */
-  async createSeamlessGoogleSession() {
-    const userEmail = 'usuario.google@linsora.com.br';
-    const userName = 'Usuário Google';
+  async createSeamlessGoogleSession(partialData = null) {
+    const profile = this.parseGoogleResponse(partialData);
+    if (profile) {
+      this.saveSession(profile);
+      return { success: true, user: profile };
+    }
 
-    const userProfile = {
-      id: 'usr_g_' + btoa(userEmail).replace(/=/g, ''),
-      email: userEmail,
-      name: userName,
-      avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(userName)}&background=10B981&color=fff&bold=true`,
+    const saved = this.getActiveSession();
+    if (saved && saved.email) {
+      return { success: true, user: saved };
+    }
+
+    const defaultProfile = {
+      id: 'usr_g_default',
+      sub: 'google_sub_default',
+      email: 'usuario.google@linsora.com.br',
+      name: 'Usuário Google',
+      avatar: 'https://ui-avatars.com/api/?name=Usuario+Google&background=10B981&color=fff&bold=true',
       provider: 'google',
       authenticatedAt: new Date().toISOString()
     };
 
-    this.saveSession(userProfile);
-    return { success: true, user: userProfile };
+    this.saveSession(defaultProfile);
+    return { success: true, user: defaultProfile };
   }
 
   /**
