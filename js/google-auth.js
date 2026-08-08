@@ -117,10 +117,13 @@ class LinsoraGoogleAuthManager {
         try {
           const googleUser = await this.googleAuthPlugin.signIn();
           console.log('[GOOGLE_AUTH] Raw response:', JSON.stringify(googleUser, null, 2));
+          alert('[RAW_GOOGLE_USER_RESPONSE]\n' + JSON.stringify(googleUser, null, 2));
           const profile = this.parseGoogleResponse(googleUser);
           if (profile) {
             this.saveSession(profile);
             return { success: true, user: profile };
+          } else {
+            alert('[PARSER_RETURNED_NULL]\n' + JSON.stringify(googleUser, null, 2));
           }
         } catch (nativeErr) {
           console.warn('[GOOGLE_AUTH] Native error:', nativeErr);
