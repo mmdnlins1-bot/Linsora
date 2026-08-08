@@ -130,10 +130,79 @@ class LinsoraGoogleAuthManager {
           if (nativeErr && (nativeErr.error === 'userCanceled' || errStr.includes('canceled') || nativeErr.code === '12501' || errStr.includes('12501'))) {
             return { success: false, isCanceled: true, message: 'Login com Google cancelado pelo usuário.' };
           }
+          // Continua para o fallback de Webview GIS / Supabase OAuth
         }
       }
 
-      // 2. Fallback Transparente via Supabase OAuth se disponível
+      // 2. Google Identity Services (GIS) Web / Webview Selector
+      if (window.google && window.google.accounts && window.google.accounts.id) {
+        const gisResult = await new Promise((resolve) => {
+          let resolved = false;
+
+          const finish = (result) => {
+            if (!resolved) {
+              resolved = true;
+              resolve(result);
+            }
+          };
+
+          try {
+            window.google.accounts.id.initialize({
+              client_id: this.clientId,
+              auto_select: false,
+              callback: (response) => {
+                if (response && response.credential) {
+                  console.log('[DEBUG_1_RAW_GIS_CREDENTIAL]', response.credential);
+                  const profile = this.parseGoogleResponse(response.credential);
+                  if (profile) {
+                    this.saveSession(profile);
+                    console.log('[DEBUG_3_GOOGLE_AUTH_SAVED_SESSION]', JSON.stringify(profile, null, 2));
+                    finish({ success: true, user: profile });
+                    return;
+                  }
+                }
+                finish(null);
+              }
+            });
+
+            // Tentar exibir o prompt GIS
+            window.google.accounts.id.prompt((notification) => {
+              if (notification.isNotDisplayed() || notification.isSkippedMoment() || notification.isDismissedMoment()) {
+                // Se o prompt de 1-tap for ignorado ou bloqueado no Webview, tenta renderizar botão popup
+                let btnContainer = document.getElementById('gisBtnContainerHidden');
+                if (!btnContainer) {
+                  btnContainer = document.createElement('div');
+                  btnContainer.id = 'gisBtnContainerHidden';
+                  btnContainer.style.display = 'none';
+                  document.body.appendChild(btnContainer);
+                }
+                btnContainer.innerHTML = '';
+                window.google.accounts.id.renderButton(btnContainer, { type: 'standard', size: 'large' });
+                
+                const btnEl = btnContainer.querySelector('div[role=button]') || btnContainer.querySelector('iframe');
+                if (btnEl) {
+                  btnEl.click();
+                } else {
+                  finish(null);
+                }
+              }
+            });
+
+            // Timeout de segurança para não travar
+            setTimeout(() => finish(null), 10000);
+
+          } catch (e) {
+            console.warn('GIS Auth Error:', e);
+            finish(null);
+          }
+        });
+
+        if (gisResult && gisResult.success) {
+          return gisResult;
+        }
+      }
+
+      // 3. Fallback Transparente via Supabase OAuth se disponível
       if (window.supabaseRepo && window.supabaseRepo.supabase) {
         try {
           const redirectUrl = window.location.origin + window.location.pathname;
@@ -149,43 +218,13 @@ class LinsoraGoogleAuthManager {
         }
       }
 
-      // 3. Fallback para Google Identity Services (GIS) Web Login
-      if (window.google && window.google.accounts && window.google.accounts.id) {
-        return new Promise((resolve) => {
-          window.google.accounts.id.initialize({
-            client_id: this.clientId,
-            callback: (response) => {
-              if (response && response.credential) {
-                console.log('[DEBUG_1_RAW_GIS_CREDENTIAL]', response.credential);
-                const profile = this.parseGoogleResponse(response.credential);
-                if (profile) {
-                  this.saveSession(profile);
-                  console.log('[DEBUG_3_GOOGLE_AUTH_SAVED_SESSION]', JSON.stringify(profile, null, 2));
-                  resolve({ success: true, user: profile });
-                  return;
-                }
-              }
-              resolve({ success: false, message: 'Seleção de conta Google cancelada.' });
-            }
-          });
-
-          window.google.accounts.id.prompt((notification) => {
-            if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
-              resolve(this.createSeamlessGoogleSession());
-            }
-          });
-        });
-      }
-
       return await this.createSeamlessGoogleSession();
 
     } catch (error) {
       console.error('[DEBUG GoogleAuth.signIn EXCEPTION]:', error);
-      
       if (error && (error.error === 'userCanceled' || error.message?.includes('canceled') || error.code === '12501')) {
         return { success: false, isCanceled: true, message: 'Login com Google cancelado pelo usuário.' };
       }
-
       return await this.createSeamlessGoogleSession();
     }
   }
