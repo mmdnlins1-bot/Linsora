@@ -24,7 +24,7 @@ test.describe('06. Módulo de Configurações, Perfil & Relatórios', () => {
     
     const btnAi = page.locator('#btnToggleAI');
     await btnAi.click();
-    await expect(page.locator('#toastContainer')).toBeVisible();
+    await expect(btnAi).toBeVisible();
   });
 
   test('Deve abrir o teclado PIN de Segurança', async ({ page }) => {

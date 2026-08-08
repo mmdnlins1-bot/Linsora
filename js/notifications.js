@@ -8,6 +8,29 @@
 class LinsoraNotificationsEngine {
   constructor() {
     this.notifications = [];
+    this.readIds = new Set(this.loadReadIds());
+  }
+
+  loadReadIds() {
+    try {
+      const raw = localStorage.getItem('LINSORA_READ_NOTIFS');
+      return raw ? JSON.parse(raw) : [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  saveReadIds() {
+    try {
+      localStorage.setItem('LINSORA_READ_NOTIFS', JSON.stringify([...this.readIds]));
+    } catch (e) {
+      console.warn('Falha ao salvar notificações lidas:', e);
+    }
+  }
+
+  markAllAsRead() {
+    this.notifications.forEach(n => this.readIds.add(n.id));
+    this.saveReadIds();
   }
 
   /**
@@ -102,7 +125,7 @@ class LinsoraNotificationsEngine {
    * Retorna a contagem de notificações não lidas
    */
   getUnreadCount() {
-    return this.notifications.length;
+    return this.notifications.filter(n => !this.readIds.has(n.id)).length;
   }
 }
 

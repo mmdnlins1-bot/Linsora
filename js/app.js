@@ -489,12 +489,11 @@ function setupEventListeners() {
   }
 
   let enteredPin = '';
+  let currentPinMode = 'UNLOCK';
 
   async function triggerBiometricAuth() {
     try {
       if (window.PublicKeyCredential && await window.PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable()) {
-        LinsoraUI.showToast('Toque no leitor de biometria...');
-        
         const challenge = new Uint8Array(32);
         window.crypto.getRandomValues(challenge);
         
@@ -530,7 +529,6 @@ function setupEventListeners() {
       console.warn('Biometria não disponível neste dispositivo:', e);
     }
     
-    LinsoraUI.showToast('Desbloqueio por biometria pronto! Insira o PIN se preferir.');
     return false;
   }
 
@@ -551,6 +549,7 @@ function setupEventListeners() {
 
   function openPinPad(mode = 'UNLOCK') {
     enteredPin = '';
+    currentPinMode = mode;
     updatePinDots();
     
     const title = document.getElementById('pinPadTitle');
@@ -600,7 +599,22 @@ function setupEventListeners() {
   }
 
   function processPinEntry() {
-    const savedPin = window.linsoraStore.state.user.pinCode || '1234';
+    const savedPin = window.linsoraStore.state.user?.pinCode;
+
+    if (currentPinMode === 'SETUP') {
+      window.linsoraStore.setPinCode(enteredPin);
+      enteredPin = '';
+      updatePinDots();
+      LinsoraUI.closeModal('modalPinPad');
+      return;
+    }
+
+    if (!savedPin) {
+      window.linsoraStore.setPinCode(enteredPin);
+      LinsoraUI.closeModal('modalPinPad');
+      grantAppAccess();
+      return;
+    }
 
     if (enteredPin === savedPin || enteredPin === '1234') {
       LinsoraUI.closeModal('modalPinPad');
@@ -617,15 +631,13 @@ function setupEventListeners() {
     btnTogglePIN.onclick = () => {
       const isEnabled = window.linsoraStore.togglePinSecurity();
       if (isEnabled) openPinPad('SETUP');
-      else LinsoraUI.showToast('Segurança por PIN desativada.');
     };
   }
 
   const btnToggleAI = document.getElementById('btnToggleAI');
   if (btnToggleAI) {
     btnToggleAI.onclick = () => {
-      const active = window.linsoraStore.toggleAiClassification();
-      LinsoraUI.showToast(`Classificação por IA ${active ? 'ativada' : 'desativada'}.`);
+      window.linsoraStore.toggleAiClassification();
     };
   }
 
@@ -974,11 +986,16 @@ function setupEventListeners() {
   document.getElementById('btnTogglePrivacy')?.addEventListener('click', () => window.linsoraStore.togglePrivacy());
   
   document.getElementById('btnToggleTheme')?.addEventListener('click', () => {
-    const newTheme = window.linsoraStore.toggleTheme();
-    LinsoraUI.showToast(`Tema ${newTheme === 'dark' ? 'Escuro' : 'Claro'} ativado!`);
+    window.linsoraStore.toggleTheme();
   });
 
-  document.getElementById('btnOpenNotifications')?.addEventListener('click', () => LinsoraUI.openModal('modalNotifications'));
+  document.getElementById('btnOpenNotifications')?.addEventListener('click', () => {
+    if (window.linsoraNotifs) {
+      window.linsoraNotifs.markAllAsRead();
+      document.getElementById('btnOpenNotifications')?.classList.remove('has-unread');
+    }
+    LinsoraUI.openModal('modalNotifications');
+  });
   document.getElementById('btnCloseAlertBanner')?.addEventListener('click', () => {
     const banner = document.getElementById('smartAlertBanner');
     if (banner) banner.style.display = 'none';

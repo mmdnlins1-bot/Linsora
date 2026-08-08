@@ -130,12 +130,26 @@ class LinsoraGoogleAuthManager {
           if (nativeErr && (nativeErr.error === 'userCanceled' || errStr.includes('canceled') || nativeErr.code === '12501' || errStr.includes('12501'))) {
             return { success: false, isCanceled: true, message: 'Login com Google cancelado pelo usuário.' };
           }
-
-          return await this.createSeamlessGoogleSession();
         }
       }
 
-      // 2. Tentar Google Identity Services no Web Browser
+      // 2. Fallback Transparente via Supabase OAuth se disponível
+      if (window.supabaseRepo && window.supabaseRepo.supabase) {
+        try {
+          const redirectUrl = window.location.origin + window.location.pathname;
+          const { data, error } = await window.supabaseRepo.supabase.auth.signInWithOAuth({
+            provider: 'google',
+            options: { redirectTo: redirectUrl }
+          });
+          if (!error && data) {
+            return { success: true, isRedirecting: true };
+          }
+        } catch (e) {
+          console.warn('Supabase OAuth Fallback Warning:', e);
+        }
+      }
+
+      // 3. Fallback para Google Identity Services (GIS) Web Login
       if (window.google && window.google.accounts && window.google.accounts.id) {
         return new Promise((resolve) => {
           window.google.accounts.id.initialize({
