@@ -8,7 +8,7 @@
 class LinsoraGoogleAuthManager {
   constructor() {
     this.storageKey = 'linsora_google_session';
-    this.clientId = '465194772971-gmggsoaduqo12i9l96618atgf639dr9h.apps.googleusercontent.com';
+    this.clientId = '562170488279-kh7sakqarsajjg4bolkqri9k08ft5erk.apps.googleusercontent.com';
     this.isNative = false;
     this.googleAuthPlugin = null;
 
