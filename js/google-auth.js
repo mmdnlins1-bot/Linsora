@@ -111,34 +111,75 @@ class LinsoraGoogleAuthManager {
   }
 
   async signIn() {
+    // ═══════════════════════════════════════════════════════
+    // 🔍 DEBUG MODE — REMOVER APÓS DIAGNÓSTICO
+    // ═══════════════════════════════════════════════════════
+    const dbg = (label, data) => {
+      const msg = `[LINSORA DEBUG]\n${label}\n\n${typeof data === 'object' ? JSON.stringify(data, Object.getOwnPropertyNames(data), 2) : String(data)}`;
+      console.warn(msg);
+      alert(msg);
+    };
+
+    dbg('ETAPA 0 — signIn() INICIADO', {
+      isNative: this.isNative,
+      hasPlugin: !!this.googleAuthPlugin,
+      capacitorExists: !!window.Capacitor,
+      isNativePlatform: window.Capacitor?.isNativePlatform?.() ?? false,
+      pluginKeys: window.Capacitor?.Plugins ? Object.keys(window.Capacitor.Plugins) : 'N/A'
+    });
+
     try {
-      // 1. Tentar Login Nativo via Capacitor no Android
+      // ── ETAPA 1: Plugin Nativo Capacitor ─────────────────
       if (this.isNative && this.googleAuthPlugin) {
+        dbg('ETAPA 1 — Chamando googleAuthPlugin.signIn()...', { plugin: String(this.googleAuthPlugin) });
         try {
           const googleUser = await this.googleAuthPlugin.signIn();
+          dbg('ETAPA 1 — SUCESSO googleAuthPlugin.signIn()', googleUser);
           console.log('[DEBUG_1_RAW_GOOGLE_USER_RESPONSE]', JSON.stringify(googleUser, null, 2));
           const profile = this.parseGoogleResponse(googleUser);
+          dbg('ETAPA 1 — parseGoogleResponse resultado', profile);
           if (profile) {
             this.saveSession(profile);
             console.log('[DEBUG_3_GOOGLE_AUTH_SAVED_SESSION]', JSON.stringify(profile, null, 2));
             return { success: true, user: profile };
           }
+          dbg('ETAPA 1 — FALHA: parseGoogleResponse retornou null', { rawGoogleUser: googleUser });
         } catch (nativeErr) {
+          // ⚠️ CAPTURA DO ERRO NATIVO REAL
+          dbg('ETAPA 1 — EXCEÇÃO NATIVA CAPTURADA', {
+            message:  nativeErr?.message  || 'sem message',
+            code:     nativeErr?.code     || 'sem code',
+            error:    nativeErr?.error    || 'sem error',
+            name:     nativeErr?.name     || 'sem name',
+            stack:    nativeErr?.stack    || 'sem stack',
+            toString: String(nativeErr),
+            full:     nativeErr
+          });
           console.warn('[DEBUG_1_NATIVE_ERROR_OBJECT]:', nativeErr);
           const errStr = String(nativeErr?.message || nativeErr?.error || nativeErr || '');
-          
+
           if (nativeErr && (nativeErr.error === 'userCanceled' || errStr.includes('canceled') || nativeErr.code === '12501' || errStr.includes('12501'))) {
             return { success: false, isCanceled: true, message: 'Login com Google cancelado pelo usuário.' };
           }
-          // Continua para o fallback de Webview GIS / Supabase OAuth
+          // Continua para fallback GIS
         }
+      } else {
+        dbg('ETAPA 1 — PULADA (plugin nativo não disponível)', {
+          isNative: this.isNative,
+          hasPlugin: !!this.googleAuthPlugin
+        });
       }
 
-      // 2. Google Identity Services (GIS) Web / Webview Selector
+      // ── ETAPA 2: Google Identity Services (GIS) ──────────
+      dbg('ETAPA 2 — Verificando GIS (window.google.accounts.id)...', {
+        hasWindowGoogle: !!window.google,
+        hasAccounts: !!window.google?.accounts,
+        hasId: !!window.google?.accounts?.id
+      });
+
       if (window.google && window.google.accounts && window.google.accounts.id) {
         const gisResult = await new Promise((resolve) => {
           let resolved = false;
-
           const finish = (result) => {
             if (!resolved) {
               resolved = true;
@@ -151,6 +192,7 @@ class LinsoraGoogleAuthManager {
               client_id: this.clientId,
               auto_select: false,
               callback: (response) => {
+                dbg('ETAPA 2 — GIS callback recebido', { hasCredential: !!response?.credential, response });
                 if (response && response.credential) {
                   console.log('[DEBUG_1_RAW_GIS_CREDENTIAL]', response.credential);
                   const profile = this.parseGoogleResponse(response.credential);
@@ -165,10 +207,15 @@ class LinsoraGoogleAuthManager {
               }
             });
 
-            // Tentar exibir o prompt GIS
             window.google.accounts.id.prompt((notification) => {
+              dbg('ETAPA 2 — GIS prompt notification', {
+                isNotDisplayed:  notification.isNotDisplayed(),
+                isSkippedMoment: notification.isSkippedMoment(),
+                isDismissed:     notification.isDismissedMoment(),
+                reason:          notification.getNotDisplayedReason?.() || notification.getSkippedReason?.() || 'N/A'
+              });
+
               if (notification.isNotDisplayed() || notification.isSkippedMoment() || notification.isDismissedMoment()) {
-                // Se o prompt de 1-tap for ignorado ou bloqueado no Webview, tenta renderizar botão popup
                 let btnContainer = document.getElementById('gisBtnContainerHidden');
                 if (!btnContainer) {
                   btnContainer = document.createElement('div');
@@ -178,7 +225,6 @@ class LinsoraGoogleAuthManager {
                 }
                 btnContainer.innerHTML = '';
                 window.google.accounts.id.renderButton(btnContainer, { type: 'standard', size: 'large' });
-                
                 const btnEl = btnContainer.querySelector('div[role=button]') || btnContainer.querySelector('iframe');
                 if (btnEl) {
                   btnEl.click();
@@ -188,10 +234,13 @@ class LinsoraGoogleAuthManager {
               }
             });
 
-            // Timeout de segurança para não travar
-            setTimeout(() => finish(null), 10000);
+            setTimeout(() => {
+              dbg('ETAPA 2 — GIS timeout (10s sem resposta)', {});
+              finish(null);
+            }, 10000);
 
           } catch (e) {
+            dbg('ETAPA 2 — EXCEÇÃO GIS', { message: e?.message, stack: e?.stack, toString: String(e) });
             console.warn('GIS Auth Error:', e);
             finish(null);
           }
@@ -200,27 +249,45 @@ class LinsoraGoogleAuthManager {
         if (gisResult && gisResult.success) {
           return gisResult;
         }
+        dbg('ETAPA 2 — GIS não retornou perfil válido', { gisResult });
       }
 
-      // 3. Fallback Transparente via Supabase OAuth se disponível
+      // ── ETAPA 3: Supabase OAuth ───────────────────────────
+      dbg('ETAPA 3 — Verificando Supabase OAuth...', {
+        hasSupabaseRepo: !!window.supabaseRepo,
+        hasSupabase:     !!window.supabaseRepo?.supabase
+      });
+
       if (window.supabaseRepo && window.supabaseRepo.supabase) {
         try {
           const redirectUrl = window.location.origin + window.location.pathname;
+          dbg('ETAPA 3 — Chamando supabase.auth.signInWithOAuth...', { redirectUrl });
           const { data, error } = await window.supabaseRepo.supabase.auth.signInWithOAuth({
             provider: 'google',
             options: { redirectTo: redirectUrl }
           });
+          dbg('ETAPA 3 — Resultado Supabase OAuth', { data, error: error?.message });
           if (!error && data) {
             return { success: true, isRedirecting: true };
           }
         } catch (e) {
+          dbg('ETAPA 3 — EXCEÇÃO Supabase OAuth', { message: e?.message, stack: e?.stack, toString: String(e) });
           console.warn('Supabase OAuth Fallback Warning:', e);
         }
       }
 
+      dbg('ETAPA FINAL — Todas as camadas falharam → createSeamlessGoogleSession()', {});
       return await this.createSeamlessGoogleSession();
 
     } catch (error) {
+      dbg('EXCEÇÃO GLOBAL capturada em signIn()', {
+        message:  error?.message,
+        code:     error?.code,
+        error:    error?.error,
+        name:     error?.name,
+        stack:    error?.stack,
+        toString: String(error)
+      });
       console.error('[DEBUG GoogleAuth.signIn EXCEPTION]:', error);
       if (error && (error.error === 'userCanceled' || error.message?.includes('canceled') || error.code === '12501')) {
         return { success: false, isCanceled: true, message: 'Login com Google cancelado pelo usuário.' };
