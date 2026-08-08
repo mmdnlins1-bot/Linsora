@@ -143,13 +143,20 @@ class SupabaseRepository {
     return { success: false, message: 'Não foi possível extrair dados da conta Google.' };
   }
 
+  generateLocalUserId(email) {
+    if (!email) return 'usr_guest';
+    const clean = String(email).toLowerCase().trim();
+    return 'usr_' + btoa(clean).replace(/=/g, '').replace(/[^a-zA-Z0-9]/g, '').slice(0, 12);
+  }
+
   async signInWithEmail(email, password) {
+    const cleanEmail = String(email || '').toLowerCase().trim();
     if (this.supabase) {
       try {
-        const { data, error } = await this.supabase.auth.signInWithPassword({ email, password });
+        const { data, error } = await this.supabase.auth.signInWithPassword({ email: cleanEmail, password });
         if (error) throw error;
         this.currentUserId = data.user.id;
-        const db = await this.getDbData(data.user.id, { id: data.user.id, email: data.user.email, name: email.split('@')[0] });
+        const db = await this.getDbData(data.user.id, { id: data.user.id, email: data.user.email, name: cleanEmail.split('@')[0] });
         this.saveActiveLocalSession(db.user);
         return { success: true, user: db.user };
       } catch (err) {
@@ -157,24 +164,25 @@ class SupabaseRepository {
       }
     }
 
-    const userId = 'usr_' + btoa(email).replace(/=/g, '').slice(0, 10);
+    const userId = this.generateLocalUserId(cleanEmail);
     this.currentUserId = userId;
-    const db = await this.getDbData(userId, { id: userId, email, name: email.split('@')[0] });
+    const db = await this.getDbData(userId, { id: userId, email: cleanEmail, name: cleanEmail.split('@')[0] });
     this.saveActiveLocalSession(db.user);
     return { success: true, user: db.user };
   }
 
   async signUpWithEmail(name, email, password) {
+    const cleanEmail = String(email || '').toLowerCase().trim();
     if (this.supabase) {
       try {
         const { data, error } = await this.supabase.auth.signUp({
-          email,
+          email: cleanEmail,
           password,
           options: { data: { full_name: name } }
         });
         if (error) throw error;
         this.currentUserId = data.user.id;
-        const db = await this.getDbData(data.user.id, { id: data.user.id, email, name });
+        const db = await this.getDbData(data.user.id, { id: data.user.id, email: cleanEmail, name });
         this.saveActiveLocalSession(db.user);
         return { success: true, user: db.user };
       } catch (err) {
@@ -182,9 +190,9 @@ class SupabaseRepository {
       }
     }
 
-    const userId = 'usr_' + btoa(email).replace(/=/g, '').slice(0, 10);
+    const userId = this.generateLocalUserId(cleanEmail);
     this.currentUserId = userId;
-    const db = await this.getDbData(userId, { id: userId, email, name: name || email.split('@')[0] });
+    const db = await this.getDbData(userId, { id: userId, email: cleanEmail, name: name || cleanEmail.split('@')[0] });
     this.saveActiveLocalSession(db.user);
     return { success: true, user: db.user };
   }
@@ -203,9 +211,10 @@ class SupabaseRepository {
   }
 
   async resetPassword(email) {
+    const cleanEmail = String(email || '').toLowerCase().trim();
     if (this.supabase) {
       try {
-        const { error } = await this.supabase.auth.resetPasswordForEmail(email);
+        const { error } = await this.supabase.auth.resetPasswordForEmail(cleanEmail);
         if (error) throw error;
         return { success: true, message: 'Link de redefinição enviado para o seu e-mail!' };
       } catch (err) {
@@ -239,7 +248,7 @@ class SupabaseRepository {
       user: {
         id: userObj?.id || 'usr_guest',
         name: userObj?.name || 'Novo Usuário',
-        email: userObj?.email || 'usuario@linsora.com.br',
+        email: userObj?.email ? String(userObj.email).toLowerCase().trim() : 'usuario@linsora.com.br',
         avatar: userObj?.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80',
         plan: 'PRO',
         isPinEnabled: false,
@@ -257,6 +266,9 @@ class SupabaseRepository {
 
   async getDbData(userId, userObj = null) {
     const activeId = userId || this.currentUserId || 'guest';
+    const key = `LINSORA_DB_CACHE_${activeId}`;
+    const stored = localStorage.getItem(key);
+    let localCache = stored ? JSON.parse(stored) : null;
 
     // Se estiver conectado ao Supabase remoto, busca via PostgREST/RLS
     if (this.supabase && activeId !== 'guest' && !activeId.startsWith('usr_')) {
@@ -270,46 +282,55 @@ class SupabaseRepository {
           this.supabase.from('fixed_bills').select('*').eq('user_id', activeId)
         ]);
 
-        const remoteData = {
-          user: {
-            id: activeId,
-            name: userObj?.name || 'Usuário',
-            email: userObj?.email || 'usuario@linsora.com.br',
-            avatar: userObj?.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80',
-            plan: 'PRO',
-            isPinEnabled: false,
-            pinCode: '1234',
-            isAiClassificationEnabled: true
-          },
-          accounts: accRes.data || [],
-          cards: cardsRes.data || [],
-          transactions: txRes.data || [],
-          goals: goalsRes.data || [],
-          pixKeys: pixRes.data || [],
-          fixedBills: billsRes.data || []
-        };
+        const remoteAccounts = accRes.data || [];
+        const remoteCards = cardsRes.data || [];
+        const remoteTransactions = txRes.data || [];
+        const remoteGoals = goalsRes.data || [];
+        const remotePix = pixRes.data || [];
+        const remoteBills = billsRes.data || [];
 
-        const key = `LINSORA_DB_CACHE_${activeId}`;
-        localStorage.setItem(key, JSON.stringify(remoteData));
-        return remoteData;
+        const hasRemoteData = remoteAccounts.length > 0 || remoteTransactions.length > 0 || remoteGoals.length > 0 || remoteCards.length > 0;
+        const hasLocalData = localCache && (localCache.transactions?.length > 0 || localCache.accounts?.length > 0 || localCache.cards?.length > 0 || localCache.goals?.length > 0);
+
+        let mergedData;
+        if (!hasRemoteData && hasLocalData) {
+          mergedData = localCache;
+        } else {
+          mergedData = {
+            user: {
+              id: activeId,
+              name: userObj?.name || localCache?.user?.name || 'Usuário',
+              email: userObj?.email ? String(userObj.email).toLowerCase().trim() : (localCache?.user?.email || 'usuario@linsora.com.br'),
+              avatar: userObj?.avatar || localCache?.user?.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80',
+              plan: 'PRO',
+              isPinEnabled: localCache?.user?.isPinEnabled || false,
+              pinCode: localCache?.user?.pinCode || '1234',
+              isAiClassificationEnabled: localCache?.user?.isAiClassificationEnabled !== false
+            },
+            accounts: hasRemoteData ? remoteAccounts : (localCache?.accounts || []),
+            cards: hasRemoteData ? remoteCards : (localCache?.cards || []),
+            transactions: hasRemoteData ? remoteTransactions : (localCache?.transactions || []),
+            goals: hasRemoteData ? remoteGoals : (localCache?.goals || []),
+            pixKeys: hasRemoteData ? remotePix : (localCache?.pixKeys || []),
+            fixedBills: hasRemoteData ? remoteBills : (localCache?.fixedBills || [])
+          };
+        }
+
+        localStorage.setItem(key, JSON.stringify(mergedData));
+        return mergedData;
       } catch (err) {
         console.warn('Fallback para cache local isolado:', err);
       }
     }
 
-    const key = `LINSORA_DB_CACHE_${activeId}`;
-    const stored = localStorage.getItem(key);
-    
-    if (stored) {
-      const data = JSON.parse(stored);
-      // Garantir que o id do estado bata com o id autenticado
-      data.user.id = activeId;
+    if (localCache) {
+      localCache.user.id = activeId;
       if (userObj) {
-        data.user.name = userObj.name || data.user.name;
-        data.user.email = userObj.email || data.user.email;
-        if (userObj.avatar) data.user.avatar = userObj.avatar;
+        if (userObj.name) localCache.user.name = userObj.name;
+        if (userObj.email) localCache.user.email = String(userObj.email).toLowerCase().trim();
+        if (userObj.avatar) localCache.user.avatar = userObj.avatar;
       }
-      return data;
+      return localCache;
     }
 
     const emptyState = this.getEmptyUserData(userObj);
@@ -324,6 +345,9 @@ class SupabaseRepository {
     // Forçar que o objeto do usuário sempre tenha o id correto
     if (data && data.user) {
       data.user.id = targetId;
+      if (data.user.email) {
+        data.user.email = String(data.user.email).toLowerCase().trim();
+      }
     }
 
     localStorage.setItem(key, JSON.stringify(data));

@@ -74,7 +74,7 @@ class LinsoraGoogleAuthManager {
     }
 
     const finalName = rawName.charAt(0).toUpperCase() + rawName.slice(1);
-    const finalEmail = email;
+    const finalEmail = String(email).toLowerCase().trim();
     const finalSub = sub;
 
     // Leitura minuciosa da foto oficial do Google em todos os possíveis campos de resposta
