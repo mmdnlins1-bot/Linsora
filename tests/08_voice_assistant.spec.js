@@ -116,4 +116,23 @@ test.describe('08. Assistente Financeiro por Voz (NLP Parser & Fluxo de Confirma
     await expect(page.locator('#modalVoiceListening')).toBeVisible();
   });
 
+  test('Deve detectar intenção de meta ao falar palavras-chave de meta/reserva e jamais lançar como despesa', async ({ page }) => {
+    await page.click('.bottom-nav .nav-item[data-tab="tabDashboard"]');
+    await expect(page.locator('#btnFabVoice')).toBeVisible();
+    await page.click('#btnFabVoice');
+    await expect(page.locator('#modalVoiceListening')).toBeVisible();
+
+    // Falar uma frase de criação de meta com prazo e aporte mensal
+    await page.fill('#voiceManualInput', 'crie uma meta de r$ 10000 até julho de 2027 apontando r$ 500 por mês');
+    await page.click('#btnVoiceProcessNow');
+
+    // NUNCA deve abrir o card de confirmação de despesa (#modalVoiceConfirmation)
+    await expect(page.locator('#modalVoiceConfirmation')).toHaveClass(/hidden/);
+
+    // DEVE abrir o card de confirmação de meta (#modalGoalVoiceConfirmation)
+    await expect(page.locator('#modalGoalVoiceConfirmation')).toBeVisible();
+    await expect(page.locator('#goalConfTarget')).toContainText('10.000,00');
+    await expect(page.locator('#goalConfMonthly')).toContainText('500,00/mês');
+  });
+
 });

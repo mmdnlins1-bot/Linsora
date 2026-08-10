@@ -107,7 +107,10 @@ class VoiceAssistantUIController {
     window.VoiceRecognitionEngine.stopListening();
     LinsoraUI.closeModal('modalVoiceListening');
 
-    if (this.currentMode === 'GOAL') {
+    const lowerText = (rawText || '').toLowerCase();
+    const isGoalIntent = this.currentMode === 'GOAL' || (window.TransactionAIParser && window.TransactionAIParser.hasGoalIntent(lowerText));
+
+    if (isGoalIntent) {
       const parsedGoal = window.TransactionAIParser.parseGoalText(rawText);
       this.currentParsedGoal = parsedGoal;
       this.openGoalConfirmationCard(parsedGoal);

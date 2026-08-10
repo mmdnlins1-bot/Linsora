@@ -285,6 +285,19 @@ class TransactionAIParser {
   }
 
   /**
+   * Identifica se a frase possui intenção de criação de Meta, Reserva ou Economia.
+   */
+  hasGoalIntent(lowerText) {
+    if (!lowerText || typeof lowerText !== 'string') return false;
+    const goalKeywords = [
+      'meta', 'metas', 'guardar', 'guardando', 'reserva', 'reservar',
+      'economizar', 'economia', 'aporte', 'aportar', 'poupar', 'poupança',
+      'poupanca', 'fundo de emergência', 'emergência', 'emergencia', 'objetivo'
+    ];
+    return goalKeywords.some(kw => lowerText.includes(kw));
+  }
+
+  /**
    * Converte texto falado ou digitado em objeto de Meta / Reserva Financeira.
    * @param {string} rawText 
    * @returns {Object} { success, type, icon, title, target, current, deadline, monthsLeft, suggestedMonthly, rawText }
@@ -309,10 +322,26 @@ class TransactionAIParser {
       icon = '💰';
     }
 
-    // 2. Extração do Valor Alvo (Target)
-    const target = this.extractAmount(cleanText) || 0;
+    // 2. Extração de Aporte Mensal explícito se o usuário falou "apontando 500 por mês" / "500 por mês" / "aporte de 500"
+    let explicitAporte = 0;
+    const aporteMatch = lowerText.match(/(?:apontando|aportando|aporte|com|de)?\s*r\$\s*(\d+(?:[.,]\d+)?)\s*(?:por\s*mês|mensal|por\s*mes)|(\d+(?:[.,]\d+)?)\s*(?:por\s*mês|mensal|por\s*mes)/);
+    if (aporteMatch) {
+      const valStr = (aporteMatch[1] || aporteMatch[2]).replace(',', '.');
+      explicitAporte = parseFloat(valStr) || 0;
+    }
 
-    // 3. Extração da Data Limite (Deadline) e Meses Restantes
+    // 3. Extração do Valor Alvo (Target)
+    // Se houver valor alvo maior ex: "meta de 10000", isolamos esse valor do aporte
+    let target = 0;
+    const targetMatch = lowerText.match(/(?:meta|reserva|fundo|guardar|objetivo|alvo|valor|de)\s*(?:de)?\s*r\$\s*(\d+(?:[.,]\d+)?(?:\s*mil)?|\d+)|(\d+(?:[.,]\d+)?)\s*mil/i);
+    if (targetMatch) {
+      target = this.extractAmount(targetMatch[0]) || 0;
+    }
+    if (!target || target <= 0) {
+      target = this.extractAmount(cleanText) || 0;
+    }
+
+    // 4. Extração da Data Limite (Deadline) e Meses Restantes
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
@@ -320,37 +349,53 @@ class TransactionAIParser {
     let deadlineDate = new Date(today);
     deadlineDate.setMonth(deadlineDate.getMonth() + 12);
 
-    const monthsMatch = lowerText.match(/\bem\s+(\d+)\s+meses?\b|\b(\d+)\s+meses?\b/);
-    if (monthsMatch) {
-      const mVal = parseInt(monthsMatch[1] || monthsMatch[2], 10);
-      if (!isNaN(mVal) && mVal > 0) {
-        monthsLeft = mVal;
-        deadlineDate = new Date(today);
-        deadlineDate.setMonth(deadlineDate.getMonth() + monthsLeft);
+    const ptMonths = {
+      'janeiro': 0, 'fevereiro': 1, 'março': 2, 'marco': 2, 'abril': 3, 'maio': 4, 'junho': 5,
+      'julho': 6, 'agosto': 7, 'setembro': 8, 'outubro': 9, 'novembro': 10, 'dezembro': 11
+    };
+
+    // Verificar se cita mês e ano em português ex: "até julho de 2027" ou "até julho"
+    const monthYearMatch = lowerText.match(/\b(?:até|ate|para|em)?\s*(janeiro|fevereiro|março|marco|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro)(?:\s+(?:de\s+)?(\d{4}))?\b/);
+    
+    if (monthYearMatch) {
+      const mName = monthYearMatch[1];
+      const mIdx = ptMonths[mName];
+      let yVal = monthYearMatch[2] ? parseInt(monthYearMatch[2], 10) : today.getFullYear();
+      if (!monthYearMatch[2] && mIdx < today.getMonth()) {
+        yVal += 1;
       }
+      deadlineDate = new Date(yVal, mIdx + 1, 0); // Último dia do mês indicado
+      const diffDays = Math.ceil((deadlineDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+      monthsLeft = Math.max(1, Math.ceil(diffDays / 30.44));
     } else {
-      const yearsMatch = lowerText.match(/\bem\s+(\d+)\s+anos?\b|\b(\d+)\s+anos?\b/);
-      if (yearsMatch) {
-        const yVal = parseInt(yearsMatch[1] || yearsMatch[2], 10);
-        if (!isNaN(yVal) && yVal > 0) {
-          monthsLeft = yVal * 12;
+      const monthsMatch = lowerText.match(/\bem\s+(\d+)\s+meses?\b|\b(\d+)\s+meses?\b/);
+      if (monthsMatch) {
+        const mVal = parseInt(monthsMatch[1] || monthsMatch[2], 10);
+        if (!isNaN(mVal) && mVal > 0) {
+          monthsLeft = mVal;
           deadlineDate = new Date(today);
-          deadlineDate.setFullYear(deadlineDate.getFullYear() + yVal);
+          deadlineDate.setMonth(deadlineDate.getMonth() + monthsLeft);
         }
-      } else if (lowerText.includes('dezembro')) {
-        const year = today.getMonth() >= 11 ? today.getFullYear() + 1 : today.getFullYear();
-        deadlineDate = new Date(year, 11, 31);
-        monthsLeft = Math.max(1, Math.ceil((deadlineDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24 * 30.44)));
       } else {
-        const dateMatch = this.extractDate(lowerText);
-        if (dateMatch) {
-          const parts = dateMatch.split('-').map(Number);
-          if (parts.length === 3) {
-            const parsedD = new Date(parts[0], parts[1] - 1, parts[2], 23, 59, 59);
-            if (parsedD > today) {
-              deadlineDate = parsedD;
-              const diffDays = Math.ceil((deadlineDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-              monthsLeft = Math.max(1, Math.ceil(diffDays / 30.44));
+        const yearsMatch = lowerText.match(/\bem\s+(\d+)\s+anos?\b|\b(\d+)\s+anos?\b/);
+        if (yearsMatch) {
+          const yVal = parseInt(yearsMatch[1] || yearsMatch[2], 10);
+          if (!isNaN(yVal) && yVal > 0) {
+            monthsLeft = yVal * 12;
+            deadlineDate = new Date(today);
+            deadlineDate.setFullYear(deadlineDate.getFullYear() + yVal);
+          }
+        } else {
+          const dateMatch = this.extractDate(lowerText);
+          if (dateMatch) {
+            const parts = dateMatch.split('-').map(Number);
+            if (parts.length === 3) {
+              const parsedD = new Date(parts[0], parts[1] - 1, parts[2], 23, 59, 59);
+              if (parsedD > today) {
+                deadlineDate = parsedD;
+                const diffDays = Math.ceil((deadlineDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+                monthsLeft = Math.max(1, Math.ceil(diffDays / 30.44));
+              }
             }
           }
         }
@@ -359,10 +404,10 @@ class TransactionAIParser {
 
     const deadlineFormatted = deadlineDate.toISOString().split('T')[0];
     const title = this.extractGoalTitle(cleanText, target, goalType);
-    const suggestedMonthly = target > 0 ? (target / monthsLeft) : 0;
+    const suggestedMonthly = explicitAporte > 0 ? explicitAporte : (target > 0 ? (target / monthsLeft) : 0);
 
     return {
-      success: target > 0,
+      success: target > 0 || explicitAporte > 0,
       type: goalType,
       icon,
       title,

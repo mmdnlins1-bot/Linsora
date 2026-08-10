@@ -269,18 +269,16 @@ class LinsoraChartEngineService {
         const val = categoryTotals[cat];
         const pct = totalExpenseSum > 0 ? ((val / totalExpenseSum) * 100).toFixed(0) : 0;
         const color = colors[idx];
-        const icon = LinsoraUtils.getCategoryIcon(cat);
 
         return `
-          <div class="category-list-row">
-            <div class="cat-left">
-              <span class="cat-dot" style="background-color: ${color};"></span>
-              <span class="cat-icon">${icon}</span>
-              <span class="cat-name">${LinsoraUtils.escapeHTML(cat)}</span>
+          <div class="category-legend-item">
+            <div class="cat-legend-left">
+              <span class="cat-color-square" style="background-color: ${color};"></span>
+              <span class="cat-legend-name">${LinsoraUtils.escapeHTML(cat)}</span>
             </div>
-            <div class="cat-right">
-              <span class="cat-pct-chip">${pct}%</span>
-              <strong class="cat-val-text">${LinsoraUtils.formatBRL(val, hideValues)}</strong>
+            <div class="cat-legend-right">
+              <span class="cat-legend-pct">${pct}%</span>
+              <span class="cat-legend-val">${LinsoraUtils.formatBRL(val, hideValues)}</span>
             </div>
           </div>
         `;

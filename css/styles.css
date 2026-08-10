@@ -1079,6 +1079,94 @@ body.frame-mode .device-notch { display: block; }
 .stat-value { font-size: 13.5px; font-weight: 800; color: #FFFFFF; }
 
 /* --------------------------------------------------------------------------
+   LEGENDA LIMPA DO GRÁFICO POR CATEGORIAS (SEM POLUIÇÃO VISUAL)
+   -------------------------------------------------------------------------- */
+.category-chart-split-view {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+}
+
+.donut-wrapper {
+  width: 100%;
+  max-width: 220px;
+  height: 200px;
+  margin: 0 auto;
+  position: relative;
+}
+
+.category-readable-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+}
+
+.category-legend-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  background-color: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border-color);
+  transition: var(--transition-fast);
+}
+
+[data-theme="light"] .category-legend-item {
+  background-color: #FFFFFF;
+  border-color: rgba(0, 0, 0, 0.08);
+}
+
+.cat-legend-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.cat-color-square {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  flex-shrink: 0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+}
+
+.cat-legend-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cat-legend-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.cat-legend-pct {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--accent-green-neon);
+  background: rgba(16, 185, 129, 0.12);
+  padding: 2px 7px;
+  border-radius: var(--radius-full);
+}
+
+.cat-legend-val {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+/* --------------------------------------------------------------------------
    2. RECOMENDAÇÕES INTELIGENTES ACIONÁVEIS
    -------------------------------------------------------------------------- */
 .actionable-insight-card {
