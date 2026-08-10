@@ -33,6 +33,15 @@ class LinsoraStore {
     this.notify();
   }
 
+  clearState() {
+    const previousUserId = this.state?.user?.id;
+    if (window.LinsoraLogger) {
+      window.LinsoraLogger.logout('Estado em memória resetado com sucesso', previousUserId);
+    }
+    this.state = null;
+    this.listeners.forEach(fn => fn(null));
+  }
+
   subscribe(listener) {
     this.listeners.push(listener);
   }
@@ -109,16 +118,18 @@ class LinsoraStore {
         const updatedTx = { ...oldTx, ...txData };
         this.state.transactions[index] = updatedTx;
         this.applyTransactionImpact(updatedTx, false); // Aplica o novo impacto
+        if (window.LinsoraLogger) window.LinsoraLogger.update('Transação', { id: txData.id, amount: updatedTx.amount }, this.state?.user?.id);
       }
     } else {
       const newTx = {
         id: 'tx_' + Date.now(),
-        userId: this.state.user.id,
+        userId: this.state?.user?.id || 'usr_guest',
         ...txData,
         status: txData.status || 'CONCLUIDO'
       };
       this.state.transactions.unshift(newTx);
       this.applyTransactionImpact(newTx, false);
+      if (window.LinsoraLogger) window.LinsoraLogger.write('Transação', { description: newTx.description, amount: newTx.amount, type: newTx.type }, this.state?.user?.id);
     }
 
     this.notify();
@@ -129,6 +140,7 @@ class LinsoraStore {
     if (tx) {
       this.applyTransactionImpact(tx, true); // Reverte o saldo ao excluir
       this.state.transactions = this.state.transactions.filter(t => t.id !== txId);
+      if (window.LinsoraLogger) window.LinsoraLogger.update('Exclusão de Transação', { id: txId, description: tx.description }, this.state?.user?.id);
       this.notify();
     }
   }
@@ -167,7 +179,7 @@ class LinsoraStore {
     const icons = ['🟣', '🟠', '🟦', '🏛️', '💰'];
     const newAcc = {
       id: 'acc_' + Date.now(),
-      userId: this.state.user.id,
+      userId: this.state?.user?.id || 'usr_guest',
       name: accData.name,
       bank: accData.name,
       type: accData.type,
@@ -176,12 +188,14 @@ class LinsoraStore {
       icon: icons[this.state.accounts.length % icons.length]
     };
     this.state.accounts.push(newAcc);
+    if (window.LinsoraLogger) window.LinsoraLogger.write('Conta Bancária', { name: newAcc.name, balance: newAcc.balance }, this.state?.user?.id);
     this.notify();
   }
 
   async deleteAccount(accId) {
     if (!accId) return false;
     this.state.accounts = this.state.accounts.filter(a => a.id !== accId);
+    if (window.LinsoraLogger) window.LinsoraLogger.update('Exclusão de Conta', { accId }, this.state?.user?.id);
     this.notify();
     return true;
   }
@@ -192,7 +206,7 @@ class LinsoraStore {
 
     const pixTx = {
       id: 'tx_pix_' + Date.now(),
-      userId: this.state.user.id,
+      userId: this.state?.user?.id || 'usr_guest',
       type: 'DESPESA',
       description: `Pix enviado (${pixKey})`,
       amount: numAmount,
@@ -206,6 +220,7 @@ class LinsoraStore {
 
     this.state.transactions.unshift(pixTx);
     this.adjustAccountBalance(pixTx.account, -numAmount);
+    if (window.LinsoraLogger) window.LinsoraLogger.write('Transferência Pix', { pixKey, amount: numAmount }, this.state?.user?.id);
     this.notify();
     return true;
   }
@@ -213,12 +228,13 @@ class LinsoraStore {
   async addPixKey(type, key, bank) {
     const newPix = {
       id: 'pix_' + Date.now(),
-      userId: this.state.user.id,
+      userId: this.state?.user?.id || 'usr_guest',
       type: type.toUpperCase(),
       key,
       bank: bank || 'Nubank'
     };
     this.state.pixKeys.push(newPix);
+    if (window.LinsoraLogger) window.LinsoraLogger.write('Chave Pix', { type, key }, this.state?.user?.id);
     this.notify();
   }
 
@@ -229,7 +245,7 @@ class LinsoraStore {
     const classes = ['nubank', 'inter', 'aurablack'];
     const newCard = {
       id: 'card_' + Date.now(),
-      userId: this.state.user.id,
+      userId: this.state?.user?.id || 'usr_guest',
       name: cardData.name,
       brand: cardData.brand,
       last4: Math.floor(1000 + Math.random() * 9000).toString(),
@@ -241,12 +257,14 @@ class LinsoraStore {
       status: 'ABERTA'
     };
     this.state.cards.push(newCard);
+    if (window.LinsoraLogger) window.LinsoraLogger.write('Cartão de Crédito', { name: newCard.name, limit: newCard.limitTotal }, this.state?.user?.id);
     this.notify();
   }
 
   async deleteCard(cardId) {
     if (!cardId) return false;
     this.state.cards = this.state.cards.filter(c => c.id !== cardId);
+    if (window.LinsoraLogger) window.LinsoraLogger.update('Exclusão de Cartão', { cardId }, this.state?.user?.id);
     this.notify();
     return true;
   }
@@ -262,7 +280,7 @@ class LinsoraStore {
 
       this.state.transactions.unshift({
         id: 'tx_pay_card_' + Date.now(),
-        userId: this.state.user.id,
+        userId: this.state?.user?.id || 'usr_guest',
         type: 'DESPESA',
         description: `Pagamento da Fatura ${card.name}`,
         amount: payAmount,
@@ -275,6 +293,7 @@ class LinsoraStore {
       });
 
       this.adjustAccountBalance(accountName, -payAmount);
+      if (window.LinsoraLogger) window.LinsoraLogger.write('Pagamento Fatura Cartão', { cardName: card.name, amount: payAmount }, this.state?.user?.id);
       this.notify();
       return true;
     }
@@ -288,7 +307,7 @@ class LinsoraStore {
     const icons = ['🎯', '✈️', '🚗', '🏠', '💎', '📈'];
     const newGoal = {
       id: 'goal_' + Date.now(),
-      userId: (this.state && this.state.user) ? this.state.user.id : 'guest',
+      userId: (this.state && this.state.user) ? this.state.user.id : 'usr_guest',
       title: goalData.title,
       target: parseFloat(goalData.target) || 1000,
       current: parseFloat(goalData.current) || 0,
@@ -297,6 +316,7 @@ class LinsoraStore {
       icon: icons[this.state.goals.length % icons.length]
     };
     this.state.goals.push(newGoal);
+    if (window.LinsoraLogger) window.LinsoraLogger.write('Meta Financeira', { title: newGoal.title, target: newGoal.target }, this.state?.user?.id);
     this.notify();
   }
 
@@ -309,6 +329,7 @@ class LinsoraStore {
       const currentVal = parseFloat(goal.current) || 0;
       const targetVal = parseFloat(goal.target) || 999999999;
       goal.current = Math.min(targetVal, currentVal + numericAmount);
+      if (window.LinsoraLogger) window.LinsoraLogger.update('Aporte em Meta', { goalTitle: goal.title, amount: numericAmount, newTotal: goal.current }, this.state?.user?.id);
       this.notify();
       return true;
     }

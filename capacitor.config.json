@@ -8,15 +8,7 @@
     "cleartext": true,
     "allowNavigation": [
       "controle-financeiro-controle-financeiro-linsora.vercel.app",
-      "*.vercel.app",
-      "accounts.google.com"
+      "*.vercel.app"
     ]
-  },
-  "plugins": {
-    "GoogleAuth": {
-      "scopes": ["profile", "email"],
-      "serverClientId": "465194772971-m698u5l0n7u3n311cbn8oha0rfn6staq.apps.googleusercontent.com",
-      "forceCodeForRefreshToken": true
-    }
   }
 }

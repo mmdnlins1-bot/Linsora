@@ -296,6 +296,36 @@ function renderFilteredTransactions(state) {
 
 function setupEventListeners() {
   
+  // EVENTOS DO ASSISTENTE FINANCEIRO POR VOZ
+  document.getElementById('btnMicHeader')?.addEventListener('click', () => {
+    if (window.VoiceAssistantUI) window.VoiceAssistantUI.startVoiceCapture();
+  });
+
+  document.getElementById('btnMicInForm')?.addEventListener('click', () => {
+    LinsoraUI.closeModal('modalTransactionForm');
+    if (window.VoiceAssistantUI) window.VoiceAssistantUI.startVoiceCapture();
+  });
+
+  document.getElementById('btnVoiceProcessNow')?.addEventListener('click', () => {
+    if (window.VoiceAssistantUI) window.VoiceAssistantUI.stopAndProcess();
+  });
+
+  document.getElementById('btnVoiceCancel')?.addEventListener('click', () => {
+    if (window.VoiceAssistantUI) window.VoiceAssistantUI.cancelVoice();
+  });
+
+  document.getElementById('btnVoiceConfSave')?.addEventListener('click', async () => {
+    if (window.VoiceAssistantUI) await window.VoiceAssistantUI.confirmAndSave();
+  });
+
+  document.getElementById('btnVoiceConfEdit')?.addEventListener('click', () => {
+    if (window.VoiceAssistantUI) window.VoiceAssistantUI.openFormToEdit();
+  });
+
+  document.getElementById('btnVoiceConfCancel')?.addEventListener('click', () => {
+    if (window.VoiceAssistantUI) window.VoiceAssistantUI.cancelVoice();
+  });
+
   document.querySelectorAll('.bottom-nav .nav-item[data-tab]').forEach(btn => {
     btn.onclick = function(e) {
       e.preventDefault();
@@ -454,21 +484,6 @@ function setupEventListeners() {
       }
 
       grantAppAccess();
-    };
-  }
-
-  const btnGoogle = document.getElementById('btnGoogleAuth');
-  if (btnGoogle) {
-    btnGoogle.onclick = async () => {
-      const res = await window.supabaseRepo.signInWithGoogleOAuth();
-      if (res.user) {
-        await window.linsoraStore.loadUserData(res.user);
-        grantAppAccess();
-      } else if (res.isCanceled) {
-        // Seleção cancelada pelo usuário (sem toast intrusivo)
-      } else if (!res.success) {
-        LinsoraUI.showToast(res.message || 'Falha ao autenticar com o Google.', 'error');
-      }
     };
   }
 
@@ -1034,10 +1049,10 @@ function setupEventListeners() {
   });
 
   document.getElementById('btnLogout')?.addEventListener('click', async () => {
-    if (window.LinsoraGoogleAuth) {
-      await window.LinsoraGoogleAuth.signOut();
-    }
     await window.supabaseRepo.signOut();
+    if (window.linsoraStore) {
+      window.linsoraStore.clearState();
+    }
     const main = document.getElementById('appMain');
     if (main) main.classList.add('hidden');
     const auth = document.getElementById('authScreen');

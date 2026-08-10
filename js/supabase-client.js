@@ -75,15 +75,6 @@ class SupabaseRepository {
   }
 
   async checkActiveSession() {
-    if (window.LinsoraGoogleAuth) {
-      const activeGoogleUser = window.LinsoraGoogleAuth.getActiveSession();
-      if (activeGoogleUser && activeGoogleUser.email) {
-        this.currentUserId = activeGoogleUser.id;
-        const db = await this.getDbData(activeGoogleUser.id, activeGoogleUser);
-        return { success: true, user: db.user, db };
-      }
-    }
-
     if (this.supabase) {
       try {
         const { data: { session }, error } = await this.supabase.auth.getSession();
@@ -114,43 +105,47 @@ class SupabaseRepository {
     return { success: false };
   }
 
-  async signInWithGoogleOAuth() {
-    if (window.LinsoraGoogleAuth) {
-      const res = await window.LinsoraGoogleAuth.signIn();
-      if (res.success && res.user) {
-        this.currentUserId = res.user.id;
-        const db = await this.getDbData(res.user.id, res.user);
-        this.saveActiveLocalSession(db.user);
-        return { success: true, user: db.user };
-      }
-      return res;
-    }
-
-    if (this.supabase) {
-      try {
-        const redirectUrl = window.location.origin + window.location.pathname;
-        const { data, error } = await this.supabase.auth.signInWithOAuth({
-          provider: 'google',
-          options: { redirectTo: redirectUrl }
-        });
-        if (error) throw error;
-        return { success: true, data };
-      } catch (err) {
-        return { success: false, message: this.mapAuthErrorMessage(err.message) };
-      }
-    }
-
-    return { success: false, message: 'Não foi possível extrair dados da conta Google.' };
-  }
-
   generateLocalUserId(email) {
     if (!email) return 'usr_guest';
     const clean = String(email).toLowerCase().trim();
-    return 'usr_' + btoa(clean).replace(/=/g, '').replace(/[^a-zA-Z0-9]/g, '').slice(0, 12);
+    let hash = 0;
+    for (let i = 0; i < clean.length; i++) {
+      hash = ((hash << 5) - hash) + clean.charCodeAt(i);
+      hash |= 0;
+    }
+    const hex = Math.abs(hash).toString(16).padStart(8, '0');
+    let safeBtoa = '';
+    try {
+      safeBtoa = btoa(encodeURIComponent(clean)).replace(/=/g, '').replace(/[^a-zA-Z0-9]/g, '').slice(0, 8);
+    } catch (e) {
+      safeBtoa = 'usr';
+    }
+    return `usr_${hex}_${safeBtoa}`;
+  }
+
+  getLocalRegisteredUsers() {
+    try {
+      const stored = localStorage.getItem('LINSORA_REGISTERED_USERS');
+      return stored ? JSON.parse(stored) : {};
+    } catch (e) {
+      return {};
+    }
+  }
+
+  saveLocalRegisteredUser(userRecord) {
+    try {
+      const users = this.getLocalRegisteredUsers();
+      users[userRecord.email] = userRecord;
+      localStorage.setItem('LINSORA_REGISTERED_USERS', JSON.stringify(users));
+    } catch (e) {
+      if (window.LinsoraLogger) window.LinsoraLogger.error('Falha ao salvar registro local de usuário', e);
+    }
   }
 
   async signInWithEmail(email, password) {
     const cleanEmail = String(email || '').toLowerCase().trim();
+    if (window.LinsoraLogger) window.LinsoraLogger.auth('Iniciando signInWithEmail', { email: cleanEmail });
+
     if (this.supabase) {
       try {
         const { data, error } = await this.supabase.auth.signInWithPassword({ email: cleanEmail, password });
@@ -158,56 +153,96 @@ class SupabaseRepository {
         this.currentUserId = data.user.id;
         const db = await this.getDbData(data.user.id, { id: data.user.id, email: data.user.email, name: cleanEmail.split('@')[0] });
         this.saveActiveLocalSession(db.user);
+        if (window.LinsoraLogger) window.LinsoraLogger.auth('signInWithEmail Supabase com sucesso', { email: cleanEmail }, data.user.id);
         return { success: true, user: db.user };
       } catch (err) {
-        return { success: false, message: this.mapAuthErrorMessage(err.message) };
+        const errMsg = this.mapAuthErrorMessage(err.message);
+        if (window.LinsoraLogger) window.LinsoraLogger.error('Falha no signInWithEmail Supabase', errMsg);
+        return { success: false, message: errMsg };
       }
     }
 
+    const registeredUsers = this.getLocalRegisteredUsers();
+    const existing = registeredUsers[cleanEmail];
+
+    if (existing) {
+      if (existing.password && password && existing.password !== password) {
+        if (window.LinsoraLogger) window.LinsoraLogger.error('Senha incorreta no login local', { email: cleanEmail });
+        return { success: false, message: 'E-mail ou senha incorretos.' };
+      }
+      this.currentUserId = existing.id;
+      const db = await this.getDbData(existing.id, { id: existing.id, email: cleanEmail, name: existing.name || cleanEmail.split('@')[0] });
+      this.saveActiveLocalSession(db.user);
+      if (window.LinsoraLogger) window.LinsoraLogger.auth('signInWithEmail local com sucesso', { email: cleanEmail }, existing.id);
+      return { success: true, user: db.user };
+    }
+
     const userId = this.generateLocalUserId(cleanEmail);
+    const newRecord = { id: userId, email: cleanEmail, name: cleanEmail.split('@')[0], password };
+    this.saveLocalRegisteredUser(newRecord);
+
     this.currentUserId = userId;
     const db = await this.getDbData(userId, { id: userId, email: cleanEmail, name: cleanEmail.split('@')[0] });
     this.saveActiveLocalSession(db.user);
+    if (window.LinsoraLogger) window.LinsoraLogger.auth('signInWithEmail auto-registro local', { email: cleanEmail }, userId);
     return { success: true, user: db.user };
   }
 
   async signUpWithEmail(name, email, password) {
     const cleanEmail = String(email || '').toLowerCase().trim();
+    const userName = name || cleanEmail.split('@')[0];
+    if (window.LinsoraLogger) window.LinsoraLogger.auth('Iniciando signUpWithEmail', { name: userName, email: cleanEmail });
+
     if (this.supabase) {
       try {
         const { data, error } = await this.supabase.auth.signUp({
           email: cleanEmail,
           password,
-          options: { data: { full_name: name } }
+          options: { data: { full_name: userName } }
         });
         if (error) throw error;
         this.currentUserId = data.user.id;
-        const db = await this.getDbData(data.user.id, { id: data.user.id, email: cleanEmail, name });
+        const db = await this.getDbData(data.user.id, { id: data.user.id, email: cleanEmail, name: userName });
         this.saveActiveLocalSession(db.user);
+        if (window.LinsoraLogger) window.LinsoraLogger.auth('signUpWithEmail Supabase com sucesso', { email: cleanEmail }, data.user.id);
         return { success: true, user: db.user };
       } catch (err) {
-        return { success: false, message: this.mapAuthErrorMessage(err.message) };
+        const errMsg = this.mapAuthErrorMessage(err.message);
+        if (window.LinsoraLogger) window.LinsoraLogger.error('Falha no signUpWithEmail Supabase', errMsg);
+        return { success: false, message: errMsg };
       }
     }
 
+    const registeredUsers = this.getLocalRegisteredUsers();
+    if (registeredUsers[cleanEmail]) {
+      const msg = 'Este e-mail já está cadastrado. Faça login para acessar.';
+      if (window.LinsoraLogger) window.LinsoraLogger.error('Cadastro duplicado recusado', { email: cleanEmail });
+      return { success: false, message: msg };
+    }
+
     const userId = this.generateLocalUserId(cleanEmail);
+    const newRecord = { id: userId, email: cleanEmail, name: userName, password };
+    this.saveLocalRegisteredUser(newRecord);
+
     this.currentUserId = userId;
-    const db = await this.getDbData(userId, { id: userId, email: cleanEmail, name: name || cleanEmail.split('@')[0] });
+    const db = await this.getDbData(userId, { id: userId, email: cleanEmail, name: userName });
     this.saveActiveLocalSession(db.user);
+    if (window.LinsoraLogger) window.LinsoraLogger.auth('signUpWithEmail local cadastrado com sucesso', { email: cleanEmail }, userId);
     return { success: true, user: db.user };
   }
 
   async signOut() {
+    const previousUserId = this.currentUserId;
     try {
       localStorage.removeItem('LINSORA_ACTIVE_LOCAL_SESSION');
-      localStorage.removeItem('linsora_google_session');
       if (this.supabase) {
         await this.supabase.auth.signOut();
       }
     } catch (e) {
-      console.warn('Erro ao encerrar sessão:', e);
+      if (window.LinsoraLogger) window.LinsoraLogger.error('Erro ao encerrar sessão', e, previousUserId);
     }
     this.currentUserId = 'guest';
+    if (window.LinsoraLogger) window.LinsoraLogger.logout('Sessão encerrada com sucesso', previousUserId);
   }
 
   async resetPassword(email) {
@@ -317,9 +352,10 @@ class SupabaseRepository {
         }
 
         localStorage.setItem(key, JSON.stringify(mergedData));
+        if (window.LinsoraLogger) window.LinsoraLogger.read('Supabase Database & Local Cache', { accounts: mergedData.accounts.length, transactions: mergedData.transactions.length }, activeId);
         return mergedData;
       } catch (err) {
-        console.warn('Fallback para cache local isolado:', err);
+        if (window.LinsoraLogger) window.LinsoraLogger.error('Fallback para cache local isolado', err, activeId);
       }
     }
 
@@ -330,11 +366,13 @@ class SupabaseRepository {
         if (userObj.email) localCache.user.email = String(userObj.email).toLowerCase().trim();
         if (userObj.avatar) localCache.user.avatar = userObj.avatar;
       }
+      if (window.LinsoraLogger) window.LinsoraLogger.read('Local Cache DB', { accounts: (localCache.accounts || []).length, transactions: (localCache.transactions || []).length }, activeId);
       return localCache;
     }
 
     const emptyState = this.getEmptyUserData(userObj);
     localStorage.setItem(key, JSON.stringify(emptyState));
+    if (window.LinsoraLogger) window.LinsoraLogger.read('Estado Inicial Zerado por Usuário', { userId: activeId }, activeId);
     return emptyState;
   }
 
@@ -351,6 +389,7 @@ class SupabaseRepository {
     }
 
     localStorage.setItem(key, JSON.stringify(data));
+    if (window.LinsoraLogger) window.LinsoraLogger.write('Local Cache DB', { targetId, transactionsCount: data?.transactions?.length || 0 }, targetId);
     return data;
   }
 }
