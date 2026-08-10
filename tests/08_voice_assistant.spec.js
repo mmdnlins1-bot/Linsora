@@ -98,4 +98,22 @@ test.describe('08. Assistente Financeiro por Voz (NLP Parser & Fluxo de Confirma
     await expect(page.locator('#fullTransactionsList')).toContainText('Roupas e Calçados');
   });
 
+  test('Deve abrir o assistente de voz diretamente do botão flutuante (FAB) e do atalho no Dashboard', async ({ page }) => {
+    // Ir para a aba Dashboard
+    await page.click('.bottom-nav .nav-item[data-tab="tabDashboard"]');
+    await expect(page.locator('#tabDashboard')).toBeVisible();
+
+    // 1. Testar FAB Flutuante de Voz (#btnFabVoice)
+    await expect(page.locator('#btnFabVoice')).toBeVisible();
+    await page.click('#btnFabVoice');
+    await expect(page.locator('#modalVoiceListening')).toBeVisible();
+    await page.click('#btnVoiceCancel');
+    await expect(page.locator('#modalVoiceListening')).toHaveClass(/hidden/);
+
+    // 2. Testar Atalho Rápido no Dashboard (#btnQuickVoice)
+    await expect(page.locator('#btnQuickVoice')).toBeVisible();
+    await page.click('#btnQuickVoice');
+    await expect(page.locator('#modalVoiceListening')).toBeVisible();
+  });
+
 });

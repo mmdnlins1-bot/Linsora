@@ -297,6 +297,14 @@ function renderFilteredTransactions(state) {
 function setupEventListeners() {
   
   // EVENTOS DO ASSISTENTE FINANCEIRO POR VOZ
+  document.getElementById('btnFabVoice')?.addEventListener('click', () => {
+    if (window.VoiceAssistantUI) window.VoiceAssistantUI.startVoiceCapture();
+  });
+
+  document.getElementById('btnQuickVoice')?.addEventListener('click', () => {
+    if (window.VoiceAssistantUI) window.VoiceAssistantUI.startVoiceCapture();
+  });
+
   document.getElementById('btnMicHeader')?.addEventListener('click', () => {
     if (window.VoiceAssistantUI) window.VoiceAssistantUI.startVoiceCapture();
   });
@@ -473,7 +481,6 @@ function setupEventListeners() {
           return;
         }
         await window.linsoraStore.loadUserData(res.user);
-        LinsoraUI.showToast('Conta criada com sucesso!');
       } else {
         const res = await window.supabaseRepo.signInWithEmail(email, password);
         if (!res.success) {

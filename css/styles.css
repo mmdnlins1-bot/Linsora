@@ -1302,6 +1302,33 @@ body.frame-mode .device-notch { display: block; }
 .floating-fab:active { transform: scale(0.9); }
 .floating-fab.hidden { display: none !important; }
 
+.floating-voice-fab {
+  position: absolute;
+  bottom: 142px;
+  right: 16px;
+  width: 52px;
+  height: 52px;
+  border-radius: var(--radius-full);
+  background: linear-gradient(135deg, #10B981, #047857);
+  border: 3px solid var(--bg-viewport);
+  color: #FFFFFF;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 6px 20px rgba(16, 185, 129, 0.55);
+  cursor: pointer;
+  z-index: 120;
+  transition: var(--transition-bounce);
+}
+
+.floating-voice-fab:hover {
+  transform: scale(1.08);
+  box-shadow: 0 8px 24px rgba(16, 185, 129, 0.75);
+}
+
+.floating-voice-fab:active { transform: scale(0.9); }
+.floating-voice-fab.hidden { display: none !important; }
+
 /* ==========================================================================
    NOVO MODAL FLUTUANTE DE NOVA TRANSAÇÃO (CENTRALIZADO & GLASSMORPHISM)
    ========================================================================== */
