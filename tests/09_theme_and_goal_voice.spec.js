@@ -123,14 +123,28 @@ test.describe('09. Assistente de Voz para Metas & Sistema de Temas Claro/Escuro'
     await page.click('#btnToggleTheme');
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
 
-    // 2. Validar que as variáveis de tema claro estão aplicadas
+    // 2. Validar que as variáveis de tema claro estão aplicadas no body e headings
     const bodyColor = await page.evaluate(() => {
       return getComputedStyle(document.body).color;
     });
-    // Em RGB, #0F172A é rgb(15, 23, 42)
     expect(bodyColor).toContain('15');
 
-    // 3. Voltar para Tema Escuro
+    // 3. Ir para o Dashboard e verificar que o Hero Card (.month-balance-hero) tem fundo claro e texto visível
+    await page.click('.bottom-nav .nav-item[data-tab="tabDashboard"]');
+    const heroBg = await page.evaluate(() => {
+      const hero = document.querySelector('.month-balance-hero');
+      return getComputedStyle(hero).backgroundImage || getComputedStyle(hero).backgroundColor;
+    });
+    expect(heroBg).toBeDefined();
+
+    const nwValColor = await page.evaluate(() => {
+      const el = document.querySelector('.nw-main-val');
+      return getComputedStyle(el).color;
+    });
+    expect(nwValColor).toContain('15'); // #0F172A
+
+    // 4. Voltar para Tema Escuro
+    await page.click('.bottom-nav .nav-item[data-tab="tabProfile"]');
     await page.click('#btnToggleTheme');
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
   });

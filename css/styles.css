@@ -95,7 +95,7 @@
 }
 
 /* ==========================================================================
-   REGRAS DE SUPORTE E ELEVAÇÃO PARA TEMA CLARO (LIGHT MODE)
+   REGRAS COMPLETAS DE ELEVAÇÃO E ALTO CONTRASTE PARA TEMA CLARO (LIGHT MODE)
    ========================================================================== */
 [data-theme="light"] body {
   background-color: var(--bg-viewport);
@@ -108,7 +108,7 @@
 [data-theme="light"] h4, 
 [data-theme="light"] h5, 
 [data-theme="light"] h6 {
-  color: var(--text-primary);
+  color: var(--text-primary) !important;
 }
 
 [data-theme="light"] .app-header {
@@ -140,6 +140,60 @@
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.05);
 }
 
+[data-theme="light"] .month-balance-hero {
+  background: linear-gradient(135deg, #FFFFFF 0%, #ECFDF5 100%) !important;
+  border: 1px solid rgba(16, 185, 129, 0.3) !important;
+  box-shadow: 0 10px 30px rgba(16, 185, 129, 0.1) !important;
+}
+
+[data-theme="light"] .month-balance-hero .balance-label {
+  color: #475569 !important;
+}
+
+[data-theme="light"] .month-balance-hero .last-updated-text {
+  color: #64748B !important;
+}
+
+[data-theme="light"] .month-balance-hero .net-worth-full-banner {
+  background: rgba(16, 185, 129, 0.08) !important;
+  border: 1px solid rgba(16, 185, 129, 0.2) !important;
+}
+
+[data-theme="light"] .month-balance-hero .nw-title {
+  color: #475569 !important;
+}
+
+[data-theme="light"] .month-balance-hero .nw-main-val {
+  color: #0F172A !important;
+}
+
+[data-theme="light"] .month-balance-hero .stat-item {
+  background: #FFFFFF !important;
+  border: 1px solid rgba(0, 0, 0, 0.08) !important;
+}
+
+[data-theme="light"] .month-balance-hero .stat-title {
+  color: #475569 !important;
+}
+
+[data-theme="light"] .month-balance-hero .stat-value {
+  color: #0F172A !important;
+}
+
+[data-theme="light"] .account-summary-card {
+  background: linear-gradient(135deg, #FFFFFF 0%, #ECFDF5 100%) !important;
+  border: 1px solid rgba(16, 185, 129, 0.3) !important;
+  box-shadow: 0 10px 30px rgba(16, 185, 129, 0.1) !important;
+}
+
+[data-theme="light"] .account-summary-card .card-label {
+  color: #475569 !important;
+}
+
+[data-theme="light"] .account-summary-card .card-large-num {
+  color: #0F172A !important;
+}
+
 [data-theme="light"] .action-tile span {
   color: var(--text-primary);
 }
@@ -158,11 +212,17 @@
   color: #0F172A;
 }
 
+[data-theme="light"] .linsora-modal-overlay {
+  background: rgba(15, 23, 42, 0.45) !important;
+  backdrop-filter: blur(12px) !important;
+}
+
 [data-theme="light"] .linsora-modal-content {
-  background-color: #FFFFFF;
-  border-color: var(--border-color);
-  box-shadow: 0 20px 45px rgba(0, 0, 0, 0.15);
-  color: var(--text-primary);
+  background-color: #FFFFFF !important;
+  background: #FFFFFF !important;
+  border-color: rgba(0, 0, 0, 0.1) !important;
+  box-shadow: 0 20px 45px rgba(0, 0, 0, 0.15) !important;
+  color: var(--text-primary) !important;
 }
 
 [data-theme="light"] .modal-header h3,
@@ -172,9 +232,109 @@
 [data-theme="light"] .card-large-num,
 [data-theme="light"] .goal-title,
 [data-theme="light"] .fatura-card-name,
-[data-theme="light"] .auth-header h2,
-[data-theme="light"] .modal-header h3 {
+[data-theme="light"] .auth-header h2 {
   color: var(--text-primary) !important;
+}
+
+[data-theme="light"] .modal-close {
+  background: rgba(0, 0, 0, 0.06) !important;
+  color: #475569 !important;
+  border-color: rgba(0, 0, 0, 0.1) !important;
+}
+
+[data-theme="light"] .modal-close:hover {
+  background: rgba(0, 0, 0, 0.12) !important;
+  color: #0F172A !important;
+}
+
+[data-theme="light"] .modal-form-unified .linsora-input:not(.input-icon-wrapper .linsora-input),
+[data-theme="light"] .linsora-modal-content .linsora-input:not(.input-icon-wrapper .linsora-input),
+[data-theme="light"] .input-amount-huge {
+  background-color: #F8FAFC !important;
+  border: 1px solid rgba(0, 0, 0, 0.12) !important;
+  color: #0F172A !important;
+}
+
+[data-theme="light"] .input-amount-huge .linsora-input {
+  color: #0F172A !important;
+}
+
+[data-theme="light"] .segmented-control {
+  background: #F1F5F9 !important;
+  border: 1px solid rgba(0, 0, 0, 0.08) !important;
+}
+
+[data-theme="light"] .seg-btn {
+  color: #64748B !important;
+}
+
+[data-theme="light"] .seg-btn.active#btnTypeExpense {
+  background: #FEE2E2 !important;
+  color: #DC2626 !important;
+  border-color: #FCA5A5 !important;
+}
+
+[data-theme="light"] .seg-btn.active#btnTypeIncome {
+  background: #D1FAE5 !important;
+  color: #059669 !important;
+  border-color: #6EE7B7 !important;
+}
+
+[data-theme="light"] .voice-conf-badge {
+  background: rgba(0, 0, 0, 0.05) !important;
+  color: #475569 !important;
+}
+
+[data-theme="light"] .voice-conf-amount-box {
+  background: #F8FAFC !important;
+  border: 1px solid rgba(0, 0, 0, 0.1) !important;
+}
+
+[data-theme="light"] .voice-conf-amount-label {
+  color: #64748B !important;
+}
+
+[data-theme="light"] .voice-detail-card {
+  background: #F8FAFC !important;
+  border: 1px solid rgba(0, 0, 0, 0.08) !important;
+}
+
+[data-theme="light"] .voice-detail-label {
+  color: #64748B !important;
+}
+
+[data-theme="light"] .voice-detail-val {
+  color: #0F172A !important;
+}
+
+[data-theme="light"] .voice-raw-box {
+  background: #F1F5F9 !important;
+  border: 1px solid rgba(0, 0, 0, 0.08) !important;
+  color: #334155 !important;
+}
+
+[data-theme="light"] .voice-raw-box span {
+  color: #64748B !important;
+}
+
+[data-theme="light"] .voice-raw-box p {
+  color: #0F172A !important;
+}
+
+[data-theme="light"] .voice-conf-actions .linsora-btn.secondary {
+  background: #F1F5F9 !important;
+  color: #0F172A !important;
+  border: 1px solid rgba(0, 0, 0, 0.15) !important;
+}
+
+[data-theme="light"] .voice-conf-actions .linsora-btn.secondary:hover {
+  background: #E2E8F0 !important;
+}
+
+[data-theme="light"] .voice-conf-actions .linsora-btn.outline {
+  background: transparent !important;
+  color: #059669 !important;
+  border: 1px solid #10B981 !important;
 }
 
 [data-theme="light"] .tx-meta,
@@ -185,21 +345,6 @@
   color: var(--text-secondary);
 }
 
-[data-theme="light"] .voice-raw-box {
-  background: rgba(0, 0, 0, 0.04);
-  border-color: var(--border-color);
-  color: var(--text-primary);
-}
-
-[data-theme="light"] .voice-conf-amount-box {
-  background: rgba(0, 0, 0, 0.03);
-  border-color: var(--border-color);
-}
-
-[data-theme="light"] .voice-modal-header {
-  border-bottom-color: var(--border-color);
-}
-
 [data-theme="light"] .tx-item {
   background-color: #FFFFFF;
   border-color: var(--border-color);
@@ -207,6 +352,12 @@
 
 [data-theme="light"] .tx-item:hover {
   background-color: #F8FAFC;
+}
+
+[data-theme="light"] .floating-fab,
+[data-theme="light"] .floating-voice-fab {
+  border-color: #FFFFFF !important;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15) !important;
 }
 
 *, *::before, *::after {
