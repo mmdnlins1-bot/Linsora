@@ -51,24 +51,162 @@
 }
 
 [data-theme="dark"] {
-  --bg-app: var(--background-main);
+  --background-main: #070B12;
+  --bg-viewport: #0A0F1D;
+  --bg-app: #070B12;
+  --bg-card: #111A2C;
+  --bg-card-hover: #18243C;
+  --bg-input: #152035;
+  --border-gray: rgba(255, 255, 255, 0.1);
+  --border-color: rgba(255, 255, 255, 0.1);
+  --border-color-strong: rgba(255, 255, 255, 0.18);
+
+  --text-primary: #F8FAFC;
+  --text-secondary: #94A3B8;
+  --text-main: #F8FAFC;
+  --text-muted: #94A3B8;
+  --text-inverse: #0F172A;
+
   --header-bg: rgba(10, 15, 29, 0.92);
   --nav-bg: rgba(15, 23, 42, 0.94);
   --glass-effect: rgba(17, 26, 44, 0.8);
 }
 
 [data-theme="light"] {
-  --bg-app: #F1F5F9;
+  --background-main: #F1F5F9;
   --bg-viewport: #F8FAFC;
+  --bg-app: #F1F5F9;
   --bg-card: #FFFFFF;
-  --bg-card-hover: #F1F5F9;
-  --bg-input: #EFF6FF;
-  --border-color: rgba(0, 0, 0, 0.08);
-  --border-color-strong: rgba(0, 0, 0, 0.16);
+  --bg-card-hover: #F8FAFC;
+  --bg-input: #F1F5F9;
+  --border-gray: rgba(0, 0, 0, 0.1);
+  --border-color: rgba(0, 0, 0, 0.1);
+  --border-color-strong: rgba(0, 0, 0, 0.2);
+
+  --text-primary: #0F172A;
+  --text-secondary: #475569;
   --text-main: #0F172A;
   --text-muted: #64748B;
-  --header-bg: rgba(248, 250, 252, 0.92);
-  --nav-bg: rgba(255, 255, 255, 0.94);
+  --text-inverse: #F8FAFC;
+
+  --header-bg: rgba(248, 250, 252, 0.94);
+  --nav-bg: rgba(255, 255, 255, 0.96);
+  --glass-effect: rgba(255, 255, 255, 0.9);
+}
+
+/* ==========================================================================
+   REGRAS DE SUPORTE E ELEVAÇÃO PARA TEMA CLARO (LIGHT MODE)
+   ========================================================================== */
+[data-theme="light"] body {
+  background-color: var(--bg-viewport);
+  color: var(--text-primary);
+}
+
+[data-theme="light"] h1, 
+[data-theme="light"] h2, 
+[data-theme="light"] h3, 
+[data-theme="light"] h4, 
+[data-theme="light"] h5, 
+[data-theme="light"] h6 {
+  color: var(--text-primary);
+}
+
+[data-theme="light"] .app-header {
+  background: var(--header-bg);
+  border-bottom: 1px solid var(--border-color);
+}
+
+[data-theme="light"] .bottom-nav {
+  background: var(--nav-bg);
+  border-top: 1px solid var(--border-color);
+}
+
+[data-theme="light"] .nav-item {
+  color: var(--text-secondary);
+}
+
+[data-theme="light"] .nav-item.active {
+  color: var(--accent-green-neon);
+}
+
+[data-theme="light"] .linsora-card,
+[data-theme="light"] .section-block,
+[data-theme="light"] .summary-card,
+[data-theme="light"] .widget-card,
+[data-theme="light"] .action-tile,
+[data-theme="light"] .profile-settings-block {
+  background-color: var(--bg-card);
+  border-color: var(--border-color);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.05);
+}
+
+[data-theme="light"] .action-tile span {
+  color: var(--text-primary);
+}
+
+[data-theme="light"] .linsora-input,
+[data-theme="light"] select.linsora-input,
+[data-theme="light"] textarea.linsora-input,
+[data-theme="light"] .input-icon-wrapper input {
+  background-color: var(--bg-input);
+  color: var(--text-primary);
+  border-color: var(--border-color);
+}
+
+[data-theme="light"] select.linsora-input option {
+  background-color: #FFFFFF;
+  color: #0F172A;
+}
+
+[data-theme="light"] .linsora-modal-content {
+  background-color: #FFFFFF;
+  border-color: var(--border-color);
+  box-shadow: 0 20px 45px rgba(0, 0, 0, 0.15);
+  color: var(--text-primary);
+}
+
+[data-theme="light"] .modal-header h3,
+[data-theme="light"] .tx-title,
+[data-theme="light"] .nw-main-val,
+[data-theme="light"] .stat-value,
+[data-theme="light"] .card-large-num,
+[data-theme="light"] .goal-title,
+[data-theme="light"] .fatura-card-name,
+[data-theme="light"] .auth-header h2,
+[data-theme="light"] .modal-header h3 {
+  color: var(--text-primary) !important;
+}
+
+[data-theme="light"] .tx-meta,
+[data-theme="light"] .stat-label,
+[data-theme="light"] .widget-label,
+[data-theme="light"] .setting-text span,
+[data-theme="light"] .voice-detail-label {
+  color: var(--text-secondary);
+}
+
+[data-theme="light"] .voice-raw-box {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: var(--border-color);
+  color: var(--text-primary);
+}
+
+[data-theme="light"] .voice-conf-amount-box {
+  background: rgba(0, 0, 0, 0.03);
+  border-color: var(--border-color);
+}
+
+[data-theme="light"] .voice-modal-header {
+  border-bottom-color: var(--border-color);
+}
+
+[data-theme="light"] .tx-item {
+  background-color: #FFFFFF;
+  border-color: var(--border-color);
+}
+
+[data-theme="light"] .tx-item:hover {
+  background-color: #F8FAFC;
 }
 
 *, *::before, *::after {

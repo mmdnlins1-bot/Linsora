@@ -569,7 +569,12 @@
           <section class="tab-page hidden" id="tabGoals">
             <div class="page-title-bar">
               <h2>Metas & Economia</h2>
-              <button type="button" class="linsora-btn primary sm" id="btnAddGoal">+ Nova Meta</button>
+              <div style="display: flex; gap: 8px; align-items: center;">
+                <button type="button" class="btn-mic-icon" id="btnMicGoalsHeader" title="Assistente de Voz para Metas">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+                </button>
+                <button type="button" class="linsora-btn primary sm" id="btnAddGoal">+ Nova Meta</button>
+              </div>
             </div>
 
             <!-- VISÃO GERAL DO PROGRESSO GLOBAL DAS METAS -->
@@ -1120,7 +1125,12 @@
       <div class="linsora-modal-overlay hidden" id="modalGoalForm">
         <div class="linsora-modal-content floating-center-card">
           <div class="modal-header">
-            <h3>+ Nova Meta Financeira</h3>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <h3>+ Nova Meta Financeira</h3>
+              <button type="button" class="btn-mic-icon" id="btnMicInGoalForm" title="Preencher via Voz">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+              </button>
+            </div>
             <button type="button" class="modal-close" data-close-modal="modalGoalForm">✕</button>
           </div>
           <form id="goalForm" class="modal-form-unified" onsubmit="return false;">
@@ -1281,6 +1291,53 @@
               <button type="button" class="linsora-btn primary block" id="btnVoiceConfSave">💾 Salvar</button>
               <button type="button" class="linsora-btn secondary block" id="btnVoiceConfEdit">✏️ Editar</button>
               <button type="button" class="linsora-btn outline block" id="btnVoiceConfCancel">Cancelar</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- MODAL DE CONFIRMAÇÃO DO ASSISTENTE DE VOZ PARA METAS & RESERVAS -->
+      <div class="linsora-modal-overlay hidden" id="modalGoalVoiceConfirmation">
+        <div class="linsora-modal-content floating-center-card voice-confirmation-card">
+          <div class="modal-header voice-modal-header">
+            <h3>🎯 Confirmar Meta por Voz</h3>
+            <button type="button" class="modal-close" data-close-modal="modalGoalVoiceConfirmation">✕</button>
+          </div>
+
+          <div class="voice-conf-body">
+            <div class="voice-conf-type-row" style="margin-bottom: 12px;">
+              <span class="voice-conf-badge goal-type" id="goalConfTypeBadge">🛡️ Reserva de Emergência</span>
+            </div>
+
+            <div class="voice-conf-amount-box" style="margin-bottom: 14px;">
+              <span class="voice-conf-label">Valor Alvo do Objetivo</span>
+              <div class="voice-conf-amount-val income" id="goalConfTarget">R$ 10.000,00</div>
+            </div>
+
+            <div class="voice-conf-details-grid">
+              <div class="voice-detail-item">
+                <span class="voice-detail-label">Nome do Objetivo</span>
+                <span class="voice-detail-val" id="goalConfTitle">Reserva de Emergência</span>
+              </div>
+              <div class="voice-detail-item">
+                <span class="voice-detail-label">Data Limite</span>
+                <span class="voice-detail-val" id="goalConfDeadline">10/08/2027</span>
+              </div>
+              <div class="voice-detail-item full-width" style="background: rgba(16, 185, 129, 0.1); border: 1px dashed var(--accent-green-neon); padding: 10px; border-radius: var(--radius-sm); margin-top: 4px;">
+                <span class="voice-detail-label" style="color: var(--accent-green-neon); font-weight: 700;">💡 Sugestão de Aporte Mensal</span>
+                <span class="voice-detail-val" id="goalConfMonthly" style="font-size: 16px; font-weight: 800; color: var(--text-primary);">R$ 833,33/mês</span>
+              </div>
+            </div>
+
+            <div class="voice-raw-box" style="margin-top: 12px;">
+              <span style="font-size: 10.5px; font-weight: 600; display: block; margin-bottom: 2px;">Voz Original:</span>
+              <span id="goalConfRawText">"Quero guardar 10 mil reais para a reserva de emergência em 12 meses"</span>
+            </div>
+
+            <div class="voice-conf-actions" style="margin-top: 16px;">
+              <button type="button" class="linsora-btn primary block" id="btnGoalConfSave">💾 Salvar Meta</button>
+              <button type="button" class="linsora-btn secondary block" id="btnGoalConfEdit">✏️ Editar</button>
+              <button type="button" class="linsora-btn outline block" id="btnGoalConfCancel">Cancelar</button>
             </div>
           </div>
         </div>

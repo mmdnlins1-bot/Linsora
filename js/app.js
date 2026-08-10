@@ -334,6 +334,28 @@ function setupEventListeners() {
     if (window.VoiceAssistantUI) window.VoiceAssistantUI.cancelVoice();
   });
 
+  // EVENTOS DO ASSISTENTE DE VOZ PARA METAS & RESERVAS
+  document.getElementById('btnMicGoalsHeader')?.addEventListener('click', () => {
+    if (window.VoiceAssistantUI) window.VoiceAssistantUI.startGoalVoiceCapture();
+  });
+
+  document.getElementById('btnMicInGoalForm')?.addEventListener('click', () => {
+    LinsoraUI.closeModal('modalGoalForm');
+    if (window.VoiceAssistantUI) window.VoiceAssistantUI.startGoalVoiceCapture();
+  });
+
+  document.getElementById('btnGoalConfSave')?.addEventListener('click', async () => {
+    if (window.VoiceAssistantUI) await window.VoiceAssistantUI.confirmAndSaveGoal();
+  });
+
+  document.getElementById('btnGoalConfEdit')?.addEventListener('click', () => {
+    if (window.VoiceAssistantUI) window.VoiceAssistantUI.openGoalFormToEdit();
+  });
+
+  document.getElementById('btnGoalConfCancel')?.addEventListener('click', () => {
+    if (window.VoiceAssistantUI) window.VoiceAssistantUI.cancelVoice();
+  });
+
   document.querySelectorAll('.bottom-nav .nav-item[data-tab]').forEach(btn => {
     btn.onclick = function(e) {
       e.preventDefault();
@@ -441,6 +463,23 @@ function setupEventListeners() {
   }
 
   let isRegisterMode = false;
+  window.resetAuthMode = function() {
+    isRegisterMode = false;
+    const nameGroup = document.getElementById('nameGroup');
+    const confirmPasswordGroup = document.getElementById('confirmPasswordGroup');
+    const authTitle = document.getElementById('authTitle');
+    const btnSubmitAuth = document.getElementById('btnSubmitAuth');
+    const toggleText = document.getElementById('toggleText');
+    const btnToggleAuth = document.getElementById('btnToggleAuthMode');
+
+    if (nameGroup) nameGroup.style.display = 'none';
+    if (confirmPasswordGroup) confirmPasswordGroup.style.display = 'none';
+    if (authTitle) authTitle.innerText = 'Seja bem-vindo(a)';
+    if (btnSubmitAuth) btnSubmitAuth.innerText = 'Entrar na Conta';
+    if (toggleText) toggleText.innerText = 'Ainda não tem conta?';
+    if (btnToggleAuth) btnToggleAuth.innerText = 'Cadastrar-se';
+  };
+
   const btnToggleAuth = document.getElementById('btnToggleAuthMode');
   if (btnToggleAuth) {
     btnToggleAuth.onclick = function() {
@@ -1060,6 +1099,9 @@ function setupEventListeners() {
     if (window.linsoraStore) {
       window.linsoraStore.clearState();
     }
+
+    if (window.resetAuthMode) window.resetAuthMode();
+
     const main = document.getElementById('appMain');
     if (main) main.classList.add('hidden');
     const auth = document.getElementById('authScreen');

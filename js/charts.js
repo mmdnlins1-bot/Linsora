@@ -70,6 +70,13 @@ class LinsoraChartEngineService {
     }
 
     if (window.Chart) {
+      const isLight = document.documentElement.getAttribute('data-theme') === 'light';
+      const textColor = isLight ? '#475569' : '#94A3B8';
+      const gridColor = isLight ? 'rgba(0, 0, 0, 0.08)' : 'rgba(255, 255, 255, 0.05)';
+      const tooltipBg = isLight ? '#FFFFFF' : '#0F172A';
+      const tooltipTitle = isLight ? '#0F172A' : '#F8FAFC';
+      const tooltipBorder = isLight ? 'rgba(0, 0, 0, 0.12)' : 'rgba(255, 255, 255, 0.1)';
+
       this.cashflowInstance = new Chart(ctx, {
         type: 'line',
         data: {
@@ -81,13 +88,13 @@ class LinsoraChartEngineService {
           maintainAspectRatio: false,
           plugins: {
             legend: {
-              labels: { color: '#94A3B8', font: { family: 'Plus Jakarta Sans', size: 12, weight: '600' } }
+              labels: { color: textColor, font: { family: 'Plus Jakarta Sans', size: 12, weight: '600' } }
             },
             tooltip: {
-              backgroundColor: '#0F172A',
-              titleColor: '#F8FAFC',
-              bodyColor: '#94A3B8',
-              borderColor: 'rgba(255, 255, 255, 0.1)',
+              backgroundColor: tooltipBg,
+              titleColor: tooltipTitle,
+              bodyColor: textColor,
+              borderColor: tooltipBorder,
               borderWidth: 1,
               padding: 12,
               displayColors: true,
@@ -99,12 +106,12 @@ class LinsoraChartEngineService {
           scales: {
             x: {
               grid: { display: false },
-              ticks: { color: '#94A3B8', font: { family: 'Plus Jakarta Sans', size: 11 } }
+              ticks: { color: textColor, font: { family: 'Plus Jakarta Sans', size: 11 } }
             },
             y: {
-              grid: { color: 'rgba(255, 255, 255, 0.05)' },
+              grid: { color: gridColor },
               ticks: {
-                color: '#94A3B8',
+                color: textColor,
                 font: { family: 'Plus Jakarta Sans', size: 11 },
                 callback: (val) => window.linsoraStore.isHideValues ? 'R$ •••' : `R$ ${val}`
               }
@@ -213,6 +220,13 @@ class LinsoraChartEngineService {
     const colors = labels.map(c => LinsoraUtils.getCategoryColor(c));
 
     if (window.Chart) {
+      const isLight = document.documentElement.getAttribute('data-theme') === 'light';
+      const tooltipBg = isLight ? '#FFFFFF' : '#0F172A';
+      const tooltipTitle = isLight ? '#0F172A' : '#F8FAFC';
+      const tooltipBody = isLight ? '#475569' : '#94A3B8';
+      const tooltipBorder = isLight ? 'rgba(0, 0, 0, 0.12)' : 'rgba(255, 255, 255, 0.1)';
+      const donutBorder = isLight ? '#FFFFFF' : '#131C2E';
+
       this.categoryInstance = new Chart(ctx, {
         type: 'doughnut',
         data: {
@@ -221,7 +235,7 @@ class LinsoraChartEngineService {
             data: dataVals,
             backgroundColor: colors,
             borderWidth: 2,
-            borderColor: '#131C2E'
+            borderColor: donutBorder
           }]
         },
         options: {
@@ -230,10 +244,10 @@ class LinsoraChartEngineService {
           plugins: {
             legend: { display: false },
             tooltip: {
-              backgroundColor: '#0F172A',
-              titleColor: '#F8FAFC',
-              bodyColor: '#94A3B8',
-              borderColor: 'rgba(255, 255, 255, 0.1)',
+              backgroundColor: tooltipBg,
+              titleColor: tooltipTitle,
+              bodyColor: tooltipBody,
+              borderColor: tooltipBorder,
               borderWidth: 1,
               padding: 10,
               callbacks: {

@@ -1,0 +1,138 @@
+const { test, expect } = require('@playwright/test');
+const { login } = require('./helpers/auth');
+
+test.describe('09. Assistente de Voz para Metas & Sistema de Temas Claro/Escuro', () => {
+
+  test.beforeEach(async ({ page }) => {
+    await login(page);
+  });
+
+  test('Deve interpretar frases de Metas e Reservas em linguagem natural através do TransactionAIParser.parseGoalText', async ({ page }) => {
+    // 1. Reserva de Emergência
+    const resEmergencia = await page.evaluate(() => {
+      return window.TransactionAIParser.parseGoalText('Quero criar uma reserva de emergencia de 12 mil reais em 12 meses');
+    });
+
+    expect(resEmergencia.type).toBe('Reserva de Emergência');
+    expect(resEmergencia.icon).toBe('🛡️');
+    expect(resEmergencia.target).toBe(12000);
+    expect(resEmergencia.monthsLeft).toBe(12);
+    expect(resEmergencia.suggestedMonthly).toBe(1000);
+
+    // 2. Reserva Financeira
+    const resFinanceira = await page.evaluate(() => {
+      return window.TransactionAIParser.parseGoalText('Quero guardar 24000 reais na reserva financeira em 2 anos');
+    });
+
+    expect(resFinanceira.type).toBe('Reserva Financeira');
+    expect(resFinanceira.icon).toBe('💰');
+    expect(resFinanceira.target).toBe(24000);
+    expect(resFinanceira.monthsLeft).toBe(24);
+    expect(resFinanceira.suggestedMonthly).toBe(1000);
+
+    // 3. Meta Financeira Genérica (Viagem / Carro)
+    const resMeta = await page.evaluate(() => {
+      return window.TransactionAIParser.parseGoalText('Minha meta é viajar para a praia guardando 6000 reais em 6 meses');
+    });
+
+    expect(resMeta.type).toBe('Meta Financeira');
+    expect(resMeta.icon).toBe('🎯');
+    expect(resMeta.title.toLowerCase()).toContain('praia');
+    expect(resMeta.target).toBe(6000);
+    expect(resMeta.monthsLeft).toBe(6);
+    expect(resMeta.suggestedMonthly).toBe(1000);
+  });
+
+  test('Deve abrir o assistente de voz na tela de Metas e processar fala -> card de confirmação -> salvar no Supabase', async ({ page }) => {
+    // Ir para a aba de Metas
+    await page.click('.bottom-nav .nav-item[data-tab="tabGoals"]');
+    await expect(page.locator('#tabGoals')).toBeVisible();
+
+    // 1. Clicar no botão de microfone no topo de Metas (#btnMicGoalsHeader)
+    await expect(page.locator('#btnMicGoalsHeader')).toBeVisible();
+    await page.click('#btnMicGoalsHeader');
+
+    // 2. Modal de escuta abre
+    await expect(page.locator('#modalVoiceListening')).toBeVisible();
+
+    // 3. Digitar frase e processar
+    await page.fill('#voiceManualInput', 'Quero criar um fundo de emergencia de 15 mil reais em 10 meses');
+    await page.click('#btnVoiceProcessNow');
+
+    // 4. Modal de escuta fecha e Card de Confirmação de Metas abre
+    await expect(page.locator('#modalVoiceListening')).toHaveClass(/hidden/);
+    await expect(page.locator('#modalGoalVoiceConfirmation')).toBeVisible();
+
+    // 5. Validar campos no Card de Confirmação
+    await expect(page.locator('#goalConfTypeBadge')).toContainText('Reserva de Emergência');
+    await expect(page.locator('#goalConfTarget')).toContainText('15.000,00');
+    await expect(page.locator('#goalConfMonthly')).toContainText('1.500,00/mês');
+
+    // 6. Clicar em Salvar
+    await page.click('#btnGoalConfSave');
+
+    // 7. Card fecha e a meta aparece na tela
+    await expect(page.locator('#modalGoalVoiceConfirmation')).toHaveClass(/hidden/);
+    await expect(page.locator('#goalsGridList')).toContainText('Reserva de Emergência');
+    await expect(page.locator('#goalsGridList')).toContainText('15.000,00');
+  });
+
+  test('Deve permitir a opção "Editar" no card de voz de metas, preenchendo o formulário modalGoalForm', async ({ page }) => {
+    await page.click('.bottom-nav .nav-item[data-tab="tabGoals"]');
+    await expect(page.locator('#tabGoals')).toBeVisible();
+
+    // 1. Clicar no botão "+ Nova Meta"
+    await page.click('#btnAddGoal');
+    await expect(page.locator('#modalGoalForm')).toBeVisible();
+
+    // 2. Clicar no botão de microfone do formulário (#btnMicInGoalForm)
+    await page.click('#btnMicInGoalForm');
+    await expect(page.locator('#modalGoalForm')).toHaveClass(/hidden/);
+    await expect(page.locator('#modalVoiceListening')).toBeVisible();
+
+    // 3. Inserir voz e processar
+    await page.fill('#voiceManualInput', 'Minha meta é comprar um carro novo guardando 30 mil reais em 15 meses');
+    await page.click('#btnVoiceProcessNow');
+
+    // 4. Card de confirmação exibe dados
+    await expect(page.locator('#modalGoalVoiceConfirmation')).toBeVisible();
+
+    // 5. Clicar em Editar
+    await page.click('#btnGoalConfEdit');
+
+    // 6. Card de confirmação fecha e abre o formulário preenchido
+    await expect(page.locator('#modalGoalVoiceConfirmation')).toHaveClass(/hidden/);
+    await expect(page.locator('#modalGoalForm')).toBeVisible();
+
+    // 7. Validar pré-preenchimento
+    await expect(page.locator('#goalTitleInput')).toHaveValue(/Carro Novo/i);
+    await expect(page.locator('#goalTargetInput')).toHaveValue('30.000,00');
+
+    // 8. Salvar pelo formulário
+    await page.click('#btnSaveGoal');
+    await expect(page.locator('#modalGoalForm')).toHaveClass(/hidden/);
+    await expect(page.locator('#goalsGridList')).toContainText('carro novo', { ignoreCase: true });
+  });
+
+  test('Deve alternar perfeitamente entre Tema Claro e Tema Escuro sem textos invisíveis', async ({ page }) => {
+    // Ir para a aba do Perfil / Configurações
+    await page.click('.bottom-nav .nav-item[data-tab="tabProfile"]');
+    await expect(page.locator('#tabProfile')).toBeVisible();
+
+    // 1. Clicar em Alternar Tema (Ativar Tema Claro)
+    await page.click('#btnToggleTheme');
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+
+    // 2. Validar que as variáveis de tema claro estão aplicadas
+    const bodyColor = await page.evaluate(() => {
+      return getComputedStyle(document.body).color;
+    });
+    // Em RGB, #0F172A é rgb(15, 23, 42)
+    expect(bodyColor).toContain('15');
+
+    // 3. Voltar para Tema Escuro
+    await page.click('#btnToggleTheme');
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+  });
+
+});

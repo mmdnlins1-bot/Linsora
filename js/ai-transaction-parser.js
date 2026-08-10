@@ -99,24 +99,24 @@ class TransactionAIParser {
 
   /**
    * Extrai valor monetário do texto.
-   * Suporta: R$ 50, 50,50, 50 reais, 1200, cinquenta reais, 2 mil, etc.
+   * Suporta: R$ 50, 50,50, 50 reais, 1200, cinquenta reais, 2 mil, 15 mil reais, etc.
    */
   extractAmount(text) {
     const normalized = text.toLowerCase().replace(/r\$\s*/g, '');
 
-    // 1. Procurar padrões com R$ ou valor numérico explícito ex: "150,50" ou "1.250,00" ou "50"
-    const currencyMatch = normalized.match(/(?:^|\s)(\d{1,3}(?:\.\d{3})*(?:,\d{1,2})?|\d+(?:[.,]\d{1,2})?)(?=\s*(?:reais|real|\b|$))/);
-    if (currencyMatch) {
-      const numStr = currencyMatch[1].replace(/\./g, '').replace(',', '.');
-      const val = parseFloat(numStr);
-      if (!isNaN(val) && val > 0) return val;
-    }
-
-    // 2. Procurar padrão "X mil"
+    // 1. Procurar padrão "X mil" primeiro (ex: "15 mil reais", "2,5 mil", "30 mil")
     const milMatch = normalized.match(/(\d+(?:[.,]\d+)?)\s*mil\b/);
     if (milMatch) {
       const numStr = milMatch[1].replace(',', '.');
       const val = parseFloat(numStr) * 1000;
+      if (!isNaN(val) && val > 0) return val;
+    }
+
+    // 2. Procurar padrões com R$ ou valor numérico explícito ex: "150,50" ou "1.250,00" ou "50"
+    const currencyMatch = normalized.match(/(?:^|\s)(\d{1,3}(?:\.\d{3})*(?:,\d{1,2})?|\d+(?:[.,]\d{1,2})?)(?=\s*(?:reais|real|\b|$))/);
+    if (currencyMatch) {
+      const numStr = currencyMatch[1].replace(/\./g, '').replace(',', '.');
+      const val = parseFloat(numStr);
       if (!isNaN(val) && val > 0) return val;
     }
 
@@ -281,6 +281,133 @@ class TransactionAIParser {
       sender: payload.from || payload.sender || 'desconhecido',
       timestamp: new Date().toISOString(),
       parsedTransaction: result
+    };
+  }
+
+  /**
+   * Converte texto falado ou digitado em objeto de Meta / Reserva Financeira.
+   * @param {string} rawText 
+   * @returns {Object} { success, type, icon, title, target, current, deadline, monthsLeft, suggestedMonthly, rawText }
+   */
+  parseGoalText(rawText) {
+    if (!rawText || typeof rawText !== 'string') {
+      return this.createEmptyGoalResult(rawText || '');
+    }
+
+    const cleanText = rawText.trim();
+    const lowerText = cleanText.toLowerCase();
+
+    // 1. Identificação do Tipo de Objetivo
+    let goalType = 'Meta Financeira';
+    let icon = '🎯';
+
+    if (lowerText.includes('emergencia') || lowerText.includes('emergência') || lowerText.includes('fundo de emergencia')) {
+      goalType = 'Reserva de Emergência';
+      icon = '🛡️';
+    } else if (lowerText.includes('reserva financeira') || lowerText.includes('reserva') || lowerText.includes('poupança') || lowerText.includes('poupanca')) {
+      goalType = 'Reserva Financeira';
+      icon = '💰';
+    }
+
+    // 2. Extração do Valor Alvo (Target)
+    const target = this.extractAmount(cleanText) || 0;
+
+    // 3. Extração da Data Limite (Deadline) e Meses Restantes
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    let monthsLeft = 12; // Padrão: 12 meses
+    let deadlineDate = new Date(today);
+    deadlineDate.setMonth(deadlineDate.getMonth() + 12);
+
+    const monthsMatch = lowerText.match(/\bem\s+(\d+)\s+meses?\b|\b(\d+)\s+meses?\b/);
+    if (monthsMatch) {
+      const mVal = parseInt(monthsMatch[1] || monthsMatch[2], 10);
+      if (!isNaN(mVal) && mVal > 0) {
+        monthsLeft = mVal;
+        deadlineDate = new Date(today);
+        deadlineDate.setMonth(deadlineDate.getMonth() + monthsLeft);
+      }
+    } else {
+      const yearsMatch = lowerText.match(/\bem\s+(\d+)\s+anos?\b|\b(\d+)\s+anos?\b/);
+      if (yearsMatch) {
+        const yVal = parseInt(yearsMatch[1] || yearsMatch[2], 10);
+        if (!isNaN(yVal) && yVal > 0) {
+          monthsLeft = yVal * 12;
+          deadlineDate = new Date(today);
+          deadlineDate.setFullYear(deadlineDate.getFullYear() + yVal);
+        }
+      } else if (lowerText.includes('dezembro')) {
+        const year = today.getMonth() >= 11 ? today.getFullYear() + 1 : today.getFullYear();
+        deadlineDate = new Date(year, 11, 31);
+        monthsLeft = Math.max(1, Math.ceil((deadlineDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24 * 30.44)));
+      } else {
+        const dateMatch = this.extractDate(lowerText);
+        if (dateMatch) {
+          const parts = dateMatch.split('-').map(Number);
+          if (parts.length === 3) {
+            const parsedD = new Date(parts[0], parts[1] - 1, parts[2], 23, 59, 59);
+            if (parsedD > today) {
+              deadlineDate = parsedD;
+              const diffDays = Math.ceil((deadlineDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+              monthsLeft = Math.max(1, Math.ceil(diffDays / 30.44));
+            }
+          }
+        }
+      }
+    }
+
+    const deadlineFormatted = deadlineDate.toISOString().split('T')[0];
+    const title = this.extractGoalTitle(cleanText, target, goalType);
+    const suggestedMonthly = target > 0 ? (target / monthsLeft) : 0;
+
+    return {
+      success: target > 0,
+      type: goalType,
+      icon,
+      title,
+      target,
+      current: 0,
+      deadline: deadlineFormatted,
+      monthsLeft,
+      suggestedMonthly,
+      rawText: cleanText
+    };
+  }
+
+  extractGoalTitle(rawText, target, goalType) {
+    if (goalType === 'Reserva de Emergência') {
+      return 'Reserva de Emergência';
+    }
+
+    let clean = rawText
+      .replace(/r\$\s*\d+(?:[.,]\d+)?/gi, '')
+      .replace(/\b\d+(?:[.,]\d+)?\s*(?:reais|real|mil)?\b/gi, '')
+      .replace(/\b(?:minha|meta|[ée]|quero|criar|uma|um|reserva|de|financeira|poupança|poupanca|em|meses|mes|anos|ano|até|ate|guardar|guardando|acumular|juntar|no valor de|valor de|hoje)\b/gi, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    if (clean.length >= 3) {
+      return clean.charAt(0).toUpperCase() + clean.slice(1);
+    }
+
+    return goalType;
+  }
+
+  createEmptyGoalResult(rawText) {
+    const defaultDeadline = new Date();
+    defaultDeadline.setMonth(defaultDeadline.getMonth() + 12);
+    return {
+      success: false,
+      type: 'Meta Financeira',
+      icon: '🎯',
+      title: 'Nova Meta Financeira',
+      target: 0,
+      current: 0,
+      deadline: defaultDeadline.toISOString().split('T')[0],
+      monthsLeft: 12,
+      suggestedMonthly: 0,
+      rawText: rawText
     };
   }
 
