@@ -4,11 +4,6 @@
   "webDir": "www",
   "bundledWebRuntime": false,
   "server": {
-    "url": "https://controle-financeiro-controle-financeiro-linsora.vercel.app",
-    "cleartext": true,
-    "allowNavigation": [
-      "controle-financeiro-controle-financeiro-linsora.vercel.app",
-      "*.vercel.app"
-    ]
+    "cleartext": true
   }
 }
