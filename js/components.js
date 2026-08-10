@@ -405,57 +405,92 @@ class LinsoraUIComponentEngine {
     }
 
     // 3. CARDS DAS METAS INDIVIDUAIS COM APORTE RÁPIDO & CÁLCULOS
-    const now = new Date();
-    container.innerHTML = goals.map(g => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const goalCalculations = goals.map(g => {
       const currentVal = parseFloat(g.current) || 0;
       const targetVal = parseFloat(g.target) || 0;
       const remainingVal = Math.max(0, targetVal - currentVal);
       const pct = targetVal > 0 ? Math.min(100, Math.round((currentVal / targetVal) * 100)) : 0;
 
-      // Calcular meses restantes até o deadline
+      let daysLeft = null;
       let monthsLeft = 1;
+      let isExpired = false;
+
       if (g.deadline) {
-        const d = new Date(g.deadline);
-        const yearDiff = d.getFullYear() - now.getFullYear();
-        const monthDiff = d.getMonth() - now.getMonth();
-        monthsLeft = Math.max(1, (yearDiff * 12) + monthDiff);
+        const parts = String(g.deadline).split('-').map(Number);
+        if (parts.length === 3) {
+          const deadlineDate = new Date(parts[0], parts[1] - 1, parts[2], 23, 59, 59);
+          const diffMs = deadlineDate.getTime() - today.getTime();
+          daysLeft = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+
+          if (daysLeft < 0 && pct < 100) {
+            isExpired = true;
+          } else {
+            monthsLeft = Math.max(1, Math.ceil(daysLeft / 30.44));
+          }
+        }
       }
 
-      const suggestedMonthly = remainingVal > 0 ? (remainingVal / monthsLeft) : 0;
-      const formattedDate = g.deadline ? new Date(g.deadline).toLocaleDateString('pt-BR') : 'Sem prazo';
+      const suggestedMonthly = (!isExpired && remainingVal > 0) ? (remainingVal / monthsLeft) : 0;
+      const formattedDate = g.deadline ? LinsoraUtils.formatDateBR(g.deadline) : 'Sem prazo';
 
+      return {
+        ...g,
+        currentVal,
+        targetVal,
+        remainingVal,
+        pct,
+        daysLeft,
+        monthsLeft,
+        isExpired,
+        suggestedMonthly,
+        formattedDate
+      };
+    });
+
+    container.innerHTML = goalCalculations.map(g => {
       return `
         <div class="goal-item-card-enhanced">
           <div class="goal-top">
             <span class="goal-title">${g.icon || '🎯'} ${LinsoraUtils.escapeHTML(g.title)}</span>
-            <span class="cat-pct-chip">${pct}%</span>
+            <span class="cat-pct-chip">${g.pct}%</span>
           </div>
 
           <div class="limit-progress-bar">
-            <div class="limit-progress-fill" style="width: ${pct}%; background: ${pct >= 100 ? '#10B981' : 'linear-gradient(90deg, #10B981, #06B6D4)'};"></div>
+            <div class="limit-progress-fill" style="width: ${g.pct}%; background: ${g.pct >= 100 ? '#10B981' : g.isExpired ? '#EF4444' : 'linear-gradient(90deg, #10B981, #06B6D4)'};"></div>
           </div>
 
           <div class="goal-values">
-            <span>Guardado: <strong>${LinsoraUtils.formatBRL(currentVal, hideValues)}</strong></span>
-            <span>Alvo: <strong>${LinsoraUtils.formatBRL(targetVal, hideValues)}</strong></span>
+            <span>Guardado: <strong>${LinsoraUtils.formatBRL(g.currentVal, hideValues)}</strong></span>
+            <span>Alvo: <strong>${LinsoraUtils.formatBRL(g.targetVal, hideValues)}</strong></span>
           </div>
 
-          ${pct >= 100 ? `
+          ${g.pct >= 100 ? `
             <div class="goal-monthly-suggestion" style="background: rgba(16,185,129,0.12); border-color: rgba(16,185,129,0.3); color: var(--accent-green-neon);">
               🎉 Meta Concluída! Parabéns pelo seu objetivo alcançado!
             </div>
+          ` : g.isExpired ? `
+            <div class="goal-monthly-suggestion" style="background: rgba(239,68,68,0.12); border-color: rgba(239,68,68,0.3); color: #EF4444;">
+              ⚠️ Prazo vencido em ${g.formattedDate}. Edite a meta e escolha um novo prazo para recalcular os aportes.
+            </div>
           ` : `
             <div class="goal-monthly-suggestion">
-              💡 Guarde <strong>${LinsoraUtils.formatBRL(suggestedMonthly, hideValues)}/mês</strong> até ${formattedDate}
+              💡 Guarde <strong>${LinsoraUtils.formatBRL(g.suggestedMonthly, hideValues)}/mês</strong> até ${g.formattedDate}
             </div>
           `}
 
           <div class="goal-time-rhythm">
-            <span>⏱️ Ritmo estimado: ~${monthsLeft} ${monthsLeft === 1 ? 'mês restante' : 'meses restantes'}</span>
-            <span>Faltam: ${LinsoraUtils.formatBRL(remainingVal, hideValues)}</span>
+            ${g.isExpired ? `
+              <span style="color: #EF4444; font-weight: 600;">⏱️ Status: Prazo Encerrado</span>
+            ` : `
+              <span>⏱️ Ritmo estimado: ~${g.daysLeft !== null && g.daysLeft <= 30 ? `${g.daysLeft} dias restantes` : `${g.monthsLeft} ${g.monthsLeft === 1 ? 'mês restante' : 'meses restantes'}`}</span>
+            `}
+            <span>Faltam: ${LinsoraUtils.formatBRL(g.remainingVal, hideValues)}</span>
           </div>
 
-          ${pct < 100 ? `
+          ${g.pct < 100 ? `
             <button type="button" class="linsora-btn secondary sm btn-deposit-goal" data-deposit-goal="${g.id}" data-deposit-title="${LinsoraUtils.escapeHTML(g.title)}">
               ➕ Adicionar valor
             </button>
@@ -480,30 +515,44 @@ class LinsoraUIComponentEngine {
     // 4. INSIGHTS INTELIGENTES & RITMO DE ECONOMIA
     if (insightsContainer) {
       const monthBalance = window.linsoraStore ? window.linsoraStore.getMonthBalance() : 0;
-      const totalSuggestedMonthly = goals.reduce((acc, g) => {
-        const remaining = Math.max(0, (g.target || 0) - (g.current || 0));
-        let months = 1;
-        if (g.deadline) {
-          const d = new Date(g.deadline);
-          months = Math.max(1, ((d.getFullYear() - now.getFullYear()) * 12) + (d.getMonth() - now.getMonth()));
-        }
-        return acc + (remaining / months);
-      }, 0);
+      
+      const activeValidGoals = goalCalculations.filter(g => g.pct < 100 && !g.isExpired);
+      const expiredGoals = goalCalculations.filter(g => g.isExpired);
 
+      const totalSuggestedMonthly = activeValidGoals.reduce((acc, g) => acc + g.suggestedMonthly, 0);
       const isBalanced = monthBalance >= totalSuggestedMonthly;
+
+      let messageHTML = '';
+      if (expiredGoals.length > 0) {
+        messageHTML = `
+          <p>
+            ⚠️ <strong>Atenção:</strong> Você possui ${expiredGoals.length} meta(s) com prazo vencido (${expiredGoals.map(e => `"${LinsoraUtils.escapeHTML(e.title)}"`).join(', ')}). 
+            Edite a data limite para recalcular seu plano de economia mensal.
+            ${activeValidGoals.length > 0 ? `<br>Para as metas ativas, o aporte mensal sugerido é de <strong>${LinsoraUtils.formatBRL(totalSuggestedMonthly, hideValues)}/mês</strong>.` : ''}
+          </p>
+        `;
+      } else if (activeValidGoals.length > 0) {
+        messageHTML = `
+          <p>
+            Para atingir todas as suas ${activeValidGoals.length} metas ativas nos prazos estipulados, o aporte mensal sugerido é de 
+            <strong>${LinsoraUtils.formatBRL(totalSuggestedMonthly, hideValues)}/mês</strong>. 
+            ${isBalanced ? 
+              'Seu saldo mensal atual cobre confortavelmente seus aportes! Continue no mesmo ritmo.' : 
+              'Dica: Reavalie algumas despesas não essenciais para manter seus aportes no prazo.'}
+          </p>
+        `;
+      } else {
+        messageHTML = `
+          <p>🎉 Todas as suas metas foram concluídas! Crie novos objetivos financeiros para continuar evoluindo.</p>
+        `;
+      }
 
       insightsContainer.innerHTML = `
         <div class="goals-smart-insights-card">
-          <div class="insights-icon">💡</div>
+          <div class="insights-icon">${expiredGoals.length > 0 ? '⚠️' : '💡'}</div>
           <div class="insights-body">
             <strong>Inteligência de Metas Linsora</strong>
-            <p>
-              Para atingir todas as suas ${goals.length} metas ativas nos prazos estipulados, o aporte mensal sugerido é de 
-              <strong>${LinsoraUtils.formatBRL(totalSuggestedMonthly, hideValues)}/mês</strong>. 
-              ${isBalanced ? 
-                'Seu saldo mensal atual cobre confortavelmente seus aportes! Continue no mesmo ritmo.' : 
-                'Dica: Reavalie algumas despesas não essenciais para manter seus aportes no prazo.'}
-            </p>
+            ${messageHTML}
           </div>
         </div>
       `;
