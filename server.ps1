@@ -3,8 +3,9 @@ $port = 3000
 $path = "c:\Users\Urso\Documents\FINANCEMVP"
 $listener = New-Object System.Net.HttpListener
 $listener.Prefixes.Add("http://localhost:$port/")
+try { $listener.Prefixes.Add("http://192.168.1.3:$port/") } catch {}
 $listener.Start()
-Write-Host "🚀 LINSORA Server rodando em http://localhost:$port/"
+Write-Host "🚀 LINSORA Server rodando em http://localhost:$port/ e http://192.168.1.3:$port/"
 
 while ($listener.IsListening) {
     $context = $listener.GetContext()
