@@ -142,6 +142,114 @@ class SupabaseRepository {
     }
   }
 
+  /* ------------------------------------------------------------------------
+     HASHING LOCAL DE SENHA (PBKDF2 via Web Crypto API)
+     Sem dependências externas — compatível com WebView Android (Capacitor)
+     Formato armazenado: "pbkdf2:<saltBase64>:<hashBase64>"
+     OWASP recomenda PBKDF2-SHA256 com >= 100.000 iterações quando bcrypt/Argon2
+     não estão disponíveis nativamente no ambiente.
+     ------------------------------------------------------------------------ */
+
+  async hashLocalPassword(password) {
+    const encoder = new TextEncoder();
+    const salt = crypto.getRandomValues(new Uint8Array(16));
+    const keyMaterial = await crypto.subtle.importKey(
+      'raw',
+      encoder.encode(String(password)),
+      'PBKDF2',
+      false,
+      ['deriveBits']
+    );
+    const hashBuffer = await crypto.subtle.deriveBits(
+      { name: 'PBKDF2', salt, iterations: 100000, hash: 'SHA-256' },
+      keyMaterial,
+      256
+    );
+    const toBase64 = (buffer) => {
+      let binary = '';
+      const bytes = new Uint8Array(buffer);
+      for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
+      return btoa(binary);
+    };
+    return `pbkdf2:${toBase64(salt)}:${toBase64(hashBuffer)}`;
+  }
+
+  async verifyLocalPassword(password, storedHash) {
+    try {
+      if (!storedHash || !storedHash.startsWith('pbkdf2:')) return false;
+      const parts = storedHash.split(':');
+      if (parts.length !== 3) return false;
+      const saltBytes = Uint8Array.from(atob(parts[1]), c => c.charCodeAt(0));
+      const encoder = new TextEncoder();
+      const keyMaterial = await crypto.subtle.importKey(
+        'raw',
+        encoder.encode(String(password)),
+        'PBKDF2',
+        false,
+        ['deriveBits']
+      );
+      const hashBuffer = await crypto.subtle.deriveBits(
+        { name: 'PBKDF2', salt: saltBytes, iterations: 100000, hash: 'SHA-256' },
+        keyMaterial,
+        256
+      );
+      let binary = '';
+      const bytes = new Uint8Array(hashBuffer);
+      for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
+      const newHashB64 = btoa(binary);
+      return newHashB64 === parts[2];
+    } catch (e) {
+      if (window.LinsoraLogger) window.LinsoraLogger.error('Erro ao verificar hash de senha local', e);
+      return false;
+    }
+  }
+
+  /* ------------------------------------------------------------------------
+     RATE LIMITING LOCAL — Proteção contra força bruta no modo offline
+     Chave no localStorage: "LINSORA_LOGIN_ATTEMPTS"
+     Estrutura por email: { count: N, lockedUntil: timestamp|null }
+     ------------------------------------------------------------------------ */
+
+  _getLoginAttempts(email) {
+    try {
+      const raw = localStorage.getItem('LINSORA_LOGIN_ATTEMPTS');
+      const store = raw ? JSON.parse(raw) : {};
+      return store[email] || { count: 0, lockedUntil: null };
+    } catch (e) {
+      return { count: 0, lockedUntil: null };
+    }
+  }
+
+  _recordFailedAttempt(email) {
+    try {
+      const raw = localStorage.getItem('LINSORA_LOGIN_ATTEMPTS');
+      const store = raw ? JSON.parse(raw) : {};
+      const entry = store[email] || { count: 0, lockedUntil: null };
+      entry.count += 1;
+      // Após 5 tentativas consecutivas incorretas: bloquear por 15 minutos
+      if (entry.count >= 5) {
+        entry.lockedUntil = Date.now() + 15 * 60 * 1000; // 15 min em ms
+      }
+      store[email] = entry;
+      localStorage.setItem('LINSORA_LOGIN_ATTEMPTS', JSON.stringify(store));
+      return entry;
+    } catch (e) {
+      return { count: 1, lockedUntil: null };
+    }
+  }
+
+  _clearLoginAttempts(email) {
+    try {
+      const raw = localStorage.getItem('LINSORA_LOGIN_ATTEMPTS');
+      if (!raw) return;
+      const store = JSON.parse(raw);
+      delete store[email];
+      localStorage.setItem('LINSORA_LOGIN_ATTEMPTS', JSON.stringify(store));
+    } catch (e) {
+      // falha silenciosa: não bloquear o fluxo de login por isso
+    }
+  }
+
   async signInWithEmail(email, password) {
     const cleanEmail = String(email || '').toLowerCase().trim();
     if (window.LinsoraLogger) window.LinsoraLogger.auth('Iniciando signInWithEmail', { email: cleanEmail });
@@ -165,11 +273,59 @@ class SupabaseRepository {
     const registeredUsers = this.getLocalRegisteredUsers();
     const existing = registeredUsers[cleanEmail];
 
+    // --- RATE LIMITING: verificar bloqueio antes de qualquer operação de senha ---
+    const attempt = this._getLoginAttempts(cleanEmail);
+    if (attempt.lockedUntil && Date.now() < attempt.lockedUntil) {
+      const remainingMs = attempt.lockedUntil - Date.now();
+      const remainingMin = Math.ceil(remainingMs / 60000);
+      const msg = `Conta bloqueada por tentativas excessivas. Tente novamente em ${remainingMin} minuto${remainingMin !== 1 ? 's' : ''}.`;
+      if (window.LinsoraLogger) window.LinsoraLogger.error('Login bloqueado por rate limit', { email: cleanEmail, remainingMin });
+      return { success: false, message: msg, locked: true, remainingMs };
+    }
+    // Se o bloqueio já expirou, limpar o contador e permitir nova tentativa
+    if (attempt.lockedUntil && Date.now() >= attempt.lockedUntil) {
+      this._clearLoginAttempts(cleanEmail);
+    }
+
     if (existing) {
-      if (existing.password && password && existing.password !== password) {
-        if (window.LinsoraLogger) window.LinsoraLogger.error('Senha incorreta no login local', { email: cleanEmail });
-        return { success: false, message: 'E-mail ou senha incorretos.' };
+      // Verificação de senha com suporte a hash PBKDF2 e migração automática de senhas legadas
+      let isMatch = false;
+      if (existing.passwordHash && existing.passwordHash.startsWith('pbkdf2:')) {
+        // Caminho seguro: senha já está em PBKDF2
+        isMatch = await this.verifyLocalPassword(password, existing.passwordHash);
+      } else if (existing.password) {
+        // Legado: senha em texto puro — comparar e migrar para hash imediatamente
+        isMatch = (existing.password === password);
+        if (isMatch) {
+          try {
+            const hashedPwd = await this.hashLocalPassword(password);
+            const allUsers = this.getLocalRegisteredUsers();
+            allUsers[cleanEmail] = { ...existing, passwordHash: hashedPwd, password: undefined };
+            localStorage.setItem('LINSORA_REGISTERED_USERS', JSON.stringify(allUsers));
+            if (window.LinsoraLogger) window.LinsoraLogger.auth('Senha local migrada para PBKDF2', { email: cleanEmail });
+          } catch (migErr) {
+            if (window.LinsoraLogger) window.LinsoraLogger.error('Falha na migração de senha para hash', migErr);
+          }
+        }
+      } else {
+        // Sem senha definida: acesso em modo visitante
+        isMatch = true;
       }
+
+      if (!isMatch) {
+        // --- RATE LIMITING: registrar falha e retornar mensagem adequada ---
+        const updated = this._recordFailedAttempt(cleanEmail);
+        const attemptsLeft = Math.max(0, 5 - updated.count);
+        if (window.LinsoraLogger) window.LinsoraLogger.error('Senha incorreta no login local', { email: cleanEmail, count: updated.count });
+        if (updated.lockedUntil) {
+          return { success: false, message: 'Conta bloqueada por 15 minutos após 5 tentativas incorretas.', locked: true, remainingMs: updated.lockedUntil - Date.now() };
+        }
+        const hint = attemptsLeft > 0 ? ` (${attemptsLeft} tentativa${attemptsLeft !== 1 ? 's' : ''} restante${attemptsLeft !== 1 ? 's' : ''})` : '';
+        return { success: false, message: `E-mail ou senha incorretos.${hint}` };
+      }
+
+      // --- RATE LIMITING: sucesso — zerar contador ---
+      this._clearLoginAttempts(cleanEmail);
       this.currentUserId = existing.id;
       const db = await this.getDbData(existing.id, { id: existing.id, email: cleanEmail, name: existing.name || cleanEmail.split('@')[0] });
       this.saveActiveLocalSession(db.user);
@@ -178,9 +334,12 @@ class SupabaseRepository {
     }
 
     const userId = this.generateLocalUserId(cleanEmail);
-    const newRecord = { id: userId, email: cleanEmail, name: cleanEmail.split('@')[0], password };
+    const hashedPwd = await this.hashLocalPassword(password);
+    const newRecord = { id: userId, email: cleanEmail, name: cleanEmail.split('@')[0], passwordHash: hashedPwd };
     this.saveLocalRegisteredUser(newRecord);
 
+    // Auto-registro: não há tentativa falha — zerar contador por precaução
+    this._clearLoginAttempts(cleanEmail);
     this.currentUserId = userId;
     const db = await this.getDbData(userId, { id: userId, email: cleanEmail, name: cleanEmail.split('@')[0] });
     this.saveActiveLocalSession(db.user);
@@ -221,7 +380,8 @@ class SupabaseRepository {
     }
 
     const userId = this.generateLocalUserId(cleanEmail);
-    const newRecord = { id: userId, email: cleanEmail, name: userName, password };
+    const hashedPwd = await this.hashLocalPassword(password);
+    const newRecord = { id: userId, email: cleanEmail, name: userName, passwordHash: hashedPwd };
     this.saveLocalRegisteredUser(newRecord);
 
     this.currentUserId = userId;
@@ -351,15 +511,28 @@ class SupabaseRepository {
           this.supabase.from('fixed_bills').select('*').eq('user_id', activeId)
         ]);
 
-        const remoteAccounts = accRes.data || [];
-        const remoteCards = cardsRes.data || [];
-        const remoteTransactions = txRes.data || [];
-        const remoteGoals = goalsRes.data || [];
-        const remotePix = pixRes.data || [];
-        const remoteBills = billsRes.data || [];
+        // Verificar e logar erros individuais por tabela sem abortar o merge
+        const selectErrors = [
+          accRes.error   && `accounts: ${accRes.error.message}`,
+          cardsRes.error && `cards: ${cardsRes.error.message}`,
+          txRes.error    && `transactions: ${txRes.error.message}`,
+          goalsRes.error && `goals: ${goalsRes.error.message}`,
+          pixRes.error   && `pix_keys: ${pixRes.error.message}`,
+          billsRes.error && `fixed_bills: ${billsRes.error.message}`
+        ].filter(Boolean);
+        if (selectErrors.length > 0 && window.LinsoraLogger) {
+          window.LinsoraLogger.error('Erros parciais na leitura do Supabase', selectErrors, activeId);
+        }
+
+        const remoteAccounts     = accRes.data   || [];
+        const remoteCards        = cardsRes.data  || [];
+        const remoteTransactions = txRes.data     || [];
+        const remoteGoals        = goalsRes.data  || [];
+        const remotePix          = pixRes.data    || [];
+        const remoteBills        = billsRes.data  || [];
 
         const hasRemoteData = remoteAccounts.length > 0 || remoteTransactions.length > 0 || remoteGoals.length > 0 || remoteCards.length > 0;
-        const hasLocalData = localCache && (localCache.transactions?.length > 0 || localCache.accounts?.length > 0 || localCache.cards?.length > 0 || localCache.goals?.length > 0);
+        const hasLocalData  = localCache && (localCache.transactions?.length > 0 || localCache.accounts?.length > 0 || localCache.cards?.length > 0 || localCache.goals?.length > 0);
 
         let mergedData;
         if (!hasRemoteData && hasLocalData) {
@@ -385,12 +558,12 @@ class SupabaseRepository {
               pinCode: localCache?.user?.pinCode || '1234',
               isAiClassificationEnabled: localCache?.user?.isAiClassificationEnabled !== false
             },
-            accounts: mergeById(remoteAccounts, localCache?.accounts),
-            cards: mergeById(remoteCards, localCache?.cards),
+            accounts:     mergeById(remoteAccounts,     localCache?.accounts),
+            cards:        mergeById(remoteCards,        localCache?.cards),
             transactions: mergeById(remoteTransactions, localCache?.transactions),
-            goals: mergeById(remoteGoals, localCache?.goals),
-            pixKeys: mergeById(remotePix, localCache?.pixKeys),
-            fixedBills: mergeById(remoteBills, localCache?.fixedBills)
+            goals:        mergeById(remoteGoals,        localCache?.goals),
+            pixKeys:      mergeById(remotePix,          localCache?.pixKeys),
+            fixedBills:   mergeById(remoteBills,        localCache?.fixedBills)
           };
         }
 
@@ -420,33 +593,74 @@ class SupabaseRepository {
   }
 
   async syncToSupabaseRemote(data, userId) {
-    if (!this.supabase || !userId || userId === 'guest' || userId.startsWith('usr_')) return;
+    if (!this.supabase || !userId || userId === 'guest' || userId.startsWith('usr_')) return { success: true, errors: [] };
+    const errors = [];
     try {
       if (data.accounts?.length) {
         const accs = data.accounts.map(a => ({ id: a.id, user_id: userId, name: a.name, type: a.type, balance: a.balance, color: a.color, icon: a.icon }));
-        await this.supabase.from('accounts').upsert(accs);
+        const { error } = await this.supabase.from('accounts').upsert(accs);
+        if (error) errors.push(`accounts: ${error.message}`);
       }
       if (data.cards?.length) {
         const cards = data.cards.map(c => ({ id: c.id, user_id: userId, name: c.name, brand: c.brand, last4: c.last4, limit_total: c.limitTotal, limit_used: c.limitUsed, closing_day: c.closingDay, due_day: c.dueDay }));
-        await this.supabase.from('cards').upsert(cards);
+        const { error } = await this.supabase.from('cards').upsert(cards);
+        if (error) errors.push(`cards: ${error.message}`);
       }
       if (data.goals?.length) {
         const goals = data.goals.map(g => ({ id: g.id, user_id: userId, title: g.title, target: g.target, current: g.current, category: g.category, deadline: g.deadline, icon: g.icon, color: g.color, monthly_contribution: g.monthlyContribution }));
-        await this.supabase.from('goals').upsert(goals);
+        const { error } = await this.supabase.from('goals').upsert(goals);
+        if (error) errors.push(`goals: ${error.message}`);
       }
       if (data.transactions?.length) {
         const txs = data.transactions.map(t => ({ id: t.id, user_id: userId, type: t.type, description: t.description, amount: t.amount, category: t.category, date: t.date, account: t.account, status: t.status, notes: t.notes }));
-        await this.supabase.from('transactions').upsert(txs);
+        const { error } = await this.supabase.from('transactions').upsert(txs);
+        if (error) errors.push(`transactions: ${error.message}`);
       }
     } catch (e) {
-      console.warn('⚡ [Supabase Sync] Sincronização remota pendente (salvo localmente):', e?.message || e);
+      errors.push(`sync_exception: ${e?.message || e}`);
+    }
+    if (errors.length > 0) {
+      if (window.LinsoraLogger) window.LinsoraLogger.error('Erros na sincronização remota (dados salvos localmente)', errors, userId);
+      return { success: false, errors };
+    }
+    return { success: true, errors: [] };
+  }
+
+  /* ------------------------------------------------------------------------
+     DELETE REMOTO — Remove registro de uma tabela no Supabase pelo ID
+     Tabelas suportadas: 'transactions' | 'accounts' | 'cards' | 'goals' |
+                         'pix_keys' | 'fixed_bills'
+     Retorna { success: boolean, error: string|null }
+     ------------------------------------------------------------------------ */
+  async deleteDbRecord(table, recordId, userId) {
+    const targetId = userId || this.currentUserId;
+    if (!this.supabase || !targetId || targetId === 'guest' || targetId.startsWith('usr_')) {
+      // Modo offline: exclusão já aplicada no estado local, nada a fazer remotamente
+      return { success: true, error: null };
+    }
+    if (!recordId) return { success: false, error: 'ID do registro não informado.' };
+    try {
+      const { error } = await this.supabase
+        .from(table)
+        .delete()
+        .eq('id', recordId)
+        .eq('user_id', targetId); // RLS extra: garante que o usuário só exclui os próprios registros
+      if (error) {
+        if (window.LinsoraLogger) window.LinsoraLogger.error(`Falha ao excluir de ${table}`, { recordId, error: error.message }, targetId);
+        return { success: false, error: error.message };
+      }
+      if (window.LinsoraLogger) window.LinsoraLogger.update(`DELETE ${table}`, { recordId }, targetId);
+      return { success: true, error: null };
+    } catch (e) {
+      if (window.LinsoraLogger) window.LinsoraLogger.error(`Exceção ao excluir de ${table}`, e, targetId);
+      return { success: false, error: e?.message || 'Erro desconhecido na exclusão remota.' };
     }
   }
 
   async saveDbData(data, userId = null) {
     const targetId = userId || data?.user?.id || this.currentUserId || 'guest';
     const key = `LINSORA_DB_CACHE_${targetId}`;
-    
+
     // Forçar que o objeto do usuário sempre tenha o id correto
     if (data && data.user) {
       data.user.id = targetId;
@@ -455,10 +669,23 @@ class SupabaseRepository {
       }
     }
 
+    // 1. Salvar localmente primeiro — garante persistência mesmo sem rede
     localStorage.setItem(key, JSON.stringify(data));
-    this.syncToSupabaseRemote(data, targetId);
+
+    // 2. Sincronizar remotamente — capturar e expor erros de escrita
+    const syncResult = await this.syncToSupabaseRemote(data, targetId);
+    if (syncResult && !syncResult.success && syncResult.errors?.length > 0) {
+      // Emite evento customizado para que a UI possa exibir aviso ao usuário
+      try {
+        const evt = new CustomEvent('linsora:sync-error', {
+          detail: { errors: syncResult.errors, savedLocally: true }
+        });
+        window.dispatchEvent(evt);
+      } catch (_) { /* ambiente sem suporte a CustomEvent */ }
+    }
+
     if (window.LinsoraLogger) window.LinsoraLogger.write('Local Cache DB', { targetId, transactionsCount: data?.transactions?.length || 0 }, targetId);
-    return data;
+    return { data, syncResult };
   }
 }
 

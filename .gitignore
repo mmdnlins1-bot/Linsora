@@ -1,3 +1,11 @@
+# Environment variables (NUNCA commite o .env real)
+.env
+.env.local
+.env.production
+
+# Firebase — contém chave de API do Google (não commitar em repos públicos)
+android/app/google-services.json
+
 # Dependencies
 node_modules/
 
