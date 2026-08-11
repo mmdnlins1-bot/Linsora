@@ -31,3 +31,9 @@ Thumbs.db
 .idea/
 .vscode/
 *.log
+
+# Keystore & signing security
+keystore.properties
+*.jks
+*.keystore
+
