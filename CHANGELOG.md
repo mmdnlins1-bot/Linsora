@@ -1,6 +1,14 @@
 # CHANGELOG — Linsora Finanças
 
 Todas as alterações notáveis, correções e melhorias de UX/UI neste projeto serão documentadas neste arquivo.
+## [1.0.2] - 2026-08-11
+
+### 💾 Persistência de Dados & Sincronização Supabase Sem Perdas
+- **Restauração Automática por E-mail**: Implementado mapeamento determinístico de chave de usuário e sessão local vinculados ao e-mail, garantindo a recuperação completa de contas, cartões, metas, receitas, despesas e preferências (`isHideValues`, `currentTheme`, `isPinEnabled`, `pinCode`, `isAiClassificationEnabled`) ao atualizar a APK ou fazer relogin.
+- **Migração Automática de Visitante**: Implementada migração transparente de dados criados antes da autenticação para o perfil do usuário logado.
+- **Auto-Sync Supabase Remote**: Implementada sincronização bi-direcional inteligente com tabelas do Supabase e mesclagem por ID sem perda de registros locais.
+- **Compatibilidade de APK & Application ID**: Verificada compatibilidade de `com.linsora.app`, mantendo o mesmo identificador de aplicativo e chave de assinatura para atualizações transparentes no Android.
+- **APK Versionada**: Nova versão gerada como `LINSORA-Financas-v1.0.2.apk` preservando builds anteriores.
 
 ## [1.0.0] - 2026-08-11
 

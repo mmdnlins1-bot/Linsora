@@ -305,6 +305,40 @@ class SupabaseRepository {
     const stored = localStorage.getItem(key);
     let localCache = stored ? JSON.parse(stored) : null;
 
+    // Migração automática de dados de visitante (guest) se o cache do novo usuário estiver zerado
+    if (!localCache || (
+      (!localCache.transactions || localCache.transactions.length === 0) &&
+      (!localCache.accounts || localCache.accounts.length === 0) &&
+      (!localCache.goals || localCache.goals.length === 0)
+    )) {
+      const guestStored = localStorage.getItem('LINSORA_DB_CACHE_usr_guest') || localStorage.getItem('LINSORA_DB_CACHE_guest');
+      if (guestStored) {
+        try {
+          const guestCache = JSON.parse(guestStored);
+          if (guestCache && (guestCache.transactions?.length || guestCache.accounts?.length || guestCache.goals?.length)) {
+            console.log('🔄 Migrando dados locais de visitante para o usuário:', activeId);
+            localCache = {
+              user: {
+                ...(guestCache.user || {}),
+                id: activeId,
+                name: userObj?.name || guestCache.user?.name || 'Usuário',
+                email: userObj?.email ? String(userObj.email).toLowerCase().trim() : (guestCache.user?.email || '')
+              },
+              accounts: (guestCache.accounts || []).map(a => ({ ...a, userId: activeId })),
+              cards: (guestCache.cards || []).map(c => ({ ...c, userId: activeId })),
+              transactions: (guestCache.transactions || []).map(t => ({ ...t, userId: activeId })),
+              goals: (guestCache.goals || []).map(g => ({ ...g, userId: activeId })),
+              pixKeys: (guestCache.pixKeys || []).map(p => ({ ...p, userId: activeId })),
+              fixedBills: (guestCache.fixedBills || []).map(f => ({ ...f, userId: activeId }))
+            };
+            localStorage.setItem(key, JSON.stringify(localCache));
+          }
+        } catch (e) {
+          console.warn('Falha na migração automática de dados de visitante:', e);
+        }
+      }
+    }
+
     // Se estiver conectado ao Supabase remoto, busca via PostgREST/RLS
     if (this.supabase && activeId !== 'guest' && !activeId.startsWith('usr_')) {
       try {
@@ -330,7 +364,16 @@ class SupabaseRepository {
         let mergedData;
         if (!hasRemoteData && hasLocalData) {
           mergedData = localCache;
+          this.syncToSupabaseRemote(localCache, activeId);
         } else {
+          // Mescla por ID garantindo que registros locais novos não sejam perdidos
+          const mergeById = (remoteList, localList = []) => {
+            const map = new Map();
+            remoteList.forEach(item => map.set(item.id, item));
+            localList.forEach(item => { if (!map.has(item.id)) map.set(item.id, item); });
+            return Array.from(map.values());
+          };
+
           mergedData = {
             user: {
               id: activeId,
@@ -342,12 +385,12 @@ class SupabaseRepository {
               pinCode: localCache?.user?.pinCode || '1234',
               isAiClassificationEnabled: localCache?.user?.isAiClassificationEnabled !== false
             },
-            accounts: hasRemoteData ? remoteAccounts : (localCache?.accounts || []),
-            cards: hasRemoteData ? remoteCards : (localCache?.cards || []),
-            transactions: hasRemoteData ? remoteTransactions : (localCache?.transactions || []),
-            goals: hasRemoteData ? remoteGoals : (localCache?.goals || []),
-            pixKeys: hasRemoteData ? remotePix : (localCache?.pixKeys || []),
-            fixedBills: hasRemoteData ? remoteBills : (localCache?.fixedBills || [])
+            accounts: mergeById(remoteAccounts, localCache?.accounts),
+            cards: mergeById(remoteCards, localCache?.cards),
+            transactions: mergeById(remoteTransactions, localCache?.transactions),
+            goals: mergeById(remoteGoals, localCache?.goals),
+            pixKeys: mergeById(remotePix, localCache?.pixKeys),
+            fixedBills: mergeById(remoteBills, localCache?.fixedBills)
           };
         }
 
@@ -376,6 +419,30 @@ class SupabaseRepository {
     return emptyState;
   }
 
+  async syncToSupabaseRemote(data, userId) {
+    if (!this.supabase || !userId || userId === 'guest' || userId.startsWith('usr_')) return;
+    try {
+      if (data.accounts?.length) {
+        const accs = data.accounts.map(a => ({ id: a.id, user_id: userId, name: a.name, type: a.type, balance: a.balance, color: a.color, icon: a.icon }));
+        await this.supabase.from('accounts').upsert(accs);
+      }
+      if (data.cards?.length) {
+        const cards = data.cards.map(c => ({ id: c.id, user_id: userId, name: c.name, brand: c.brand, last4: c.last4, limit_total: c.limitTotal, limit_used: c.limitUsed, closing_day: c.closingDay, due_day: c.dueDay }));
+        await this.supabase.from('cards').upsert(cards);
+      }
+      if (data.goals?.length) {
+        const goals = data.goals.map(g => ({ id: g.id, user_id: userId, title: g.title, target: g.target, current: g.current, category: g.category, deadline: g.deadline, icon: g.icon, color: g.color, monthly_contribution: g.monthlyContribution }));
+        await this.supabase.from('goals').upsert(goals);
+      }
+      if (data.transactions?.length) {
+        const txs = data.transactions.map(t => ({ id: t.id, user_id: userId, type: t.type, description: t.description, amount: t.amount, category: t.category, date: t.date, account: t.account, status: t.status, notes: t.notes }));
+        await this.supabase.from('transactions').upsert(txs);
+      }
+    } catch (e) {
+      console.warn('⚡ [Supabase Sync] Sincronização remota pendente (salvo localmente):', e?.message || e);
+    }
+  }
+
   async saveDbData(data, userId = null) {
     const targetId = userId || data?.user?.id || this.currentUserId || 'guest';
     const key = `LINSORA_DB_CACHE_${targetId}`;
@@ -389,6 +456,7 @@ class SupabaseRepository {
     }
 
     localStorage.setItem(key, JSON.stringify(data));
+    this.syncToSupabaseRemote(data, targetId);
     if (window.LinsoraLogger) window.LinsoraLogger.write('Local Cache DB', { targetId, transactionsCount: data?.transactions?.length || 0 }, targetId);
     return data;
   }
