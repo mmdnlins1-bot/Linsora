@@ -17,6 +17,19 @@ class LinsoraStore {
     this.searchQuery = '';
     this.cashflowMetric = 'all';
     this.cashflowPeriod = 'monthly';
+
+    // Ouvir falhas de sincronizacao remota e avisar o usuario
+    window.addEventListener('linsora:sync-error', (evt) => {
+      const detail = evt?.detail || {};
+      const msg = detail.savedLocally
+        ? 'Seus dados foram salvos localmente, mas não foi possível sincronizar com o servidor. Verifique sua conexão.'
+        : 'Erro ao sincronizar dados com o servidor.';
+      if (window.LinsoraNotifications?.show) {
+        window.LinsoraNotifications.show(msg, 'warning');
+      } else if (window.LinsoraLogger) {
+        window.LinsoraLogger.error('[sync-error]', detail);
+      }
+    });
   }
 
   async init(userObj = null) {
@@ -146,6 +159,12 @@ class LinsoraStore {
       this.state.transactions = this.state.transactions.filter(t => t.id !== txId);
       if (window.LinsoraLogger) window.LinsoraLogger.update('Exclusão de Transação', { id: txId, description: tx.description }, this.state?.user?.id);
       this.notify();
+      // Propagar DELETE ao Supabase remoto
+      const userId = this.state?.user?.id;
+      const remoteResult = await window.supabaseRepo.deleteDbRecord('transactions', txId, userId);
+      if (!remoteResult.success && window.LinsoraNotifications?.show) {
+        window.LinsoraNotifications.show('Transação excluída localmente, mas não foi possível remover do servidor.', 'warning');
+      }
     }
   }
 
@@ -201,6 +220,12 @@ class LinsoraStore {
     this.state.accounts = this.state.accounts.filter(a => a.id !== accId);
     if (window.LinsoraLogger) window.LinsoraLogger.update('Exclusão de Conta', { accId }, this.state?.user?.id);
     this.notify();
+    // Propagar DELETE ao Supabase remoto
+    const userId = this.state?.user?.id;
+    const remoteResult = await window.supabaseRepo.deleteDbRecord('accounts', accId, userId);
+    if (!remoteResult.success && window.LinsoraNotifications?.show) {
+      window.LinsoraNotifications.show('Conta excluída localmente, mas não foi possível remover do servidor.', 'warning');
+    }
     return true;
   }
 
@@ -270,6 +295,12 @@ class LinsoraStore {
     this.state.cards = this.state.cards.filter(c => c.id !== cardId);
     if (window.LinsoraLogger) window.LinsoraLogger.update('Exclusão de Cartão', { cardId }, this.state?.user?.id);
     this.notify();
+    // Propagar DELETE ao Supabase remoto
+    const userId = this.state?.user?.id;
+    const remoteResult = await window.supabaseRepo.deleteDbRecord('cards', cardId, userId);
+    if (!remoteResult.success && window.LinsoraNotifications?.show) {
+      window.LinsoraNotifications.show('Cartão excluído localmente, mas não foi possível remover do servidor.', 'warning');
+    }
     return true;
   }
 
@@ -353,6 +384,12 @@ class LinsoraStore {
     if (this.state.goals.length < initialLen) {
       if (window.LinsoraLogger) window.LinsoraLogger.update('Meta Excluída', { goalId }, this.state?.user?.id);
       this.notify();
+      // Propagar DELETE ao Supabase remoto
+      const userId = this.state?.user?.id;
+      const remoteResult = await window.supabaseRepo.deleteDbRecord('goals', goalId, userId);
+      if (!remoteResult.success && window.LinsoraNotifications?.show) {
+        window.LinsoraNotifications.show('Meta excluída localmente, mas não foi possível remover do servidor.', 'warning');
+      }
       return true;
     }
     return false;
