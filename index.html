@@ -474,15 +474,41 @@
 
             <!-- 2. COMPARATIVO RECEITA VS DESPESAS (TAXA DE COMPROMETIMENTO E POUPANÇA) -->
             <div class="health-comparative-grid">
-              <div class="linsora-card metric-mini-card">
-                <span class="metric-mini-label">Comprometimento de Renda</span>
-                <div class="metric-mini-val" id="healthCommitmentRate">0%</div>
+              <div class="linsora-card metric-mini-card health-metric-premium">
+                <div class="health-metric-header">
+                  <div class="health-metric-icon-wrap commitment">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                  </div>
+                  <div class="health-metric-title-group">
+                    <span class="metric-mini-label">Comprometimento de Renda</span>
+                    <span class="health-badge-chip" id="healthCommitmentBadge">--</span>
+                  </div>
+                </div>
+                <div class="metric-val-row">
+                  <div class="metric-mini-val" id="healthCommitmentRate">0%</div>
+                </div>
+                <div class="health-mini-bar">
+                  <div class="health-mini-bar-fill" id="healthCommitmentBarFill" style="width: 0%;"></div>
+                </div>
                 <span class="metric-mini-sub" id="healthCommitmentStatus">--</span>
               </div>
 
-              <div class="linsora-card metric-mini-card">
-                <span class="metric-mini-label">Margem de Poupança</span>
-                <div class="metric-mini-val" id="healthSavingsRate">0%</div>
+              <div class="linsora-card metric-mini-card health-metric-premium">
+                <div class="health-metric-header">
+                  <div class="health-metric-icon-wrap savings">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+                  </div>
+                  <div class="health-metric-title-group">
+                    <span class="metric-mini-label">Margem de Poupança</span>
+                    <span class="health-badge-chip emerald" id="healthSavingsBadge">--</span>
+                  </div>
+                </div>
+                <div class="metric-val-row">
+                  <div class="metric-mini-val" id="healthSavingsRate">0%</div>
+                </div>
+                <div class="health-mini-bar">
+                  <div class="health-mini-bar-fill emerald" id="healthSavingsBarFill" style="width: 0%;"></div>
+                </div>
                 <span class="metric-mini-sub" id="healthSavingsStatus">--</span>
               </div>
             </div>
@@ -598,25 +624,26 @@
 
             <div class="linsora-card user-profile-card">
               <div class="profile-card-header">
-                <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80" alt="Avatar" class="profile-avatar-lg" id="profileAvatarImg">
-                <div>
+                <div class="profile-avatar-wrapper" id="btnChangeAvatar" title="Clique para alterar a foto de perfil">
+                  <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80" alt="Avatar" class="profile-avatar-lg" id="profileAvatarImg">
+                  <div class="avatar-edit-overlay">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+                  </div>
+                  <div class="avatar-upload-spinner hidden" id="avatarUploadSpinner">
+                    <div class="spinner-ring"></div>
+                  </div>
+                </div>
+                <input type="file" id="profileAvatarInput" accept="image/*" style="display: none;">
+                
+                <div class="profile-info-wrap">
                   <h3 id="profileNameDisplay">Usuário</h3>
                   <span style="font-size: 13px; color: var(--text-muted);" id="profileEmailDisplay">usuario@linsora.com.br</span>
-                  <div style="margin-top: 6px;">
+                  <div style="margin-top: 6px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
                     <span class="badge-status-chip success">Conta PRO Premium</span>
+                    <button type="button" class="change-photo-btn" id="btnTriggerPhotoUpload">📷 Alterar Foto</button>
                   </div>
                 </div>
               </div>
-            </div>
-
-            <div class="linsora-card report-export-card">
-              <div class="report-info">
-                <h3>📄 Relatório Financeiro PDF</h3>
-                <p>Gere um demonstrativo completo com entradas, saídas, patrimônio e análise de hábitos pronto para imprimir ou arquivar.</p>
-              </div>
-              <button type="button" class="linsora-btn primary block" id="btnExportPDF">
-                Exportar Relatório PDF
-              </button>
             </div>
 
             <div class="section-block profile-settings-block">

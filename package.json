@@ -1,12 +1,12 @@
 {
   "name": "linsora-finance-mvp",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "LINSORA — Gestão Financeira Pessoal Inteligente",
   "main": "js/app.js",
   "scripts": {
     "start": "npx http-server . -p 3000 -c-1",
     "build:cap": "powershell -Command \"Copy-Item -Recurse -Force index.html, css, js, manifest.webmanifest, sw.js www/\" && npx cap sync android",
-    "build:apk": "npm run build:cap && powershell -Command \"$env:JAVA_HOME='C:\\Users\\Urso\\.bubblewrap\\jdk\\jdk-17.0.11+9'; $env:ANDROID_HOME='C:\\Users\\Urso\\.bubblewrap\\android_sdk'; Set-Location android; .\\gradlew.bat assembleDebug; Copy-Item app\\build\\outputs\\apk\\debug\\app-debug.apk ..\\LINSORA-Financas-v1.0.2.apk -Force; Copy-Item app\\build\\outputs\\apk\\debug\\app-debug.apk ..\\LINSORA-Financas.apk -Force\"",
+    "build:apk": "npm run build:cap && powershell -Command \"$env:JAVA_HOME='C:\\Users\\Urso\\.bubblewrap\\jdk\\jdk-17.0.11+9'; $env:ANDROID_HOME='C:\\Users\\Urso\\.bubblewrap\\android_sdk'; Set-Location android; .\\gradlew.bat assembleDebug; Copy-Item app\\build\\outputs\\apk\\debug\\app-debug.apk ..\\LINSORA-Financas-v1.0.3.apk -Force; Copy-Item app\\build\\outputs\\apk\\debug\\app-debug.apk ..\\LINSORA-Financas.apk -Force\"",
     "test": "playwright test",
     "test:ui": "playwright test --ui",
     "test:headed": "playwright test --headed",

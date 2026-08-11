@@ -202,13 +202,36 @@ class LinsoraUIComponentEngine {
       if (compEl) compEl.innerText = `${Math.round(commitmentRate)}%`;
       
       const compStatEl = document.getElementById('healthCommitmentStatus');
-      if (compStatEl) compStatEl.innerText = commitmentRate <= 70 ? '🟢 Dentro do limite seguro' : '🟡 Alto comprometimento de renda';
+      if (compStatEl) compStatEl.innerText = commitmentRate <= 70 ? '🟢 Dentro do limite seguro (até 70%)' : '🟡 Alto comprometimento da renda';
+
+      const compBadgeEl = document.getElementById('healthCommitmentBadge');
+      if (compBadgeEl) {
+        compBadgeEl.innerText = commitmentRate <= 50 ? 'Ideal' : commitmentRate <= 75 ? 'Seguro' : 'Alerta';
+        compBadgeEl.className = `health-badge-chip ${commitmentRate <= 50 ? 'emerald' : commitmentRate <= 75 ? 'warning' : 'danger'}`;
+      }
+
+      const compFillEl = document.getElementById('healthCommitmentBarFill');
+      if (compFillEl) {
+        compFillEl.style.width = `${Math.min(100, Math.round(commitmentRate))}%`;
+        compFillEl.style.background = commitmentRate <= 50 ? 'var(--accent-green-neon)' : commitmentRate <= 75 ? '#F59E0B' : '#EF4444';
+      }
 
       const savEl = document.getElementById('healthSavingsRate');
       if (savEl) savEl.innerText = `${Math.round(savingsRate)}%`;
 
       const savStatEl = document.getElementById('healthSavingsStatus');
-      if (savStatEl) savStatEl.innerText = savingsRate >= 20 ? '🚀 Meta de poupança atingida' : '💡 Meta ideal: guardar ao menos 20%';
+      if (savStatEl) savStatEl.innerText = savingsRate >= 20 ? '🚀 Meta de poupança atingida!' : '💡 Recomendado: guardar ao menos 20%';
+
+      const savBadgeEl = document.getElementById('healthSavingsBadge');
+      if (savBadgeEl) {
+        savBadgeEl.innerText = savingsRate >= 20 ? 'Excelente' : savingsRate >= 10 ? 'Regular' : 'Abaixo';
+        savBadgeEl.className = `health-badge-chip ${savingsRate >= 20 ? 'emerald' : savingsRate >= 10 ? 'warning' : 'danger'}`;
+      }
+
+      const savFillEl = document.getElementById('healthSavingsBarFill');
+      if (savFillEl) {
+        savFillEl.style.width = `${Math.min(100, Math.round(savingsRate))}%`;
+      }
     }
 
     const numEl = document.getElementById('healthScoreNum');
@@ -229,11 +252,11 @@ class LinsoraUIComponentEngine {
     const summaryEl = document.getElementById('healthScoreSummary');
     if (summaryEl) summaryEl.innerText = summaryText;
 
-    this.renderHealthInsights('healthInsightsContainer', currentTxs, prevTxs, currentIncome, currentExpense, prevIncome, prevExpense);
+    this.renderHealthInsights('healthInsightsContainer', currentTxs, prevTxs, currentIncome, currentExpense, prevIncome, prevExpense, hideValues);
     this.renderCategoryVariationsGrid('healthCategoryVariationsGrid', currentTxs, prevTxs, hideValues);
   }
 
-  renderHealthInsights(containerId, currentTxs, prevTxs, currentIncome, currentExpense, prevIncome, prevExpense) {
+  renderHealthInsights(containerId, currentTxs, prevTxs, currentIncome, currentExpense, prevIncome, prevExpense, hideValues = false) {
     const container = document.getElementById(containerId);
     if (!container) return;
 
@@ -252,57 +275,10 @@ class LinsoraUIComponentEngine {
 
     const insights = [];
 
-    if (prevExpense > 0) {
-      const expenseDiffPct = Math.round(((currentExpense - prevExpense) / prevExpense) * 100);
-      if (expenseDiffPct > 0) {
-        insights.push({
-          type: 'danger',
-          icon: '📈',
-          title: 'Aumento Global de Despesas',
-          message: `Seus gastos totais aumentaram ${expenseDiffPct}% em relação ao mês anterior (R$ ${currentExpense.toLocaleString('pt-BR')} vs R$ ${prevExpense.toLocaleString('pt-BR')}).`
-        });
-      } else if (expenseDiffPct < 0) {
-        insights.push({
-          type: 'success',
-          icon: '🎉',
-          title: 'Economia Conquistada',
-          message: `Parabéns! Você reduziu seus gastos totais em ${Math.abs(expenseDiffPct)}% em relação ao mês anterior!`
-        });
-      }
-    }
-
+    // Redesenho do Maior Ofensor Orçamentário como Card de Alerta Hero
     const catCurrent = {};
     currentTxs.filter(t => t.type === 'DESPESA').forEach(t => {
       catCurrent[t.category] = (catCurrent[t.category] || 0) + Number(t.amount);
-    });
-
-    const catPrev = {};
-    prevTxs.filter(t => t.type === 'DESPESA').forEach(t => {
-      catPrev[t.category] = (catPrev[t.category] || 0) + Number(t.amount);
-    });
-
-    Object.keys(catCurrent).forEach(cat => {
-      const currVal = catCurrent[cat];
-      const prevVal = catPrev[cat] || 0;
-
-      if (prevVal > 0) {
-        const diffPct = Math.round(((currVal - prevVal) / prevVal) * 100);
-        if (diffPct >= 15) {
-          insights.push({
-            type: 'warning',
-            icon: '⚠️',
-            title: `Variação Significativa em ${cat}`,
-            message: `Sua conta/despesa de ${cat} aumentou ${diffPct}% em relação ao mês passado (de R$ ${prevVal.toLocaleString('pt-BR')} para R$ ${currVal.toLocaleString('pt-BR')}).`
-          });
-        } else if (diffPct <= -10) {
-          insights.push({
-            type: 'success',
-            icon: '🟢',
-            title: `Redução de Custos em ${cat}`,
-            message: `Você economizou ${Math.abs(diffPct)}% em ${cat} neste mês!`
-          });
-        }
-      }
     });
 
     let topCategory = null;
@@ -316,13 +292,78 @@ class LinsoraUIComponentEngine {
 
     if (topCategory && currentExpense > 0) {
       const topPct = Math.round((topCategoryVal / currentExpense) * 100);
+      const incomePct = currentIncome > 0 ? Math.round((topCategoryVal / currentIncome) * 100) : null;
+      
+      const tipsMap = {
+        'Alimentação': 'Planejar compras de mercado semanais e substituir entregas de aplicativos por refeições preparadas pode reduzir este gasto em até 25%.',
+        'Moradia': 'Avalie renegociar contratos de serviços (internet, TV, condomínio) e otimizar o consumo elétrico nos horários de pico.',
+        'Transporte': 'Considere combinar trajetos, utilizar transporte compartilhado e realizar manutenções preventivas no veículo.',
+        'Lazer': 'Estabeleça um teto semanal para passeios e busque opções culturais gratuitas ou com descontos corporativos.',
+        'Saúde': 'Pesquise farmácias com programas de fidelidade, descontos do plano de saúde e mantenha check-ups preventivos em dia.',
+        'Outros': 'Revise pequenas assinaturas recorrentes e compras impulsivas que passam despercebidas no dia a dia.'
+      };
+
+      const tipText = tipsMap[topCategory] || 'Crie uma meta com limite teto para esta categoria e acompanhe os lançamentos semanalmente.';
+
       insights.push({
-        type: 'info',
-        icon: '📊',
-        title: `Maior Ofensor Orçamentário: ${topCategory}`,
-        message: `A categoria ${topCategory} representa ${topPct}% de todas as suas despesas no mês atual.`
+        isHeroOffender: true,
+        type: 'danger',
+        category: topCategory,
+        amount: topCategoryVal,
+        pct: topPct,
+        incomePct,
+        tipText
       });
     }
+
+    if (prevExpense > 0) {
+      const expenseDiffPct = Math.round(((currentExpense - prevExpense) / prevExpense) * 100);
+      if (expenseDiffPct > 0) {
+        insights.push({
+          type: 'danger',
+          icon: '📈',
+          title: 'Aumento Global de Despesas',
+          message: `Seus gastos totais aumentaram ${expenseDiffPct}% em relação ao mês anterior (${LinsoraUtils.formatBRL(currentExpense, hideValues)} vs ${LinsoraUtils.formatBRL(prevExpense, hideValues)}).`
+        });
+      } else if (expenseDiffPct < 0) {
+        insights.push({
+          type: 'success',
+          icon: '🎉',
+          title: 'Economia Conquistada',
+          message: `Parabéns! Você reduziu seus gastos totais em ${Math.abs(expenseDiffPct)}% em relação ao mês anterior!`
+        });
+      }
+    }
+
+    const catPrev = {};
+    prevTxs.filter(t => t.type === 'DESPESA').forEach(t => {
+      catPrev[t.category] = (catPrev[t.category] || 0) + Number(t.amount);
+    });
+
+    Object.keys(catCurrent).forEach(cat => {
+      if (cat === topCategory) return; // já destacado no hero
+      const currVal = catCurrent[cat];
+      const prevVal = catPrev[cat] || 0;
+
+      if (prevVal > 0) {
+        const diffPct = Math.round(((currVal - prevVal) / prevVal) * 100);
+        if (diffPct >= 15) {
+          insights.push({
+            type: 'warning',
+            icon: '⚠️',
+            title: `Variação Significativa em ${cat}`,
+            message: `Sua conta/despesa de ${cat} aumentou ${diffPct}% em relação ao mês passado (de ${LinsoraUtils.formatBRL(prevVal, hideValues)} para ${LinsoraUtils.formatBRL(currVal, hideValues)}).`
+          });
+        } else if (diffPct <= -10) {
+          insights.push({
+            type: 'success',
+            icon: '🟢',
+            title: `Redução de Custos em ${cat}`,
+            message: `Você economizou ${Math.abs(diffPct)}% em ${cat} neste mês!`
+          });
+        }
+      }
+    });
 
     if (insights.length === 0) {
       insights.push({
@@ -333,15 +374,51 @@ class LinsoraUIComponentEngine {
       });
     }
 
-    container.innerHTML = insights.map(i => `
-      <div class="linsora-card insight-card ${i.type}">
-        <div class="insight-icon">${i.icon}</div>
-        <div class="insight-content">
-          <strong>${i.title}</strong>
-          <p>${i.message}</p>
+    container.innerHTML = insights.map(i => {
+      if (i.isHeroOffender) {
+        return `
+          <div class="linsora-card hero-offender-card">
+            <div class="offender-badge-row">
+              <span class="offender-alert-badge">🚨 ALERTA FINANCEIRO</span>
+              <span class="offender-category-pill">${i.category}</span>
+            </div>
+            <h4 class="offender-title">Maior Ofensor Orçamentário</h4>
+            <div class="offender-stats-grid">
+              <div class="offender-stat-item">
+                <span class="offender-stat-label">Valor Gasto no Mês</span>
+                <strong class="offender-stat-val main-amount">${LinsoraUtils.formatBRL(i.amount, hideValues)}</strong>
+              </div>
+              <div class="offender-stat-item">
+                <span class="offender-stat-label">Impacto no Orçamento</span>
+                <strong class="offender-stat-val highlight-red">${i.pct}% <small>das despesas</small></strong>
+              </div>
+              ${i.incomePct !== null ? `
+              <div class="offender-stat-item">
+                <span class="offender-stat-label">Comprometimento Renda</span>
+                <strong class="offender-stat-val">${i.incomePct}% <small>da renda total</small></strong>
+              </div>
+              ` : ''}
+            </div>
+            <div class="offender-tip-box">
+              <div class="offender-tip-header">
+                <span class="tip-icon">💡</span>
+                <strong>Dica Prática Linsora:</strong>
+              </div>
+              <p>${i.tipText}</p>
+            </div>
+          </div>
+        `;
+      }
+      return `
+        <div class="linsora-card insight-card ${i.type}">
+          <div class="insight-icon">${i.icon}</div>
+          <div class="insight-content">
+            <strong>${i.title}</strong>
+            <p>${i.message}</p>
+          </div>
         </div>
-      </div>
-    `).join('');
+      `;
+    }).join('');
   }
 
   renderCategoryVariationsGrid(containerId, currentTxs, prevTxs, hideValues) {

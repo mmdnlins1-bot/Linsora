@@ -29,12 +29,14 @@ window.switchTab = function(tabId) {
   }
 
   const fabBtn = document.getElementById('btnFabNewTransaction');
+  const fabVoiceBtn = document.getElementById('btnFabVoice');
   if (fabBtn) {
-    if (tabId === 'tabProfile') {
-      fabBtn.classList.add('hidden');
-    } else {
-      fabBtn.classList.remove('hidden');
-    }
+    if (tabId === 'tabProfile') fabBtn.classList.add('hidden');
+    else fabBtn.classList.remove('hidden');
+  }
+  if (fabVoiceBtn) {
+    if (tabId === 'tabProfile') fabVoiceBtn.classList.add('hidden');
+    else fabVoiceBtn.classList.remove('hidden');
   }
 
   if (tabId === 'tabDashboard' && window.linsoraStore && window.linsoraStore.state) {
@@ -1078,7 +1080,64 @@ function setupEventListeners() {
     }
   });
 
-  document.getElementById('btnExportPDF')?.addEventListener('click', () => LinsoraUtils.generatePDFReport(window.linsoraStore.state));
+  // FLUXO COMPLETO DE UPLOAD DE FOTO DE PERFIL
+  const triggerAvatarSelect = () => document.getElementById('profileAvatarInput')?.click();
+  document.getElementById('btnChangeAvatar')?.addEventListener('click', triggerAvatarSelect);
+  document.getElementById('btnTriggerPhotoUpload')?.addEventListener('click', triggerAvatarSelect);
+
+  document.getElementById('profileAvatarInput')?.addEventListener('change', async (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+
+    const spinner = document.getElementById('avatarUploadSpinner');
+    if (spinner) spinner.classList.remove('hidden');
+
+    try {
+      const compressedDataUrl = await LinsoraUtils.processAndCompressImage(file, 300, 300, 0.8);
+      let finalUrl = compressedDataUrl;
+
+      // Se o cliente Supabase estiver autenticado, tenta salvar no bucket de avatars
+      if (window.supabaseRepo && window.supabaseRepo.supabase && window.supabaseRepo.currentUserId && !window.supabaseRepo.currentUserId.startsWith('usr_')) {
+        try {
+          const userId = window.supabaseRepo.currentUserId;
+          const fileName = `avatar_${userId}.jpg`;
+          const blob = LinsoraUtils.dataURItoBlob(compressedDataUrl);
+
+          const { data, error } = await window.supabaseRepo.supabase.storage
+            .from('avatars')
+            .upload(fileName, blob, { upsert: true, contentType: 'image/jpeg' });
+
+          if (!error && data) {
+            const { data: publicUrlData } = window.supabaseRepo.supabase.storage
+              .from('avatars')
+              .getPublicUrl(fileName);
+            if (publicUrlData && publicUrlData.publicUrl) {
+              finalUrl = publicUrlData.publicUrl;
+            }
+          }
+        } catch (supErr) {
+          console.warn('Fallback para imagem de cache local:', supErr);
+        }
+      }
+
+      if (window.linsoraStore && window.linsoraStore.state && window.linsoraStore.state.user) {
+        window.linsoraStore.state.user.avatar = finalUrl;
+        window.linsoraStore.notify();
+      }
+
+      const avatarImg = document.getElementById('profileAvatarImg');
+      if (avatarImg) avatarImg.src = finalUrl;
+
+      LinsoraUI.showToast('Foto de perfil atualizada com sucesso!', 'success');
+    } catch (err) {
+      console.error('Erro no upload de foto:', err);
+      LinsoraUI.showToast('Não foi possível alterar a foto: ' + (err.message || 'Erro de leitura'), 'error');
+    } finally {
+      if (spinner) spinner.classList.add('hidden');
+      e.target.value = '';
+    }
+  });
+
   document.getElementById('btnTogglePrivacy')?.addEventListener('click', () => window.linsoraStore.togglePrivacy());
   
   document.getElementById('btnToggleTheme')?.addEventListener('click', () => {

@@ -43,12 +43,16 @@ test.describe('06. Módulo de Configurações, Perfil & Relatórios', () => {
     await expect(page.locator('#modalPinPad')).toHaveClass(/hidden/, { timeout: 5000 });
   });
 
-  test('Deve disparar a geração de Relatório PDF na aba Relatórios', async ({ page }) => {
+  test('Garante que o card de Relatório PDF foi removido do perfil e que a alteração de foto está funcional', async ({ page }) => {
     await page.click('.bottom-nav .nav-item[data-tab="tabProfile"]');
     await expect(page.locator('#tabProfile')).toBeVisible();
 
-    await page.click('#btnExportPDF');
-    const pdfTemplate = page.locator('#pdfPrintTemplate');
-    await expect(pdfTemplate).toContainText('LINSORA');
+    // Garantir remoção do card PDF
+    await expect(page.locator('#btnExportPDF')).not.toBeVisible();
+    await expect(page.locator('.report-export-card')).not.toBeVisible();
+
+    // Garantir presença do elemento de alteração de foto
+    await expect(page.locator('#btnTriggerPhotoUpload')).toBeVisible();
+    await expect(page.locator('#profileAvatarImg')).toBeVisible();
   });
 });

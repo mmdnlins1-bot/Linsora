@@ -3497,3 +3497,377 @@ body.frame-mode .device-notch { display: block; }
 #modalConfirmDelete.hidden .linsora-modal-content {
   animation: none;
 }
+
+/* ==========================================================================
+   PERFIL: UPLOAD DE FOTO DE PERFIL COM LOADING SPINNER E OVERLAY EDITÁVEL
+   ========================================================================== */
+.profile-avatar-wrapper {
+  position: relative;
+  width: 86px;
+  height: 86px;
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  overflow: hidden;
+  flex-shrink: 0;
+  border: 2.5px solid var(--accent-green-neon);
+  box-shadow: 0 4px 18px rgba(16, 185, 129, 0.25);
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.profile-avatar-wrapper:hover {
+  transform: scale(1.04);
+  box-shadow: 0 6px 24px rgba(16, 185, 129, 0.4);
+}
+
+.profile-avatar-lg {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.avatar-edit-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(2px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #FFFFFF;
+  opacity: 0;
+  transition: opacity var(--transition-fast);
+}
+
+.avatar-edit-overlay svg {
+  width: 24px;
+  height: 24px;
+}
+
+.profile-avatar-wrapper:hover .avatar-edit-overlay,
+.profile-avatar-wrapper:active .avatar-edit-overlay {
+  opacity: 1;
+}
+
+.avatar-upload-spinner {
+  position: absolute;
+  inset: 0;
+  background: rgba(7, 11, 18, 0.75);
+  backdrop-filter: blur(3px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 5;
+}
+
+.spinner-ring {
+  width: 28px;
+  height: 28px;
+  border: 3px solid rgba(16, 185, 129, 0.2);
+  border-top-color: var(--accent-green-neon);
+  border-radius: 50%;
+  animation: spinRing 0.8s linear infinite;
+}
+
+@keyframes spinRing {
+  to { transform: rotate(360deg); }
+}
+
+.change-photo-btn {
+  background: rgba(16, 185, 129, 0.12);
+  color: var(--accent-green-neon);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  padding: 4px 10px;
+  border-radius: var(--radius-full);
+  font-size: 11.5px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+
+.change-photo-btn:hover {
+  background: rgba(16, 185, 129, 0.22);
+  border-color: var(--accent-green-neon);
+}
+
+.profile-info-wrap h3 {
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--text-primary);
+  margin: 0 0 2px;
+}
+
+/* ==========================================================================
+   SAÚDE FINANCEIRA: CARDS PREMIUM DE COMPROMETIMENTO E MARGEM DE POUPANÇA
+   ========================================================================== */
+.health-comparative-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.health-metric-premium {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: rgba(15, 23, 42, 0.65);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-xl);
+  backdrop-filter: blur(12px);
+  transition: transform var(--transition-fast), border-color var(--transition-fast);
+}
+
+.health-metric-premium:hover {
+  transform: translateY(-2px);
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+.health-metric-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.health-metric-icon-wrap {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.health-metric-icon-wrap.commitment {
+  background: rgba(239, 68, 68, 0.12);
+  color: #EF4444;
+}
+
+.health-metric-icon-wrap.savings {
+  background: rgba(16, 185, 129, 0.12);
+  color: var(--accent-green-neon);
+}
+
+.health-metric-icon-wrap svg {
+  width: 18px;
+  height: 18px;
+}
+
+.health-metric-title-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.health-metric-title-group .metric-mini-label {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.health-badge-chip {
+  align-self: flex-start;
+  font-size: 10px;
+  font-weight: 800;
+  padding: 2px 7px;
+  border-radius: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  background: rgba(245, 158, 11, 0.15);
+  color: #F59E0B;
+}
+
+.health-badge-chip.emerald {
+  background: rgba(16, 185, 129, 0.15);
+  color: var(--accent-green-neon);
+}
+
+.health-badge-chip.danger {
+  background: rgba(239, 68, 68, 0.15);
+  color: #EF4444;
+}
+
+.metric-val-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.health-metric-premium .metric-mini-val {
+  font-size: 26px;
+  font-weight: 800;
+  color: var(--text-primary);
+  letter-spacing: -0.5px;
+}
+
+.health-mini-bar {
+  width: 100%;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 99px;
+  overflow: hidden;
+}
+
+.health-mini-bar-fill {
+  height: 100%;
+  border-radius: 99px;
+  background: #F59E0B;
+  transition: width 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.health-mini-bar-fill.emerald {
+  background: var(--accent-green-neon);
+}
+
+.health-metric-premium .metric-mini-sub {
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.3;
+}
+
+/* ==========================================================================
+   DIAGNÓSTICO: HERO CARD ALERTA — MAIOR OFENSOR ORÇAMENTÁRIO
+   ========================================================================== */
+.hero-offender-card {
+  padding: 20px;
+  background: linear-gradient(145deg, rgba(239, 68, 68, 0.12) 0%, rgba(15, 23, 42, 0.85) 100%);
+  border: 1.5px solid rgba(239, 68, 68, 0.4);
+  border-radius: var(--radius-xl);
+  box-shadow: 0 8px 30px rgba(239, 68, 68, 0.12);
+  margin-bottom: 12px;
+  position: relative;
+  overflow: hidden;
+}
+
+.offender-badge-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.offender-alert-badge {
+  font-size: 10.5px;
+  font-weight: 800;
+  color: #EF4444;
+  background: rgba(239, 68, 68, 0.18);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  padding: 3px 9px;
+  border-radius: var(--radius-full);
+  letter-spacing: 0.4px;
+}
+
+.offender-category-pill {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.1);
+  padding: 3px 10px;
+  border-radius: var(--radius-full);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.offender-title {
+  font-size: 17px;
+  font-weight: 800;
+  color: var(--text-primary);
+  margin: 0 0 14px;
+  letter-spacing: -0.3px;
+}
+
+.offender-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 10px;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: var(--radius-md);
+  padding: 12px;
+  margin-bottom: 14px;
+}
+
+.offender-stat-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.offender-stat-label {
+  font-size: 10.5px;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.offender-stat-val {
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--text-primary);
+}
+
+.offender-stat-val.main-amount {
+  color: var(--text-primary);
+  font-size: 16px;
+}
+
+.offender-stat-val.highlight-red {
+  color: #EF4444;
+}
+
+.offender-stat-val small {
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.offender-tip-box {
+  background: rgba(16, 185, 129, 0.08);
+  border: 1px dashed rgba(16, 185, 129, 0.35);
+  border-radius: var(--radius-md);
+  padding: 12px;
+}
+
+.offender-tip-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--accent-green-neon);
+  margin-bottom: 4px;
+}
+
+.offender-tip-box p {
+  font-size: 12.5px;
+  color: var(--text-secondary);
+  line-height: 1.45;
+  margin: 0;
+}
+
+/* Light mode adjustments */
+[data-theme="light"] .health-metric-premium {
+  background: #FFFFFF;
+  border-color: rgba(0, 0, 0, 0.08);
+}
+[data-theme="light"] .hero-offender-card {
+  background: linear-gradient(145deg, #FEF2F2 0%, #FFFFFF 100%);
+  border-color: rgba(239, 68, 68, 0.3);
+}
+[data-theme="light"] .offender-stats-grid {
+  background: #F8FAFC;
+  border-color: rgba(0, 0, 0, 0.06);
+}
+[data-theme="light"] .offender-tip-box {
+  background: #F0FDF4;
+  border-color: rgba(16, 185, 129, 0.4);
+}
+[data-theme="light"] .offender-tip-box p {
+  color: #334155;
+}
+

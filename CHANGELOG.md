@@ -1,6 +1,19 @@
 # CHANGELOG — Linsora Finanças
 
-Todas as alterações notáveis, correções e melhorias de UX/UI neste projeto serão documentadas neste arquivo.
+Todas as alterações notáveis, correções e melhorias de UX/UI neste projeto serão documentadas neste arquivo.## [1.0.3] - 2026-08-11
+
+### 📷 Upload & Gestão de Foto de Perfil
+- **Fluxo Completo de Foto**: Permite selecionar da galeria ou tirar foto na tela Perfil & Configurações.
+- **Compressão & Redimensionamento Client-Side**: Redimensionamento proporcional (máx. 300x300px) e compressão Canvas JPEG (qualidade 0.8) antes de salvar.
+- **Supabase Storage Sync**: Upload automático para o bucket `avatars` no Supabase com fallback para imagem de cache local.
+- **Indicador Visual de Carregamento**: Adicionado spinner animado e overlay interativo no avatar.
+
+### 🎨 Refinamento Visual & Componentes Premium
+- **Cleanup na Aba Perfil**: Removido o card de "Relatório financeiro PDF" e ocultado o botão FAB de microfone ao navegar para a aba Perfil, otimizando o espaçamento vertical.
+- **Cards de Saúde Financeira Premium**: Redesenho de "Comprometimento de Renda" e "Margem de Poupança" com badges de status coloridos, ícones dedicados e micro-barras de progresso fluidas.
+- **Card Hero — Maior Ofensor Orçamentário**: Redesenho completo do diagnóstico de ofensor com gradiente de alerta vermelho/dark, métricas de impacto no orçamento/renda e Dica Prática de Redução de Gastos personalizada por categoria.
+- **Padronização do Design System**: Harmonização global de cards, glassmorphism e espaçamentos.
+
 ## [1.0.2] - 2026-08-11
 
 ### 💾 Persistência de Dados & Sincronização Supabase Sem Perdas
