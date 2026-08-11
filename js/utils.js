@@ -130,6 +130,78 @@ const LinsoraUtils = {
     const date = new Date(cleanDate + 'T00:00:00');
     return date.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long' });
   },
+  /**
+   * Traduz termos técnicos internos de Repetição/Recorrência para o Português
+   * Evita a exibição de strings como "SINGLE", "single", "MONTHLY", "recurring", etc.
+   */
+  translateRepetition(rep) {
+    if (!rep) return 'Única';
+    const str = String(rep).toUpperCase().trim();
+    const map = {
+      'SINGLE': 'Única',
+      'UNICA': 'Única',
+      'MONTHLY': 'Mensal',
+      'MENSAL': 'Mensal',
+      'PARCELED': 'Parcelada',
+      'PARCELADO': 'Parcelada',
+      'RECURRING': 'Recorrente',
+      'RECURRING_MONTHLY': 'Recorrente Mensal',
+      'WEEKLY': 'Semanal',
+      'DAILY': 'Diário',
+      'YEARLY': 'Anual',
+      'ANNUAL': 'Anual'
+    };
+    return map[str] || (str.charAt(0) + str.slice(1).toLowerCase());
+  },
+
+  /**
+   * Traduz termos técnicos internos de Tipo de Operação para Português
+   */
+  translateType(type) {
+    if (!type) return 'Despesa';
+    const str = String(type).toUpperCase().trim();
+    if (str === 'RECEITA' || str === 'INCOME') return 'Receita';
+    if (str === 'DESPESA' || str === 'EXPENSE') return 'Despesa';
+    return str.charAt(0) + str.slice(1).toLowerCase();
+  },
+
+  /**
+   * Traduz termos técnicos internos de Tipo de Conta Bancária para Português
+   */
+  translateAccountType(accType) {
+    if (!accType) return 'Conta Corrente';
+    const str = String(accType).toUpperCase().trim();
+    const map = {
+      'CORRENTE': 'Conta Corrente',
+      'CHECKING': 'Conta Corrente',
+      'POUPANCA': 'Poupança',
+      'SAVINGS': 'Poupança',
+      'INVESTIMENTO': 'Investimentos',
+      'INVESTMENT': 'Investimentos',
+      'CARTEIRA': 'Carteira Física',
+      'CASH': 'Dinheiro',
+      'CREDIT': 'Cartão de Crédito',
+      'CREDIT_CARD': 'Cartão de Crédito'
+    };
+    return map[str] || str;
+  },
+
+  /**
+   * Traduz termos técnicos internos de Status para Português
+   */
+  translateStatus(status) {
+    if (!status) return 'Concluído';
+    const str = String(status).toUpperCase().trim();
+    const map = {
+      'PAID': 'Paga',
+      'OPEN': 'Aberta',
+      'OVERDUE': 'Vencida',
+      'PENDING': 'Pendente',
+      'SUCCESS': 'Concluído',
+      'SINGLE': 'Única'
+    };
+    return map[str] || str;
+  },
 
   /**
    * Retorna a cor característica de cada categoria de gasto
@@ -286,3 +358,5 @@ const LinsoraUtils = {
     }, 1000);
   }
 };
+
+window.LinsoraUtils = LinsoraUtils;

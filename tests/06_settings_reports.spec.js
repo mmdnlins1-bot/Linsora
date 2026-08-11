@@ -40,7 +40,7 @@ test.describe('06. Módulo de Configurações, Perfil & Relatórios', () => {
     await page.click('.pin-key[data-num="3"]');
     await page.click('.pin-key[data-num="4"]');
 
-    await expect(page.locator('#modalPinPad')).toHaveClass(/hidden/);
+    await expect(page.locator('#modalPinPad')).toHaveClass(/hidden/, { timeout: 5000 });
   });
 
   test('Deve disparar a geração de Relatório PDF na aba Relatórios', async ({ page }) => {

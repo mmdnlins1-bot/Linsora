@@ -34,6 +34,47 @@ test.describe('08. Assistente Financeiro por Voz (NLP Parser & Fluxo de Confirma
     expect(resultTransport.type).toBe('DESPESA');
     expect(resultTransport.amount).toBe(150);
     expect(resultTransport.category).toBe('Transporte');
+
+    // Testes de Intenção e Banimento de Salário para Despesas
+    const resultTvBox = await page.evaluate(() => {
+      return window.TransactionAIParser.parseText('pagamento do TV box no valor de r$ 40');
+    });
+
+    expect(resultTvBox.type).toBe('DESPESA');
+    expect(resultTvBox.amount).toBe(40);
+    expect(resultTvBox.category).toBe('Serviços');
+    expect(resultTvBox.category).not.toBe('Salário');
+
+    const resultApt = await page.evaluate(() => {
+      return window.TransactionAIParser.parseText('pagamento do apartamento no valor de r$ 1100');
+    });
+
+    expect(resultApt.type).toBe('DESPESA');
+    expect(resultApt.amount).toBe(1100);
+    expect(resultApt.category).toBe('Moradia');
+    expect(resultApt.category).not.toBe('Salário');
+
+    const resultEnergia = await page.evaluate(() => {
+      return window.TransactionAIParser.parseText('conta de energia no valor de r$ 150');
+    });
+
+    expect(resultEnergia.type).toBe('DESPESA');
+    expect(resultEnergia.amount).toBe(150);
+    expect(resultEnergia.category).toBe('Moradia');
+    expect(resultEnergia.category).not.toBe('Salário');
+
+    // Teste de Tradução de Termos Técnicos para Português
+    const translationTest = await page.evaluate(() => {
+      return {
+        single: window.LinsoraUtils.translateRepetition('SINGLE'),
+        monthly: window.LinsoraUtils.translateRepetition('MONTHLY'),
+        parceled: window.LinsoraUtils.translateRepetition('PARCELED')
+      };
+    });
+
+    expect(translationTest.single).toBe('Única');
+    expect(translationTest.monthly).toBe('Mensal');
+    expect(translationTest.parceled).toBe('Parcelada');
   });
 
   test('Deve abrir o assistente de voz e processar fala -> card de confirmação -> salvar no Supabase', async ({ page }) => {

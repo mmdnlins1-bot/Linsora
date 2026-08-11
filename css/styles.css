@@ -1594,10 +1594,184 @@ body.frame-mode .device-notch { display: block; }
    10. METAS & PERFIL
    -------------------------------------------------------------------------- */
 .goals-grid-list { display: flex; flex-direction: column; gap: 10px; }
-.goal-item-card { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 14px; display: flex; flex-direction: column; }
-.goal-top { display: flex; justify-content: space-between; align-items: center; }
-.goal-title { font-size: 14px; font-weight: 700; }
-.goal-values { display: flex; justify-content: space-between; font-size: 11.5px; color: var(--text-secondary); }
+
+.goals-overview-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: 16px;
+  box-shadow: var(--shadow-sm);
+  width: 100%;
+}
+
+[data-theme="light"] .goals-overview-card {
+  background: linear-gradient(135deg, #FFFFFF 0%, #ECFDF5 100%) !important;
+  border: 1px solid rgba(16, 185, 129, 0.3) !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.05) !important;
+}
+
+.goals-overview-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.goals-overview-header h3 {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+[data-theme="light"] .goals-overview-header h3 {
+  color: #0F172A !important;
+}
+
+.goals-overview-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.overview-metric-item {
+  background: var(--bg-input);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 10px 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 2px;
+}
+
+[data-theme="light"] .overview-metric-item {
+  background: #FFFFFF !important;
+  border-color: rgba(0, 0, 0, 0.08) !important;
+}
+
+.overview-metric-item span {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+[data-theme="light"] .overview-metric-item span {
+  color: #475569 !important;
+}
+
+.overview-metric-item strong {
+  font-size: 13.5px;
+  font-weight: 800;
+  color: var(--text-primary);
+}
+
+[data-theme="light"] .overview-metric-item strong {
+  color: #0F172A !important;
+}
+
+.goal-item-card-enhanced {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  box-shadow: var(--shadow-sm);
+  width: 100%;
+}
+
+[data-theme="light"] .goal-item-card-enhanced {
+  background: #FFFFFF !important;
+  border-color: rgba(0, 0, 0, 0.08) !important;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.04) !important;
+}
+
+.goal-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.goal-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+[data-theme="light"] .goal-title {
+  color: #0F172A !important;
+}
+
+.goal-values {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+[data-theme="light"] .goal-values {
+  color: #475569 !important;
+}
+
+.goal-values strong {
+  color: var(--text-primary);
+  font-weight: 700;
+}
+
+[data-theme="light"] .goal-values strong {
+  color: #0F172A !important;
+}
+
+.goal-monthly-suggestion {
+  background: rgba(6, 182, 212, 0.1);
+  border: 1px solid rgba(6, 182, 212, 0.25);
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 8px 12px;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+[data-theme="light"] .goal-monthly-suggestion {
+  background: #F0FDF4 !important;
+  border-color: rgba(16, 185, 129, 0.3) !important;
+  color: #0F172A !important;
+}
+
+.goal-time-rhythm {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+[data-theme="light"] .goal-time-rhythm {
+  color: #64748B !important;
+}
+
+.goal-card-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.goal-card-actions .linsora-btn {
+  flex: 1;
+  font-size: 11.5px;
+  padding: 8px 10px;
+}
 
 .fixed-bills-list { display: flex; flex-direction: column; gap: 8px; }
 .fixed-bill-card { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 10px 14px; display: flex; justify-content: space-between; align-items: center; }
@@ -2582,52 +2756,127 @@ body.frame-mode .device-notch { display: block; }
 }
 
 .voice-conf-amount-val {
-  font-size: 26px;
+  font-size: 24px;
   font-weight: 800;
 }
 
 .voice-conf-amount-val.income { color: var(--accent-green-neon); }
 .voice-conf-amount-val.expense { color: #EF4444; }
 
-.voice-conf-details-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
+.voice-modal-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
-.voice-detail-box {
+.voice-conf-amount-box {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--bg-input);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 10px 14px;
+  margin-top: 10px;
+  margin-bottom: 12px;
+  gap: 8px;
+}
+
+.voice-conf-label {
+  font-size: 11px;
+  color: var(--text-secondary);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.voice-conf-amount-val.nowrap-val {
+  white-space: nowrap;
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+}
+
+.voice-conf-details-grid.two-cols-fixed {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.voice-detail-item {
   background: var(--bg-card);
   border: 1px solid var(--border-color);
-  padding: 10px 12px;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
+  padding: 8px 12px;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
+}
+
+[data-theme="light"] .voice-detail-item {
+  background: #FFFFFF;
+  border-color: rgba(0, 0, 0, 0.08);
+}
+
+.voice-detail-item.span-two {
+  grid-column: span 2;
+  background: rgba(16, 185, 129, 0.08);
+  border: 1px dashed rgba(16, 185, 129, 0.35);
+}
+
+[data-theme="light"] .voice-detail-item.span-two {
+  background: #F0FDF4;
+  border-color: rgba(16, 185, 129, 0.4);
 }
 
 .voice-detail-label {
   font-size: 10.5px;
   color: var(--text-secondary);
-  text-transform: uppercase;
   font-weight: 600;
 }
 
+[data-theme="light"] .voice-detail-label {
+  color: #475569;
+}
+
 .voice-detail-val {
-  font-size: 13px;
+  font-size: 13.5px;
   font-weight: 700;
   color: var(--text-primary);
-  display: flex;
-  align-items: center;
-  gap: 6px;
+  word-break: break-word;
+}
+
+[data-theme="light"] .voice-detail-val {
+  color: #0F172A;
+}
+
+.voice-detail-val.highlight-green {
+  color: var(--accent-green-neon);
+  font-size: 15px;
+  font-weight: 800;
+}
+
+[data-theme="light"] .voice-detail-val.highlight-green {
+  color: #059669;
 }
 
 .voice-raw-box {
-  background: rgba(15, 23, 42, 0.4);
-  border: 1px dashed var(--border-color);
-  padding: 10px 12px;
-  border-radius: var(--radius-sm);
-  font-size: 12px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 8px 12px;
+  font-size: 11.5px;
   color: var(--text-secondary);
+  font-style: italic;
+  margin-bottom: 14px;
+}
+
+[data-theme="light"] .voice-raw-box {
+  background: #F8FAFC;
+  border-color: rgba(0, 0, 0, 0.06);
+  color: #334155;
 }
 
 .voice-conf-actions {
@@ -2636,6 +2885,615 @@ body.frame-mode .device-notch { display: block; }
   margin-top: 6px;
 }
 
+.voice-conf-actions .linsora-btn {
+  flex: 1;
+  font-size: 12px;
+  padding: 9px 10px;
+}
 
+/* --------------------------------------------------------------------------
+   DASHBOARD COMPACTO E EFICIENTE (-25% DE ALTURA EM CARDS & RESUMO 2X2)
+   -------------------------------------------------------------------------- */
+.tab-page#tabDashboard {
+  gap: 12px;
+}
 
+.month-balance-hero {
+  padding: 12px 14px !important;
+  border-radius: var(--radius-md);
+}
 
+.month-balance-hero .balance-header {
+  margin-bottom: 2px;
+}
+
+.month-balance-hero .balance-label {
+  font-size: 11px;
+}
+
+.month-balance-hero .balance-amount {
+  font-size: 24px;
+  margin-bottom: 2px;
+}
+
+.month-balance-hero .last-updated-row {
+  margin-bottom: 8px;
+}
+
+.month-balance-hero .last-updated-text {
+  font-size: 10px;
+}
+
+.month-balance-hero .net-worth-full-banner {
+  padding: 8px 10px;
+  margin-bottom: 8px;
+  border-radius: var(--radius-sm);
+}
+
+.month-balance-hero .nw-title {
+  font-size: 10px;
+}
+
+.month-balance-hero .nw-main-val {
+  font-size: 14px;
+}
+
+.month-balance-hero .nw-variation-badge {
+  font-size: 10.5px;
+  padding: 1px 6px;
+}
+
+.month-balance-hero .balance-stats-grid {
+  gap: 6px;
+}
+
+.month-balance-hero .stat-item {
+  padding: 6px 8px;
+  border-radius: var(--radius-sm);
+  gap: 8px;
+}
+
+.month-balance-hero .stat-icon {
+  width: 26px;
+  height: 26px;
+  font-size: 12px;
+}
+
+.month-balance-hero .stat-title {
+  font-size: 9.5px;
+}
+
+.month-balance-hero .stat-value {
+  font-size: 12px;
+}
+
+/* RECOMENDAÇÃO INTELIGENTE COMPACTA */
+.actionable-insight-card {
+  padding: 8px 12px !important;
+  border-radius: var(--radius-md);
+}
+
+.actionable-insight-card .insight-header {
+  margin-bottom: 4px;
+}
+
+.actionable-insight-card .insight-badge {
+  font-size: 9.5px;
+  padding: 1px 6px;
+}
+
+.actionable-insight-card .insight-content p {
+  font-size: 11.5px;
+  line-height: 1.3;
+}
+
+/* AÇÕES RÁPIDAS COMPACTAS */
+.scrollable-actions {
+  gap: 8px;
+  padding: 2px;
+}
+
+.scrollable-actions .action-tile {
+  width: 72px !important;
+  padding: 6px 4px !important;
+  gap: 4px !important;
+  border-radius: var(--radius-sm);
+}
+
+.scrollable-actions .tile-icon {
+  width: 34px !important;
+  height: 34px !important;
+  border-radius: var(--radius-sm);
+}
+
+.scrollable-actions .tile-icon svg {
+  width: 17px !important;
+  height: 17px !important;
+}
+
+.scrollable-actions .action-tile span {
+  font-size: 10px !important;
+}
+
+/* RESUMO FINANCEIRO GRADE 2X2 */
+.resumo-widgets-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr) !important;
+  grid-template-rows: auto auto !important;
+  gap: 8px !important;
+}
+
+.resumo-widget-card {
+  padding: 8px 10px !important;
+  gap: 2px !important;
+  border-radius: var(--radius-sm);
+}
+
+.widget-label {
+  font-size: 10px !important;
+}
+
+.widget-value {
+  font-size: 14.5px !important;
+}
+
+.widget-sub {
+  font-size: 9.5px !important;
+}
+
+/* GRÁFICO DE CATEGORIAS SIMPLIFICADO & DONUT COMPACTO */
+.donut-wrapper {
+  max-width: 170px !important;
+  height: 145px !important;
+}
+
+.category-legend-item {
+  padding: 5px 8px !important;
+  border-radius: var(--radius-sm);
+}
+
+.cat-legend-name {
+  font-size: 11.5px !important;
+}
+
+.cat-legend-pct {
+  font-size: 10.5px !important;
+  padding: 1px 5px !important;
+}
+
+.cat-legend-val {
+  font-size: 11.5px !important;
+}
+
+/* ============================================================================
+   MÓDULO DE SAÚDE FINANCEIRA & DIAGNÓSTICO INTELIGENTE (tabHealth)
+   ============================================================================ */
+
+.health-score-card {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.12), rgba(15, 23, 42, 0.95));
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  padding: 20px;
+  border-radius: var(--radius-lg);
+  margin-bottom: 16px;
+}
+
+.health-score-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 14px;
+}
+
+.health-score-main-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 4px;
+}
+
+.health-score-number {
+  font-size: 32px;
+  font-weight: 800;
+  color: var(--text-primary);
+  letter-spacing: -0.5px;
+}
+
+.health-pulse-icon-wrapper {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: rgba(16, 185, 129, 0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.health-pulse-icon-wrapper svg {
+  width: 24px;
+  height: 24px;
+}
+
+.health-progress-bar-container {
+  width: 100%;
+  height: 8px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 12px;
+}
+
+.health-progress-bar-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.health-score-summary {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.health-comparative-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.health-insights-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.insight-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: var(--radius-md);
+  border-left: 4px solid var(--border-color);
+  background: var(--card-bg);
+}
+
+.insight-card.success {
+  border-left-color: var(--accent-green-neon);
+  background: linear-gradient(90deg, rgba(16, 185, 129, 0.08), var(--card-bg));
+}
+
+.insight-card.warning {
+  border-left-color: #F59E0B;
+  background: linear-gradient(90deg, rgba(245, 158, 11, 0.08), var(--card-bg));
+}
+
+.insight-card.danger {
+  border-left-color: #EF4444;
+  background: linear-gradient(90deg, rgba(239, 68, 68, 0.08), var(--card-bg));
+}
+
+.insight-card.info {
+  border-left-color: #3B82F6;
+  background: linear-gradient(90deg, rgba(59, 130, 246, 0.08), var(--card-bg));
+}
+
+.insight-icon {
+  font-size: 20px;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.insight-content strong {
+  display: block;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 2px;
+}
+
+.insight-content p {
+  font-size: 12.5px;
+  color: var(--text-secondary);
+  line-height: 1.4;
+  margin: 0;
+}
+
+.category-variations-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 10px;
+}
+
+.category-variation-item {
+  padding: 12px;
+  border-radius: var(--radius-md);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.cat-var-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.cat-var-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.cat-var-val {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.category-variation-badge {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.category-variation-badge.danger {
+  background: rgba(239, 68, 68, 0.15);
+  color: #EF4444;
+}
+
+.category-variation-badge.success {
+  background: rgba(16, 185, 129, 0.15);
+  color: var(--accent-green-neon);
+}
+
+.category-variation-badge.neutral {
+  background: rgba(100, 116, 139, 0.15);
+  color: var(--text-muted);
+}
+.tile-icon.health-bg {
+  background: rgba(16, 185, 129, 0.15);
+  color: var(--accent-green-neon);
+}
+
+/* ==========================================================================
+   FIX: VOICE-CONF VALOR ALVO — Evita overflow horizontal em qualquer tela
+   ========================================================================== */
+.voice-conf-amount-box {
+  overflow: hidden;
+}
+
+.voice-conf-amount-val.nowrap-val {
+  white-space: normal;          /* permite quebra quando necessário */
+  word-break: break-word;
+  font-size: clamp(14px, 4vw, 18px);  /* escala com a tela */
+  font-weight: 800;
+  letter-spacing: -0.3px;
+  text-align: right;
+  flex: 1;
+  min-width: 0;
+}
+
+.voice-conf-amount-box .voice-conf-label {
+  flex-shrink: 0;
+}
+
+/* ==========================================================================
+   MODAL DE CONFIRMAÇÃO NATIVO — Substitui window.confirm()
+   Segue o design system Linsora: glassmorphism + tons dark + verde neon
+   ========================================================================== */
+.confirm-delete-card {
+  max-width: 320px;
+  text-align: center;
+  padding: 28px 24px 24px;
+}
+
+.confirm-delete-icon-row {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 16px;
+}
+
+.confirm-delete-icon-wrap {
+  width: 60px;
+  height: 60px;
+  border-radius: var(--radius-full);
+  background: rgba(239, 68, 68, 0.12);
+  border: 1.5px solid rgba(239, 68, 68, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #EF4444;
+  animation: confirmIconPop 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+@keyframes confirmIconPop {
+  from { transform: scale(0.6); opacity: 0; }
+  to   { transform: scale(1);   opacity: 1; }
+}
+
+.confirm-delete-title {
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--text-primary);
+  margin: 0 0 8px;
+  letter-spacing: -0.3px;
+}
+
+.confirm-delete-msg {
+  font-size: 13.5px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  margin: 0 0 22px;
+}
+
+.confirm-delete-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+}
+
+.confirm-delete-actions .linsora-btn {
+  flex: 1;
+  min-width: 0;
+}
+
+/* ==========================================================================
+   SISTEMA DE BOTÕES LINSORA — Primary / Secondary / Outline / Danger
+   ========================================================================== */
+.linsora-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 11px 18px;
+  border-radius: var(--radius-full);
+  font-family: var(--font-main);
+  font-size: 13.5px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: var(--transition-fast);
+  border: 1.5px solid transparent;
+  white-space: nowrap;
+  letter-spacing: 0.1px;
+}
+
+.linsora-btn.primary {
+  background: var(--accent-green-neon);
+  color: var(--text-inverse);
+  border-color: var(--accent-green-neon);
+  box-shadow: 0 4px 14px rgba(16, 185, 129, 0.35);
+}
+.linsora-btn.primary:hover {
+  background: var(--primary-600);
+  border-color: var(--primary-600);
+  box-shadow: 0 6px 20px rgba(16, 185, 129, 0.45);
+  transform: translateY(-1px);
+}
+.linsora-btn.primary:active { transform: translateY(0); }
+
+.linsora-btn.secondary {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-primary);
+  border-color: var(--border-color-strong);
+}
+.linsora-btn.secondary:hover {
+  background: rgba(255, 255, 255, 0.14);
+  border-color: rgba(255, 255, 255, 0.28);
+}
+
+.linsora-btn.outline {
+  background: transparent;
+  color: var(--text-secondary);
+  border-color: var(--border-color);
+}
+.linsora-btn.outline:hover {
+  color: var(--text-primary);
+  border-color: var(--border-color-strong);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.linsora-btn.danger {
+  background: rgba(239, 68, 68, 0.12);
+  color: #EF4444;
+  border-color: rgba(239, 68, 68, 0.4);
+}
+.linsora-btn.danger:hover {
+  background: rgba(239, 68, 68, 0.22);
+  border-color: rgba(239, 68, 68, 0.65);
+  box-shadow: 0 4px 14px rgba(239, 68, 68, 0.2);
+}
+
+.linsora-btn.block { width: 100%; }
+.linsora-btn.lg { padding: 13px 22px; font-size: 15px; }
+
+/* Light mode adjustments for buttons */
+[data-theme="light"] .linsora-btn.secondary {
+  background: rgba(0,0,0,0.06);
+  color: #0F172A;
+  border-color: rgba(0,0,0,0.15);
+}
+[data-theme="light"] .linsora-btn.outline {
+  color: #475569;
+  border-color: rgba(0,0,0,0.18);
+}
+[data-theme="light"] .linsora-btn.outline:hover {
+  color: #0F172A;
+  background: rgba(0,0,0,0.04);
+}
+[data-theme="light"] .confirm-delete-title { color: #0F172A; }
+[data-theme="light"] .confirm-delete-msg { color: #475569; }
+
+/* ==========================================================================
+   AUDITORIA GERAL — Ajustes de espaçamento e consistência visual
+   ========================================================================== */
+
+/* Garante espaçamento uniforme entre seções do dashboard */
+.section-block {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Chart card padronizado */
+.chart-card {
+  padding: 16px;
+}
+
+.chart-card .chart-header,
+.chart-card .chart-header-row > div:first-child {
+  margin-bottom: 12px;
+}
+
+.chart-card h3 {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0 0 2px;
+}
+
+.chart-subtitle {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+/* Melhorias no modal da meta por voz para telas pequenas */
+.voice-confirmation-card {
+  padding: 20px 16px 22px;
+}
+
+.voice-modal-header {
+  margin-bottom: 12px;
+}
+
+.voice-modal-title-row h3 {
+  font-size: 16px;
+  font-weight: 800;
+}
+
+/* Fundo escurecido do modal de confirmação ganha entrada suave */
+#modalConfirmDelete {
+  animation: backdropFadeIn 0.2s ease both;
+}
+#modalConfirmDelete .linsora-modal-content {
+  animation: confirmCardSlideUp 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+@keyframes backdropFadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes confirmCardSlideUp {
+  from { transform: translateY(24px) scale(0.95); opacity: 0; }
+  to   { transform: translateY(0)    scale(1);    opacity: 1; }
+}
+
+/* Garante que o modal oculto não anima na saída */
+#modalConfirmDelete.hidden {
+  animation: none;
+}
+#modalConfirmDelete.hidden .linsora-modal-content {
+  animation: none;
+}

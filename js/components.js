@@ -115,19 +115,13 @@ class LinsoraUIComponentEngine {
           <span class="widget-label">Renda Comprometida</span>
           <strong class="widget-value">${commitmentPct}%</strong>
           <div class="widget-bar"><div class="widget-bar-fill" style="width: ${commitmentPct}%; background-color: ${commitmentPct > 80 ? '#EF4444' : commitmentPct > 60 ? '#F59E0B' : '#10B981'};"></div></div>
-          <span class="widget-sub">${commitmentPct > 80 ? '⚠️ Nível crítico' : commitmentPct > 60 ? 'Atenção ao orçamento' : 'Dentro do limite ideal'}</span>
+          <span class="widget-sub">${commitmentPct > 80 ? '⚠️ Crítico' : commitmentPct > 60 ? 'Atenção' : 'Ideal'}</span>
         </div>
 
         <div class="resumo-widget-card">
           <span class="widget-label">Economizado no Mês</span>
           <strong class="widget-value positive">${LinsoraUtils.formatBRL(savedAmount, hideValues)}</strong>
           <span class="widget-sub">Saldo positivo retido</span>
-        </div>
-
-        <div class="resumo-widget-card">
-          <span class="widget-label">Contas a Vencer</span>
-          <strong class="widget-value ${billsCount > 0 ? 'warning' : ''}">${billsCount} pendentes</strong>
-          <span class="widget-sub">${billsCount > 0 ? 'Exige atenção ao prazo' : 'Todas em dia'}</span>
         </div>
 
         <div class="resumo-widget-card">
@@ -142,202 +136,256 @@ class LinsoraUIComponentEngine {
           <div class="widget-bar"><div class="widget-bar-fill emerald" style="width: ${goalsAvgPct}%;"></div></div>
           <span class="widget-sub">Média dos objetivos</span>
         </div>
-
-        <div class="resumo-widget-card">
-          <span class="widget-label">Disponível no Mês</span>
-          <strong class="widget-value">${LinsoraUtils.formatBRL(availableAmount, hideValues)}</strong>
-          <span class="widget-sub">Margem para gastos</span>
-        </div>
       </div>
     `;
   }
 
   /**
-   * Renderiza o Grid de Contas Bancárias Padronizado
+   * Renderiza o módulo de Saúde Financeira, Diagnóstico Automático e Consultoria Inteligente
    */
-  renderAccountsGrid(containerId, accounts = []) {
-    const container = document.getElementById(containerId);
-    if (!container) return;
+  renderHealthTab(state) {
+    const transactions = state?.transactions || [];
+    const hideValues = window.linsoraStore?.isHideValues || false;
 
-    const totalEl = document.getElementById('accountsTotalBalance');
-    const totalSum = accounts.reduce((acc, a) => acc + a.balance, 0);
-    if (totalEl) totalEl.innerText = LinsoraUtils.formatBRL(totalSum, window.linsoraStore.isHideValues);
-
-    if (!accounts || accounts.length === 0) {
-      container.innerHTML = `
-        <div class="empty-state-card">
-          <div class="empty-icon">🏛️</div>
-          <p>Nenhuma conta bancária cadastrada</p>
-          <span class="empty-sub">Clique em **+ Nova Conta** para vincular seu banco.</span>
-        </div>
-      `;
-      return;
-    }
-
-    const hideValues = window.linsoraStore.isHideValues;
-
-    container.innerHTML = accounts.map(acc => {
-      const formattedVal = LinsoraUtils.formatBRL(acc.balance, hideValues);
-      return `
-        <div class="account-tile-item">
-          <div class="acc-brand">
-            <div class="acc-logo-box" style="background: linear-gradient(135deg, ${acc.color || '#059669'}, #047857);">
-              ${acc.icon || '🏛️'}
-            </div>
-            <div>
-              <strong class="acc-name">${LinsoraUtils.escapeHTML(acc.name)}</strong>
-              <span class="acc-type-chip">${acc.type}</span>
-            </div>
-          </div>
-          <div class="acc-val">${formattedVal}</div>
-        </div>
-      `;
-    }).join('');
-
-    this.updateAccountDropdowns(accounts);
-  }
-
-  updateAccountDropdowns(accounts = []) {
-    const txSelect = document.getElementById('txAccount');
-    const pixBankSelect = document.getElementById('pixBankSelect');
-
-    if (txSelect) {
-      if (accounts.length === 0) {
-        txSelect.innerHTML = `<option value="Conta Principal">Conta Principal</option>`;
-      } else {
-        txSelect.innerHTML = accounts.map(a => `<option value="${LinsoraUtils.escapeHTML(a.name)}">${LinsoraUtils.escapeHTML(a.name)}</option>`).join('');
-      }
-    }
-
-    if (pixBankSelect) {
-      if (accounts.length === 0) {
-        pixBankSelect.innerHTML = `<option value="Conta Principal">Conta Principal</option>`;
-      } else {
-        pixBankSelect.innerHTML = accounts.map(a => `<option value="${LinsoraUtils.escapeHTML(a.name)}">${LinsoraUtils.escapeHTML(a.name)}</option>`).join('');
-      }
-    }
-  }
-
-  renderCardsCarousel(containerId, cards = []) {
-    const container = document.getElementById(containerId);
-    if (!container) return;
-
-    if (!cards || cards.length === 0) {
-      container.innerHTML = `
-        <div class="empty-state-card" style="width: 100%;">
-          <div class="empty-icon">💳</div>
-          <p>Nenhum cartão de crédito cadastrado</p>
-          <span class="empty-sub">Clique em **+ Novo Cartão** para acompanhar suas faturas.</span>
-        </div>
-      `;
-      this.updateFaturaDetails(null);
-      return;
-    }
-
-    container.innerHTML = cards.map((c, index) => {
-      const isSelected = window.selectedCardId === c.id || (index === 0 && !window.selectedCardId);
-      if (isSelected) window.selectedCardId = c.id;
-
-      return `
-        <div class="credit-card-physical ${c.colorClass || 'nubank'} ${isSelected ? 'selected' : ''}" onclick="LinsoraUI.selectCard('${c.id}')">
-          <div class="cc-top">
-            <div class="cc-chip"></div>
-            <span class="cc-flag">${c.brand}</span>
-          </div>
-          <div class="cc-number">•••• •••• •••• ${c.last4 || '4892'}</div>
-          <div class="cc-bottom">
-            <span>${LinsoraUtils.escapeHTML(c.name)}</span>
-            <span>Vence dia ${c.dueDay}</span>
-          </div>
-        </div>
-      `;
-    }).join('');
-
-    const activeCard = cards.find(c => c.id === window.selectedCardId) || cards[0];
-    this.updateFaturaDetails(activeCard);
-  }
-
-  updateFaturaDetails(card) {
-    const hideValues = window.linsoraStore.isHideValues;
-
-    if (!card) {
-      document.getElementById('faturaCardName').innerText = 'Nenhum cartão cadastrado';
-      document.getElementById('faturaTotalValue').innerText = LinsoraUtils.formatBRL(0, hideValues);
-      document.getElementById('limitUsedText').innerText = LinsoraUtils.formatBRL(0, hideValues);
-      document.getElementById('limitAvailText').innerText = LinsoraUtils.formatBRL(0, hideValues);
-      document.getElementById('limitProgressFill').style.width = '0%';
-      document.getElementById('faturaClosingDate').innerText = '--';
-      document.getElementById('faturaDueDate').innerText = '--';
-      document.getElementById('faturaBestDay').innerText = '--';
-      document.getElementById('faturaItemsList').innerHTML = `<p style="font-size:12px; color:var(--text-muted); text-align:center; padding:16px;">Nenhum cartão cadastrado.</p>`;
-      return;
-    }
-
-    document.getElementById('faturaCardName').innerText = card.name;
-    document.getElementById('faturaTotalValue').innerText = LinsoraUtils.formatBRL(card.limitUsed, hideValues);
+    const now = new Date();
+    const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
     
-    const limitAvail = card.limitTotal - card.limitUsed;
-    document.getElementById('limitUsedText').innerText = LinsoraUtils.formatBRL(card.limitUsed, hideValues);
-    document.getElementById('limitAvailText').innerText = LinsoraUtils.formatBRL(limitAvail, hideValues);
+    const prevMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const prevMonthKey = `${prevMonthDate.getFullYear()}-${String(prevMonthDate.getMonth() + 1).padStart(2, '0')}`;
 
-    const pct = card.limitTotal > 0 ? Math.min(100, Math.round((card.limitUsed / card.limitTotal) * 100)) : 0;
-    document.getElementById('limitProgressFill').style.width = `${pct}%`;
+    const currentTxs = transactions.filter(t => t.date && t.date.startsWith(currentMonthKey));
+    const prevTxs = transactions.filter(t => t.date && t.date.startsWith(prevMonthKey));
 
-    document.getElementById('faturaClosingDate').innerText = `${card.closingDay}/08`;
-    document.getElementById('faturaDueDate').innerText = `${card.dueDay}/08`;
-    document.getElementById('faturaBestDay').innerText = `${card.closingDay + 1}/08`;
+    const currentIncome = currentTxs.filter(t => t.type === 'RECEITA').reduce((acc, t) => acc + (Number(t.amount) || 0), 0);
+    const currentExpense = currentTxs.filter(t => t.type === 'DESPESA').reduce((acc, t) => acc + (Number(t.amount) || 0), 0);
 
-    const cardTxs = window.linsoraStore.state.transactions.filter(t => t.account.includes(card.name) || t.account.includes('Cartão'));
-    const itemsList = document.getElementById('faturaItemsList');
-    if (itemsList) {
-      if (cardTxs.length === 0) {
-        itemsList.innerHTML = `<p style="font-size:12px; color:var(--text-muted); text-align:center; padding:16px;">Nenhuma compra nesta fatura.</p>`;
+    const prevIncome = prevTxs.filter(t => t.type === 'RECEITA').reduce((acc, t) => acc + (Number(t.amount) || 0), 0);
+    const prevExpense = prevTxs.filter(t => t.type === 'DESPESA').reduce((acc, t) => acc + (Number(t.amount) || 0), 0);
+
+    let score = 70;
+    let statusText = 'Estável';
+    let statusClass = 'warning';
+    let summaryText = '';
+
+    const commitmentRate = currentIncome > 0 ? (currentExpense / currentIncome) * 100 : (currentExpense > 0 ? 100 : 0);
+    const savingsRate = currentIncome > 0 ? Math.max(0, ((currentIncome - currentExpense) / currentIncome) * 100) : 0;
+
+    if (transactions.length === 0) {
+      score = 50;
+      statusText = 'Aguardando Dados';
+      statusClass = 'info';
+      summaryText = 'Ainda não há dados suficientes para calcular o diagnóstico da sua saúde financeira. Comece registrando suas receitas e despesas!';
+    } else {
+      if (commitmentRate <= 50) {
+        score = Math.min(100, Math.round(85 + (savingsRate * 0.15)));
+        statusText = 'Excelente';
+        statusClass = 'success';
+        summaryText = `Parabéns! Sua saúde financeira está excelente. Você está comprometendo apenas ${Math.round(commitmentRate)}% da sua renda e poupando ${Math.round(savingsRate)}% das suas receitas.`;
+      } else if (commitmentRate <= 75) {
+        score = Math.round(70 + (savingsRate * 0.1));
+        statusText = 'Equilibrada';
+        statusClass = 'success';
+        summaryText = `Sua saúde financeira está estável. Seus gastos comprometem ${Math.round(commitmentRate)}% das suas receitas do mês.`;
+      } else if (commitmentRate <= 95) {
+        score = Math.round(45 + ((100 - commitmentRate) * 0.5));
+        statusText = 'Atenção';
+        statusClass = 'warning';
+        summaryText = `Atenção: Suas despesas comprometem ${Math.round(commitmentRate)}% das suas receitas do mês. Recomendamos atenção aos gastos discricionários.`;
       } else {
-        itemsList.innerHTML = cardTxs.map(t => `
-          <div style="display:flex; justify-content:space-between; padding:10px 0; border-bottom:1px solid var(--border-color); font-size:13px;">
-            <span>${LinsoraUtils.escapeHTML(t.description)}</span>
-            <strong>${LinsoraUtils.formatBRL(t.amount, hideValues)}</strong>
-          </div>
-        `).join('');
+        score = Math.max(15, Math.round(30 - ((commitmentRate - 100) * 0.3)));
+        statusText = 'Crítico';
+        statusClass = 'danger';
+        summaryText = `Alerta Crítico: Suas despesas atingiram ${Math.round(commitmentRate)}% das suas receitas. Recomendamos revisão imediata para reequilíbrio financeiro.`;
       }
+
+      const compEl = document.getElementById('healthCommitmentRate');
+      if (compEl) compEl.innerText = `${Math.round(commitmentRate)}%`;
+      
+      const compStatEl = document.getElementById('healthCommitmentStatus');
+      if (compStatEl) compStatEl.innerText = commitmentRate <= 70 ? '🟢 Dentro do limite seguro' : '🟡 Alto comprometimento de renda';
+
+      const savEl = document.getElementById('healthSavingsRate');
+      if (savEl) savEl.innerText = `${Math.round(savingsRate)}%`;
+
+      const savStatEl = document.getElementById('healthSavingsStatus');
+      if (savStatEl) savStatEl.innerText = savingsRate >= 20 ? '🚀 Meta de poupança atingida' : '💡 Meta ideal: guardar ao menos 20%';
     }
+
+    const numEl = document.getElementById('healthScoreNum');
+    if (numEl) numEl.innerText = `${score}/100`;
+
+    const badgeEl = document.getElementById('healthStatusBadge');
+    if (badgeEl) {
+      badgeEl.innerText = statusText;
+      badgeEl.className = `badge-status-chip ${statusClass}`;
+    }
+
+    const fillEl = document.getElementById('healthScoreBarFill');
+    if (fillEl) {
+      fillEl.style.width = `${score}%`;
+      fillEl.style.background = score >= 75 ? 'var(--accent-green-neon)' : (score >= 50 ? '#F59E0B' : '#EF4444');
+    }
+
+    const summaryEl = document.getElementById('healthScoreSummary');
+    if (summaryEl) summaryEl.innerText = summaryText;
+
+    this.renderHealthInsights('healthInsightsContainer', currentTxs, prevTxs, currentIncome, currentExpense, prevIncome, prevExpense);
+    this.renderCategoryVariationsGrid('healthCategoryVariationsGrid', currentTxs, prevTxs, hideValues);
   }
 
-  selectCard(cardId) {
-    window.selectedCardId = cardId;
-    this.renderCardsCarousel('cardsCarousel', window.linsoraStore.state.cards);
-  }
-
-  renderPixKeysList(containerId, pixKeys = []) {
+  renderHealthInsights(containerId, currentTxs, prevTxs, currentIncome, currentExpense, prevIncome, prevExpense) {
     const container = document.getElementById(containerId);
     if (!container) return;
 
-    const textCount = document.getElementById('pixKeysCountText');
-    if (textCount) textCount.innerHTML = `✨ Chaves Pix Ativas: <strong>${pixKeys.length} cadastradas</strong>`;
-
-    if (!pixKeys || pixKeys.length === 0) {
+    if (currentTxs.length < 2 && prevTxs.length === 0) {
       container.innerHTML = `
-        <div class="empty-state-card">
-          <div class="empty-icon">⚡</div>
-          <p>Nenhuma chave Pix cadastrada</p>
-          <span class="empty-sub">Clique em **+ Cadastrar Chave** para registrar suas chaves.</span>
+        <div class="linsora-card insight-card info">
+          <div class="insight-icon">💡</div>
+          <div class="insight-content">
+            <strong>Pouco Histórico Registrado</strong>
+            <p>Ainda não há dados suficientes para uma comparação detalhada. Continue registrando suas transações para liberar seus diagnósticos e insights personalizados!</p>
+          </div>
         </div>
       `;
       return;
     }
 
-    container.innerHTML = pixKeys.map(k => `
-      <div class="pix-key-item">
-        <div class="pix-key-left">
-          <div class="pix-key-icon">⚡</div>
-          <div>
-            <strong style="display:block; font-size:13.5px;">${k.type}: ${LinsoraUtils.escapeHTML(k.key)}</strong>
-            <span style="font-size:11px; color:var(--text-muted);">${k.bank}</span>
-          </div>
+    const insights = [];
+
+    if (prevExpense > 0) {
+      const expenseDiffPct = Math.round(((currentExpense - prevExpense) / prevExpense) * 100);
+      if (expenseDiffPct > 0) {
+        insights.push({
+          type: 'danger',
+          icon: '📈',
+          title: 'Aumento Global de Despesas',
+          message: `Seus gastos totais aumentaram ${expenseDiffPct}% em relação ao mês anterior (R$ ${currentExpense.toLocaleString('pt-BR')} vs R$ ${prevExpense.toLocaleString('pt-BR')}).`
+        });
+      } else if (expenseDiffPct < 0) {
+        insights.push({
+          type: 'success',
+          icon: '🎉',
+          title: 'Economia Conquistada',
+          message: `Parabéns! Você reduziu seus gastos totais em ${Math.abs(expenseDiffPct)}% em relação ao mês anterior!`
+        });
+      }
+    }
+
+    const catCurrent = {};
+    currentTxs.filter(t => t.type === 'DESPESA').forEach(t => {
+      catCurrent[t.category] = (catCurrent[t.category] || 0) + Number(t.amount);
+    });
+
+    const catPrev = {};
+    prevTxs.filter(t => t.type === 'DESPESA').forEach(t => {
+      catPrev[t.category] = (catPrev[t.category] || 0) + Number(t.amount);
+    });
+
+    Object.keys(catCurrent).forEach(cat => {
+      const currVal = catCurrent[cat];
+      const prevVal = catPrev[cat] || 0;
+
+      if (prevVal > 0) {
+        const diffPct = Math.round(((currVal - prevVal) / prevVal) * 100);
+        if (diffPct >= 15) {
+          insights.push({
+            type: 'warning',
+            icon: '⚠️',
+            title: `Variação Significativa em ${cat}`,
+            message: `Sua conta/despesa de ${cat} aumentou ${diffPct}% em relação ao mês passado (de R$ ${prevVal.toLocaleString('pt-BR')} para R$ ${currVal.toLocaleString('pt-BR')}).`
+          });
+        } else if (diffPct <= -10) {
+          insights.push({
+            type: 'success',
+            icon: '🟢',
+            title: `Redução de Custos em ${cat}`,
+            message: `Você economizou ${Math.abs(diffPct)}% em ${cat} neste mês!`
+          });
+        }
+      }
+    });
+
+    let topCategory = null;
+    let topCategoryVal = 0;
+    Object.entries(catCurrent).forEach(([cat, val]) => {
+      if (val > topCategoryVal) {
+        topCategoryVal = val;
+        topCategory = cat;
+      }
+    });
+
+    if (topCategory && currentExpense > 0) {
+      const topPct = Math.round((topCategoryVal / currentExpense) * 100);
+      insights.push({
+        type: 'info',
+        icon: '📊',
+        title: `Maior Ofensor Orçamentário: ${topCategory}`,
+        message: `A categoria ${topCategory} representa ${topPct}% de todas as suas despesas no mês atual.`
+      });
+    }
+
+    if (insights.length === 0) {
+      insights.push({
+        type: 'success',
+        icon: '✨',
+        title: 'Finanças Sob Controle',
+        message: 'Seus padrões de consumo permanecem estáveis dentro da média habituada.'
+      });
+    }
+
+    container.innerHTML = insights.map(i => `
+      <div class="linsora-card insight-card ${i.type}">
+        <div class="insight-icon">${i.icon}</div>
+        <div class="insight-content">
+          <strong>${i.title}</strong>
+          <p>${i.message}</p>
         </div>
-        <span class="badge-status-chip success">Ativa</span>
       </div>
     `).join('');
+  }
+
+  renderCategoryVariationsGrid(containerId, currentTxs, prevTxs, hideValues) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+
+    const categories = ['Alimentação', 'Moradia', 'Transporte', 'Lazer', 'Saúde', 'Outros'];
+
+    const catCurrent = {};
+    currentTxs.filter(t => t.type === 'DESPESA').forEach(t => {
+      catCurrent[t.category] = (catCurrent[t.category] || 0) + Number(t.amount);
+    });
+
+    const catPrev = {};
+    prevTxs.filter(t => t.type === 'DESPESA').forEach(t => {
+      catPrev[t.category] = (catPrev[t.category] || 0) + Number(t.amount);
+    });
+
+    container.innerHTML = categories.map(cat => {
+      const curr = catCurrent[cat] || 0;
+      const prev = catPrev[cat] || 0;
+
+      let badgeHTML = `<span class="category-variation-badge neutral">Sem dados ant.</span>`;
+      if (prev > 0) {
+        const pct = Math.round(((curr - prev) / prev) * 100);
+        if (pct > 0) {
+          badgeHTML = `<span class="category-variation-badge danger">+${pct}% 🔺</span>`;
+        } else if (pct < 0) {
+          badgeHTML = `<span class="category-variation-badge success">${pct}% 🔻</span>`;
+        } else {
+          badgeHTML = `<span class="category-variation-badge neutral">0% 🟢</span>`;
+        }
+      }
+
+      return `
+        <div class="linsora-card category-variation-item">
+          <div class="cat-var-top">
+            <span class="cat-var-name">${LinsoraUtils.getCategoryIcon(cat)} ${cat}</span>
+            ${badgeHTML}
+          </div>
+          <div class="cat-var-val">${LinsoraUtils.formatBRL(curr, hideValues)}</div>
+        </div>
+      `;
+    }).join('');
   }
 
   renderGoalsList(containerId, goals = []) {
@@ -490,16 +538,24 @@ class LinsoraUIComponentEngine {
             <span>Faltam: ${LinsoraUtils.formatBRL(g.remainingVal, hideValues)}</span>
           </div>
 
-          ${g.pct < 100 ? `
-            <button type="button" class="linsora-btn secondary sm btn-deposit-goal" data-deposit-goal="${g.id}" data-deposit-title="${LinsoraUtils.escapeHTML(g.title)}">
-              ➕ Adicionar valor
+          <div class="goal-card-actions">
+            ${g.pct < 100 ? `
+              <button type="button" class="linsora-btn primary sm btn-deposit-goal" data-deposit-goal="${g.id}" data-deposit-title="${LinsoraUtils.escapeHTML(g.title)}">
+                ➕ Aporte
+              </button>
+            ` : ''}
+            <button type="button" class="linsora-btn secondary sm btn-edit-goal" data-goal-id="${g.id}">
+              ✏️ Editar
             </button>
-          ` : ''}
+            <button type="button" class="linsora-btn danger sm btn-delete-goal" data-goal-id="${g.id}" data-goal-title="${LinsoraUtils.escapeHTML(g.title)}">
+              🗑️ Excluir
+            </button>
+          </div>
         </div>
       `;
     }).join('');
 
-    // Adicionar eventos nos botões de aporte rápido
+    // Adicionar eventos nos botões de ação
     container.querySelectorAll('.btn-deposit-goal').forEach(btn => {
       btn.onclick = () => {
         const goalId = btn.getAttribute('data-deposit-goal');
@@ -509,6 +565,43 @@ class LinsoraUIComponentEngine {
         if (inputId) inputId.value = goalId;
         if (titleEl) titleEl.innerText = `Meta: "${goalTitle}"`;
         LinsoraUI.openModal('modalDepositGoal');
+      };
+    });
+
+    container.querySelectorAll('.btn-edit-goal').forEach(btn => {
+      btn.onclick = () => {
+        const goalId = btn.getAttribute('data-goal-id');
+        const goal = goals.find(item => item.id === goalId);
+        if (goal) {
+          const idInput = document.getElementById('goalIdInput');
+          const titleInput = document.getElementById('goalTitleInput');
+          const targetInput = document.getElementById('goalTargetInput');
+          const currentInput = document.getElementById('goalCurrentInput');
+          const deadlineInput = document.getElementById('goalDeadlineInput');
+
+          if (idInput) idInput.value = goal.id;
+          if (titleInput) titleInput.value = goal.title;
+          if (targetInput) targetInput.value = LinsoraUtils.formatBRL(goal.target).replace('R$', '').trim();
+          if (currentInput) currentInput.value = LinsoraUtils.formatBRL(goal.current).replace('R$', '').trim();
+          if (deadlineInput) deadlineInput.value = goal.deadline || '';
+
+          const modalTitle = document.querySelector('#modalGoalForm .modal-header h3');
+          if (modalTitle) modalTitle.innerText = '✏️ Editar Meta Financeira';
+
+          LinsoraUI.openModal('modalGoalForm');
+        }
+      };
+    });
+
+    container.querySelectorAll('.btn-delete-goal').forEach(btn => {
+      btn.onclick = async () => {
+        const goalId = btn.getAttribute('data-goal-id');
+        const goalTitle = btn.getAttribute('data-goal-title');
+        const confirmed = await LinsoraUI.showConfirmModal(goalTitle);
+        if (confirmed) {
+          await window.linsoraStore.deleteGoal(goalId);
+          LinsoraUI.showToast(`Meta "${goalTitle}" excluída com sucesso!`, 'info');
+        }
       };
     });
 
@@ -627,10 +720,10 @@ class LinsoraUIComponentEngine {
           ${LinsoraUtils.escapeHTML(tx.description)}
         </div>
         <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; font-size:13px; background:var(--bg-input); padding:12px; border-radius:var(--radius-md);">
-          <div><span style="color:var(--text-muted); font-size:11px; display:block;">Categoria</span><strong>${tx.category}</strong></div>
+          <div><span style="color:var(--text-muted); font-size:11px; display:block;">Categoria</span><strong>${LinsoraUtils.escapeHTML(tx.category)}</strong></div>
           <div><span style="color:var(--text-muted); font-size:11px; display:block;">Data</span><strong>${LinsoraUtils.formatDateBR(tx.date)}</strong></div>
-          <div><span style="color:var(--text-muted); font-size:11px; display:block;">Conta</span><strong>${tx.account}</strong></div>
-          <div><span style="color:var(--text-muted); font-size:11px; display:block;">Repetição</span><strong>${tx.repetition}</strong></div>
+          <div><span style="color:var(--text-muted); font-size:11px; display:block;">Conta</span><strong>${LinsoraUtils.escapeHTML(tx.account)}</strong></div>
+          <div><span style="color:var(--text-muted); font-size:11px; display:block;">Repetição</span><strong>${LinsoraUtils.translateRepetition(tx.repetition)}</strong></div>
         </div>
       `;
     }
@@ -654,6 +747,158 @@ class LinsoraUIComponentEngine {
   closeModal(modalId) {
     const modal = document.getElementById(modalId);
     if (modal) modal.classList.add('hidden');
+  }
+
+  /**
+   * Exibe o modal nativo de confirmação de exclusão do Linsora.
+   * Substitui o window.confirm() padrão do navegador.
+   * @param {string} itemName - Nome do item a ser excluído
+   * @returns {Promise<boolean>} - true se o usuário confirmou, false se cancelou
+   */
+  showConfirmModal(itemName) {
+    return new Promise((resolve) => {
+      const modal   = document.getElementById('modalConfirmDelete');
+      const msgEl   = document.getElementById('confirmDeleteMsg');
+      const btnOk   = document.getElementById('btnConfirmDeleteConfirm');
+      const btnCancel = document.getElementById('btnConfirmDeleteCancel');
+
+      if (!modal || !msgEl || !btnOk || !btnCancel) {
+        // Fallback gracioso se o modal ainda não existir no DOM
+        resolve(window.confirm(`Tem certeza que deseja excluir "${itemName}"?`));
+        return;
+      }
+
+      msgEl.textContent = `Tem certeza que deseja excluir "${itemName}"? Esta ação não pode ser desfeita.`;
+
+      const cleanup = () => {
+        modal.classList.add('hidden');
+        btnOk.removeEventListener('click', onConfirm);
+        btnCancel.removeEventListener('click', onCancel);
+        modal.removeEventListener('click', onBackdrop);
+      };
+
+      const onConfirm = () => { cleanup(); resolve(true); };
+      const onCancel  = () => { cleanup(); resolve(false); };
+      const onBackdrop = (e) => { if (e.target === modal) onCancel(); };
+
+      btnOk.addEventListener('click', onConfirm);
+      btnCancel.addEventListener('click', onCancel);
+      modal.addEventListener('click', onBackdrop);
+
+      modal.classList.remove('hidden');
+    });
+  }
+
+  /**
+   * Renderiza o carrossel de cartões de crédito e atualiza a exibição da fatura selecionada
+   */
+  renderCardsCarousel(containerId, cards = []) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+
+    if (!cards || cards.length === 0) {
+      container.innerHTML = `
+        <div class="empty-state-card" style="width: 100%;">
+          <div class="empty-icon">💳</div>
+          <p>Nenhum cartão cadastrado</p>
+          <span class="empty-sub">Clique em **+ Novo Cartão** para adicionar seu primeiro cartão de crédito.</span>
+        </div>
+      `;
+      this.updateFaturaDetailsCard(null);
+      return;
+    }
+
+    if (!window.selectedCardId || !cards.some(c => c.id === window.selectedCardId)) {
+      window.selectedCardId = cards[0].id;
+    }
+
+    container.innerHTML = cards.map(card => {
+      const isSelected = card.id === window.selectedCardId;
+      const colorClass = card.colorClass || 'nubank';
+      const last4 = card.last4 || '0000';
+      const brandUpper = (card.brand || 'MASTERCARD').toUpperCase();
+
+      return `
+        <div class="credit-card-physical ${colorClass} ${isSelected ? 'selected' : ''}" onclick="LinsoraUI.selectCard('${card.id}')">
+          <div class="cc-top">
+            <div class="cc-chip"></div>
+            <span class="cc-flag">${LinsoraUtils.escapeHTML(brandUpper)}</span>
+          </div>
+          <div class="cc-number">•••• •••• •••• ${LinsoraUtils.escapeHTML(last4)}</div>
+          <div class="cc-bottom">
+            <span>${LinsoraUtils.escapeHTML(card.name)}</span>
+            <span>Venc. Dia ${card.dueDay || 10}</span>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    const selectedCard = cards.find(c => c.id === window.selectedCardId) || cards[0];
+    this.updateFaturaDetailsCard(selectedCard);
+  }
+
+  selectCard(cardId) {
+    window.selectedCardId = cardId;
+    const cards = (window.linsoraStore && window.linsoraStore.state && window.linsoraStore.state.cards) || [];
+    this.renderCardsCarousel('cardsCarousel', cards);
+  }
+
+  updateFaturaDetailsCard(card) {
+    const cardNameEl = document.getElementById('faturaCardName');
+    const statusBadgeEl = document.getElementById('faturaStatusBadge');
+    const totalValEl = document.getElementById('faturaTotalValue');
+    const limitUsedEl = document.getElementById('limitUsedText');
+    const limitAvailEl = document.getElementById('limitAvailText');
+    const limitFillEl = document.getElementById('limitProgressFill');
+    const closingDateEl = document.getElementById('faturaClosingDate');
+    const dueDateEl = document.getElementById('faturaDueDate');
+    const bestDayEl = document.getElementById('faturaBestDay');
+
+    if (!card) {
+      if (cardNameEl) cardNameEl.innerText = 'Nenhum cartão selecionado';
+      if (statusBadgeEl) {
+        statusBadgeEl.innerText = 'Sem Cartão';
+        statusBadgeEl.className = 'badge-status-chip info';
+      }
+      if (totalValEl) totalValEl.innerText = 'R$ 0,00';
+      if (limitUsedEl) limitUsedEl.innerText = 'R$ 0,00';
+      if (limitAvailEl) limitAvailEl.innerText = 'R$ 0,00';
+      if (limitFillEl) limitFillEl.style.width = '0%';
+      if (closingDateEl) closingDateEl.innerText = '--';
+      if (dueDateEl) dueDateEl.innerText = '--';
+      if (bestDayEl) bestDayEl.innerText = '--';
+      return;
+    }
+
+    const hideValues = window.linsoraStore ? window.linsoraStore.isHideValues : false;
+    const limitTotal = parseFloat(card.limitTotal) || 0;
+    const limitUsed = parseFloat(card.limitUsed) || 0;
+    const limitAvail = Math.max(0, limitTotal - limitUsed);
+    const limitPct = limitTotal > 0 ? Math.min(100, Math.round((limitUsed / limitTotal) * 100)) : 0;
+
+    if (cardNameEl) cardNameEl.innerText = card.name;
+    if (statusBadgeEl) {
+      if (limitUsed === 0) {
+        statusBadgeEl.innerText = 'Paga / Zerada 🟢';
+        statusBadgeEl.className = 'badge-status-chip success';
+      } else {
+        statusBadgeEl.innerText = `Fatura Aberta (${limitPct}%) 🟡`;
+        statusBadgeEl.className = 'badge-status-chip warning';
+      }
+    }
+
+    if (totalValEl) totalValEl.innerText = LinsoraUtils.formatBRL(limitUsed, hideValues);
+    if (limitUsedEl) limitUsedEl.innerText = LinsoraUtils.formatBRL(limitUsed, hideValues);
+    if (limitAvailEl) limitAvailEl.innerText = LinsoraUtils.formatBRL(limitAvail, hideValues);
+    if (limitFillEl) limitFillEl.style.width = `${limitPct}%`;
+
+    const closingDay = card.closingDay || 15;
+    const dueDay = card.dueDay || 22;
+    const bestDay = closingDay + 1 > 30 ? 1 : closingDay + 1;
+
+    if (closingDateEl) closingDateEl.innerText = `Dia ${closingDay}`;
+    if (dueDateEl) dueDateEl.innerText = `Dia ${dueDay}`;
+    if (bestDayEl) bestDayEl.innerText = `Dia ${bestDay}`;
   }
 
   showToast(message, type = 'success') {

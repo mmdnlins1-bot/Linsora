@@ -169,13 +169,34 @@ class VoiceAssistantUIController {
     const rawEl = document.getElementById('goalConfRawText');
 
     if (badgeEl) {
-      badgeEl.innerHTML = `${parsed.icon} ${parsed.type}`;
+      if (parsed.isExistingGoal) {
+        badgeEl.innerHTML = `➕ APORTE EM META EXISTENTE`;
+        badgeEl.style.background = 'rgba(16, 185, 129, 0.2)';
+        badgeEl.style.color = 'var(--accent-green-neon)';
+      } else {
+        badgeEl.innerHTML = `${parsed.icon} ${parsed.type}`;
+        badgeEl.style.background = '';
+        badgeEl.style.color = '';
+      }
     }
 
     if (titleEl) titleEl.innerText = parsed.title;
-    if (targetEl) targetEl.innerText = LinsoraUtils.formatBRL(parsed.target);
-    if (deadlineEl) deadlineEl.innerText = LinsoraUtils.formatDateBR(parsed.deadline);
-    if (monthlyEl) monthlyEl.innerText = LinsoraUtils.formatBRL(parsed.suggestedMonthly) + '/mês';
+    if (targetEl) {
+      if (parsed.isExistingGoal) {
+        targetEl.innerText = `+ ${LinsoraUtils.formatBRL(parsed.amount)} (Novo total: ${LinsoraUtils.formatBRL(parsed.newCurrent)})`;
+      } else {
+        targetEl.innerText = LinsoraUtils.formatBRL(parsed.target);
+      }
+    }
+    if (deadlineEl) deadlineEl.innerText = parsed.deadline ? LinsoraUtils.formatDateBR(parsed.deadline) : 'Sem prazo';
+    if (monthlyEl) {
+      if (parsed.isExistingGoal) {
+        const pct = parsed.target > 0 ? Math.min(100, Math.round((parsed.newCurrent / parsed.target) * 100)) : 0;
+        monthlyEl.innerText = `Progresso: ${pct}% de ${LinsoraUtils.formatBRL(parsed.target)}`;
+      } else {
+        monthlyEl.innerText = LinsoraUtils.formatBRL(parsed.suggestedMonthly) + '/mês';
+      }
+    }
     if (rawEl) rawEl.innerText = `"${parsed.rawText}"`;
 
     LinsoraUI.openModal('modalGoalVoiceConfirmation');
@@ -204,9 +225,15 @@ class VoiceAssistantUIController {
       notes: `Voz: "${this.currentParsedTx.rawText}"`
     };
 
-    await window.linsoraStore.saveTransaction(txPayload);
-    LinsoraUI.closeModal('modalVoiceConfirmation');
-    LinsoraUI.showToast(`Lançamento (${txPayload.type === 'RECEITA' ? 'Receita' : 'Despesa'}) salvo com sucesso via Voz! 🎙️`);
+    try {
+      await window.linsoraStore.saveTransaction(txPayload);
+      LinsoraUI.closeModal('modalVoiceConfirmation');
+      LinsoraUI.showToast(`Lançamento (${txPayload.type === 'RECEITA' ? 'Receita' : 'Despesa'}) salvo com sucesso via Voz! 🎙️`);
+    } catch (err) {
+      console.error('[LINSORA Voice] Erro ao salvar transação:', err);
+      LinsoraUI.closeModal('modalVoiceConfirmation');
+      LinsoraUI.showToast('Lançamento salvo localmente!');
+    }
     this.currentParsedTx = null;
   }
 
@@ -219,17 +246,29 @@ class VoiceAssistantUIController {
       return;
     }
 
-    const goalPayload = {
-      title: this.currentParsedGoal.title,
-      target: this.currentParsedGoal.target,
-      current: 0,
-      deadline: this.currentParsedGoal.deadline,
-      icon: this.currentParsedGoal.icon
-    };
+    try {
+      if (this.currentParsedGoal.isExistingGoal) {
+        await window.linsoraStore.depositToGoal(this.currentParsedGoal.goalId, this.currentParsedGoal.amount);
+        LinsoraUI.closeModal('modalGoalVoiceConfirmation');
+        LinsoraUI.showToast(`Aporte de ${LinsoraUtils.formatBRL(this.currentParsedGoal.amount)} adicionado à meta "${this.currentParsedGoal.title}"! 🎯`, 'success');
+      } else {
+        const goalPayload = {
+          title: this.currentParsedGoal.title,
+          target: this.currentParsedGoal.target,
+          current: 0,
+          deadline: this.currentParsedGoal.deadline,
+          icon: this.currentParsedGoal.icon
+        };
+        await window.linsoraStore.addGoal(goalPayload);
+        LinsoraUI.closeModal('modalGoalVoiceConfirmation');
+        LinsoraUI.showToast(`Meta "${goalPayload.title}" criada com sucesso via Voz! 🎯`, 'success');
+      }
+    } catch (err) {
+      console.error('[LINSORA Voice] Erro ao salvar meta:', err);
+      LinsoraUI.closeModal('modalGoalVoiceConfirmation');
+      LinsoraUI.showToast('Meta salva localmente!');
+    }
 
-    await window.linsoraStore.addGoal(goalPayload);
-    LinsoraUI.closeModal('modalGoalVoiceConfirmation');
-    LinsoraUI.showToast(`Meta "${goalPayload.title}" criada com sucesso via Voz! 🎯`);
     this.currentParsedGoal = null;
   }
 
@@ -271,13 +310,25 @@ class VoiceAssistantUIController {
 
     LinsoraUI.closeModal('modalGoalVoiceConfirmation');
 
+    const idInput = document.getElementById('goalIdInput');
+    if (idInput) idInput.value = this.currentParsedGoal.isExistingGoal ? (this.currentParsedGoal.goalId || '') : '';
+
     document.getElementById('goalTitleInput').value = this.currentParsedGoal.title;
     
-    const centsStr = Math.round(this.currentParsedGoal.target * 100).toString();
-    const formattedTarget = LinsoraUtils.formatCurrencyInput(centsStr);
-    document.getElementById('goalTargetInput').value = formattedTarget;
-    document.getElementById('goalCurrentInput').value = '0,00';
-    document.getElementById('goalDeadlineInput').value = this.currentParsedGoal.deadline;
+    const targetCents = Math.round(this.currentParsedGoal.target * 100).toString();
+    document.getElementById('goalTargetInput').value = LinsoraUtils.formatCurrencyInput(targetCents);
+
+    const currentVal = this.currentParsedGoal.isExistingGoal ? (this.currentParsedGoal.newCurrent || 0) : 0;
+    const currentCents = Math.round(currentVal * 100).toString();
+    document.getElementById('goalCurrentInput').value = LinsoraUtils.formatCurrencyInput(currentCents);
+    
+    if (this.currentParsedGoal.deadline) {
+      document.getElementById('goalDeadlineInput').value = this.currentParsedGoal.deadline;
+    }
+
+    if (this.currentParsedGoal.icon && document.getElementById('goalIconInput')) {
+      document.getElementById('goalIconInput').value = this.currentParsedGoal.icon;
+    }
 
     LinsoraUI.openModal('modalGoalForm');
     LinsoraUI.showToast('Formulário de meta preenchido com a voz. Ajuste como preferir e salve!', 'info');

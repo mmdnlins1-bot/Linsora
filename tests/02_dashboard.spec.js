@@ -29,20 +29,9 @@ test.describe('02. Dashboard & Métricas Principais', () => {
     await expect(balanceEl).toHaveText(initialText);
   });
 
-  test('Deve alternar pílulas de período e métrica do gráfico de fluxo de caixa', async ({ page }) => {
-    // Pílulas de período
-    const pillWeekly = page.locator('#periodPillsSelector .period-pill[data-period="weekly"]');
-    await pillWeekly.click();
-    await expect(pillWeekly).toHaveClass(/active/);
-
-    const pillDaily = page.locator('#periodPillsSelector .period-pill[data-period="daily"]');
-    await pillDaily.click();
-    await expect(pillDaily).toHaveClass(/active/);
-
-    // Pílulas de métrica
-    const metricIncomes = page.locator('#metricPillsSelector .period-pill[data-metric="incomes"]');
-    await metricIncomes.click();
-    await expect(metricIncomes).toHaveClass(/active/);
+  test('Garante que o card Fluxo de Caixa Real foi removido da tela inicial', async ({ page }) => {
+    await expect(page.locator('#cashFlowRealCard')).not.toBeVisible();
+    await expect(page.locator('#periodPillsSelector')).not.toBeVisible();
   });
 
   test('Deve exibir indicador de saúde financeira condicional', async ({ page }) => {

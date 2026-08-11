@@ -1,5 +1,4 @@
 const { test, expect } = require('@playwright/test');
-const { login } = require('./helpers/auth');
 
 test.describe('01. Fluxo de Autenticação & Onboarding', () => {
 
@@ -11,16 +10,20 @@ test.describe('01. Fluxo de Autenticação & Onboarding', () => {
       sessionStorage.clear();
     });
     await page.reload();
+    // Aguardar a splash screen aparecer
+    await expect(page.locator('#splashScreen')).toBeVisible({ timeout: 5000 });
   });
 
   test('Deve carregar a Splash Screen e ocultá-la após timeout', async ({ page }) => {
     const splash = page.locator('#splashScreen');
     await expect(splash).toBeVisible();
-    await expect(splash).toHaveClass(/hidden/, { timeout: 3000 });
+    // A splash deve sumir em até 5 segundos (timer de 1200ms + margem)
+    await expect(splash).toHaveClass(/hidden/, { timeout: 5000 });
   });
 
   test('Deve navegar pelas etapas de Onboarding e acessar a tela de Login', async ({ page }) => {
-    await expect(page.locator('#onboardingScreen')).toBeVisible();
+    // Aguardar a splash sumir e onboarding aparecer
+    await expect(page.locator('#onboardingScreen')).toBeVisible({ timeout: 5000 });
 
     // Step 1 -> Step 2
     await page.click('#btnNextOnboarding');
@@ -39,7 +42,7 @@ test.describe('01. Fluxo de Autenticação & Onboarding', () => {
   });
 
   test('Deve alternar entre Login e Cadastro', async ({ page }) => {
-    await expect(page.locator('#onboardingScreen')).toBeVisible();
+    await expect(page.locator('#onboardingScreen')).toBeVisible({ timeout: 5000 });
     await page.click('#btnSkipOnboarding');
 
     await expect(page.locator('#authScreen')).toBeVisible();
@@ -55,7 +58,7 @@ test.describe('01. Fluxo de Autenticação & Onboarding', () => {
   });
 
   test('Deve permitir Entrar na Conta (Modo Convidado / Email)', async ({ page }) => {
-    await expect(page.locator('#onboardingScreen')).toBeVisible();
+    await expect(page.locator('#onboardingScreen')).toBeVisible({ timeout: 5000 });
     await page.click('#btnSkipOnboarding');
 
     await page.fill('#authEmail', 'teste@linsora.com.br');
@@ -68,7 +71,7 @@ test.describe('01. Fluxo de Autenticação & Onboarding', () => {
   });
 
   test('Deve realizar Logout com segurança', async ({ page }) => {
-    await expect(page.locator('#onboardingScreen')).toBeVisible();
+    await expect(page.locator('#onboardingScreen')).toBeVisible({ timeout: 5000 });
     await page.click('#btnSkipOnboarding');
 
     await page.fill('#authEmail', 'teste@linsora.com.br');
@@ -88,4 +91,5 @@ test.describe('01. Fluxo de Autenticação & Onboarding', () => {
     await expect(page.locator('#authScreen')).toBeVisible();
   });
 });
+
 

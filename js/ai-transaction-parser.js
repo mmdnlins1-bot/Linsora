@@ -8,16 +8,17 @@
 class TransactionAIParser {
   constructor() {
     this.defaultCategories = [
-      { name: 'Alimentação', keywords: ['almoço', 'almoco', 'jantar', 'janta', 'restaurante', 'ifood', 'padaria', 'mercado', 'supermercado', 'comida', 'lanche', 'cafe', 'café', 'pizza', 'feira', 'acougue', 'açougue'] },
-      { name: 'Transporte', keywords: ['uber', '99', 'taxi', 'táxi', 'gasolina', 'combustivel', 'combustível', 'estacionamento', 'pedagio', 'pedágio', 'metro', 'metrô', 'onibus', 'ônibus', 'passagem', 'oficina', 'mecanico', 'mecânico'] },
-      { name: 'Moradia', keywords: ['aluguel', 'condominio', 'condomínio', 'luz', 'energia', 'agua', 'água', 'internet', 'gas', 'gás', 'iptu', 'reforma', 'casa'] },
-      { name: 'Saúde', keywords: ['farmacia', 'farmácia', 'remedio', 'remédio', 'consulta', 'medico', 'médico', 'dentista', 'exame', 'hospital', 'plano de saude', 'drogaria'] },
-      { name: 'Lazer', keywords: ['cinema', 'jogo', 'show', 'viagem', 'passeio', 'bar', 'cerveja', 'festa', 'steam', 'netflix', 'spotify', 'lazer', 'entretenimento', 'clube'] },
-      { name: 'Salário', keywords: ['salario', 'salário', 'pagamento', 'pro-labore', 'pró-labore', 'freela', 'freelance', 'comissao', 'comissão', 'rendimento', 'proventos'] },
-      { name: 'Investimentos', keywords: ['aporte', 'acoes', 'ações', 'fii', 'tesouro', 'investimento', 'poupanca', 'poupança', 'crypto', 'cripto', 'cdb'] },
-      { name: 'Educação', keywords: ['curso', 'faculdade', 'escola', 'livro', 'mensalidade', 'aula', 'treinamento'] },
-      { name: 'Compras', keywords: ['roupa', 'sapato', 'loja', 'eletronico', 'eletrônico', 'shopping', 'amazon', 'mercado livre', 'magalu', 'presente'] },
-      { name: 'Outros', keywords: ['outros', 'diversos', 'extra', 'taxa', 'tarifa'] }
+      { name: 'Alimentação', targetType: 'DESPESA', keywords: ['almoço', 'almoco', 'jantar', 'janta', 'restaurante', 'ifood', 'padaria', 'mercado', 'supermercado', 'comida', 'lanche', 'cafe', 'café', 'pizza', 'feira', 'acougue', 'açougue', 'lanchonete', 'hamburguer', 'pastel'] },
+      { name: 'Transporte', targetType: 'DESPESA', keywords: ['uber', '99', 'taxi', 'táxi', 'gasolina', 'combustivel', 'combustível', 'estacionamento', 'pedagio', 'pedágio', 'metro', 'metrô', 'onibus', 'ônibus', 'passagem', 'oficina', 'mecanico', 'mecânico', 'posto'] },
+      { name: 'Moradia', targetType: 'DESPESA', keywords: ['aluguel', 'apartamento', 'apê', 'ape', 'condominio', 'condomínio', 'luz', 'energia', 'agua', 'água', 'gas', 'gás', 'iptu', 'reforma', 'casa', 'energia elétrica', 'luz elétrica'] },
+      { name: 'Saúde', targetType: 'DESPESA', keywords: ['farmacia', 'farmácia', 'remedio', 'remédio', 'consulta', 'medico', 'médico', 'dentista', 'exame', 'hospital', 'plano de saude', 'drogaria'] },
+      { name: 'Lazer', targetType: 'DESPESA', keywords: ['cinema', 'jogo', 'show', 'viagem', 'passeio', 'bar', 'cerveja', 'festa', 'steam', 'netflix', 'spotify', 'lazer', 'entretenimento', 'clube'] },
+      { name: 'Serviços', targetType: 'DESPESA', keywords: ['tv box', 'tvbox', 'streaming', 'plano', 'assinatura', 'wifi', 'wi-fi', 'celular', 'barbeiro', 'cabeleireiro', 'salao', 'salão', 'manutencao', 'manutenção', 'tv por assinatura'] },
+      { name: 'Salário', targetType: 'RECEITA', keywords: ['salario', 'salário', 'pro-labore', 'pró-labore', 'holerite', 'remuneração', 'contracheque', 'ordenado'] },
+      { name: 'Investimentos', targetType: 'AMBOS', keywords: ['aporte', 'acoes', 'ações', 'fii', 'tesouro', 'investimento', 'poupanca', 'poupança', 'crypto', 'cripto', 'cdb'] },
+      { name: 'Educação', targetType: 'DESPESA', keywords: ['curso', 'faculdade', 'escola', 'livro', 'mensalidade', 'aula', 'treinamento'] },
+      { name: 'Compras', targetType: 'DESPESA', keywords: ['roupa', 'sapato', 'loja', 'eletronico', 'eletrônico', 'shopping', 'amazon', 'mercado livre', 'magalu', 'presente'] },
+      { name: 'Outros', targetType: 'AMBOS', keywords: ['outros', 'diversos', 'extra', 'taxa', 'tarifa'] }
     ];
 
     this.numberMap = {
@@ -47,7 +48,7 @@ class TransactionAIParser {
     const type = this.detectType(lowerText);
     const amount = this.extractAmount(cleanText);
     const date = this.extractDate(lowerText);
-    const category = this.detectCategory(lowerText, customCategories);
+    const category = this.detectCategory(lowerText, type, customCategories);
     const description = this.extractDescription(cleanText, amount, category, type);
 
     const confidence = (amount > 0 ? 0.4 : 0) + (category ? 0.3 : 0) + (type ? 0.2 : 0) + 0.1;
@@ -219,17 +220,28 @@ class TransactionAIParser {
   }
 
   /**
-   * Identifica a categoria baseada em palavras-chave.
+   * Identifica a categoria baseada no tipo de transação (DESPESA / RECEITA) e palavras-chave.
    */
-  detectCategory(lowerText, customCategories = []) {
+  detectCategory(lowerText, txType = 'DESPESA', customCategories = []) {
     const allCategories = customCategories.length > 0
-      ? customCategories.map(c => typeof c === 'string' ? { name: c, keywords: [c.toLowerCase()] } : c)
+      ? customCategories.map(c => typeof c === 'string' ? { name: c, targetType: 'AMBOS', keywords: [c.toLowerCase()] } : c)
       : this.defaultCategories;
 
     let bestCategory = null;
     let maxMatchCount = 0;
 
     for (const cat of allCategories) {
+      const catType = cat.targetType || 'AMBOS';
+
+      // REGRA ESTRITA: Se for DESPESA, banir categorias puras de RECEITA (como Salário)!
+      if (txType === 'DESPESA' && catType === 'RECEITA') {
+        continue;
+      }
+      // Se for RECEITA, banir categorias puras de DESPESA!
+      if (txType === 'RECEITA' && catType === 'DESPESA') {
+        continue;
+      }
+
       const keywords = cat.keywords || [cat.name.toLowerCase()];
       let count = 0;
 
@@ -245,7 +257,13 @@ class TransactionAIParser {
       }
     }
 
-    return bestCategory || 'Outros';
+    if (!bestCategory) {
+      if (txType === 'DESPESA') return 'Outros';
+      if (txType === 'RECEITA') return 'Salário';
+      return 'Outros';
+    }
+
+    return bestCategory;
   }
 
   /**
@@ -310,7 +328,67 @@ class TransactionAIParser {
     const cleanText = rawText.trim();
     const lowerText = cleanText.toLowerCase();
 
-    // 1. Identificação do Tipo de Objetivo
+    // 0. VERIFICAÇÃO DE INTENÇÃO DE APORTE E MATCH COM METAS EXISTENTES
+    const activeGoals = (window.linsoraStore && window.linsoraStore.state && window.linsoraStore.state.goals) || [];
+    const normText = lowerText.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    const isDepositIntent = /adicion|aport|guard|deposit|coloc|somar|nessa meta|na meta|para a meta/i.test(normText);
+    
+    // Tentar encontrar uma meta ativa por correspondência de título ou palavras-chave
+    let matchedGoal = null;
+    if (activeGoals.length > 0) {
+      matchedGoal = activeGoals.find(g => {
+        const normTitle = (g.title || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        return normText.includes(normTitle) || normTitle.includes(normText);
+      });
+
+      if (!matchedGoal) {
+        matchedGoal = activeGoals.find(g => {
+          const normTitle = (g.title || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+          const words = normTitle.split(/\s+/).filter(w => w.length >= 3 && !['meta', 'para', 'com', 'dos', 'das'].includes(w));
+          return words.some(w => normText.includes(w));
+        });
+      }
+
+      if (!matchedGoal && isDepositIntent) {
+        matchedGoal = activeGoals.find(g => (parseFloat(g.current) || 0) < (parseFloat(g.target) || 0)) || activeGoals[0];
+      }
+    }
+
+    // Extração de Aporte Mensal explícito se o usuário falou "apontando 500 por mês" / "500 por mês"
+    let explicitAporte = 0;
+    const aporteMatch = lowerText.match(/(?:apontando|aportando|aporte|com|de)?\s*r\$\s*(\d+(?:[.,]\d+)?)\s*(?:por\s*mês|mensal|por\s*mes)|(\d+(?:[.,]\d+)?)\s*(?:por\s*mês|mensal|por\s*mes)/);
+    if (aporteMatch) {
+      const valStr = (aporteMatch[1] || aporteMatch[2]).replace(',', '.');
+      explicitAporte = parseFloat(valStr) || 0;
+    }
+
+    // Se identificarmos uma meta existente e o comando for aporte/contribuição:
+    if (matchedGoal && (isDepositIntent || (!lowerText.includes('nova meta') && !lowerText.includes('criar meta')))) {
+      const extractedAmount = this.extractAmount(cleanText) || explicitAporte || 0;
+      const currentVal = parseFloat(matchedGoal.current) || 0;
+      const targetVal = parseFloat(matchedGoal.target) || 1000;
+      const newCurrent = Math.min(targetVal, currentVal + extractedAmount);
+
+      return {
+        success: extractedAmount > 0,
+        isExistingGoal: true,
+        goalId: matchedGoal.id,
+        action: 'APORTE',
+        type: 'Aporte em Meta Existente',
+        icon: matchedGoal.icon || '➕',
+        title: matchedGoal.title,
+        target: targetVal,
+        current: currentVal,
+        amount: extractedAmount,
+        newCurrent: newCurrent,
+        deadline: matchedGoal.deadline,
+        monthsLeft: 1,
+        suggestedMonthly: 0,
+        rawText: cleanText
+      };
+    }
+
+    // 1. Identificação do Tipo de Objetivo (Criação de Nova Meta)
     let goalType = 'Meta Financeira';
     let icon = '🎯';
 
@@ -320,14 +398,6 @@ class TransactionAIParser {
     } else if (lowerText.includes('reserva financeira') || lowerText.includes('reserva') || lowerText.includes('poupança') || lowerText.includes('poupanca')) {
       goalType = 'Reserva Financeira';
       icon = '💰';
-    }
-
-    // 2. Extração de Aporte Mensal explícito se o usuário falou "apontando 500 por mês" / "500 por mês" / "aporte de 500"
-    let explicitAporte = 0;
-    const aporteMatch = lowerText.match(/(?:apontando|aportando|aporte|com|de)?\s*r\$\s*(\d+(?:[.,]\d+)?)\s*(?:por\s*mês|mensal|por\s*mes)|(\d+(?:[.,]\d+)?)\s*(?:por\s*mês|mensal|por\s*mes)/);
-    if (aporteMatch) {
-      const valStr = (aporteMatch[1] || aporteMatch[2]).replace(',', '.');
-      explicitAporte = parseFloat(valStr) || 0;
     }
 
     // 3. Extração do Valor Alvo (Target)
@@ -420,23 +490,82 @@ class TransactionAIParser {
     };
   }
 
+  /**
+   * Extrai somente o Nome Estruturado do Objetivo de uma frase de Voz para Metas.
+   * Elimina verbos de comando, artigos, preposições, valores monetários e datas do título.
+   * Exemplo: "cria uma meta com o nome carro no valor de 50 mil reais até julho de 2030" -> "Carro"
+   * @param {string} rawText 
+   * @param {number} target 
+   * @param {string} goalType 
+   * @returns {string} Nome limpo e curto do objetivo
+   */
   extractGoalTitle(rawText, target, goalType) {
     if (goalType === 'Reserva de Emergência') {
       return 'Reserva de Emergência';
     }
 
-    let clean = rawText
+    if (!rawText || typeof rawText !== 'string') {
+      return goalType || 'Meta Financeira';
+    }
+
+    const cleanRaw = rawText.trim();
+    const normText = cleanRaw.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+    // 1. Tentar extração por padrões explícitos ("com o nome [de] X", "nome da meta e X", "intitulada X", "para X")
+    const explicitPatterns = [
+      /(?:com\s+o\s+nome\s+(?:de\s+)?|nome\s+(?:da\s+meta|do\s+objetivo)?\s*(?:e)?\s+)([a-z0-9\s]+?)(?=\s+(?:no\s+valor|valor|de\s+r\$|de\s+\d|para|ate|em|\d|r\$|$))/i,
+      /(?:chamad[oa]|intitulad[oa])\s+(?:de\s+)?([a-z0-9\s]+?)(?=\s+(?:no\s+valor|valor|de\s+r\$|de\s+\d|para|ate|em|\d|r\$|$))/i,
+      /(?:meta|reserva)\s+(?:para|de)\s+([a-z0-9\s]+?)(?=\s+(?:no\s+valor|valor|de\s+r\$|de\s+\d|ate|em|\d|r\$|$))/i
+    ];
+
+    for (const pattern of explicitPatterns) {
+      const match = normText.match(pattern);
+      if (match && match[1]) {
+        let extracted = match[1]
+          .replace(/\b(?:com|o|a|os|as|um|uma|de|da|do|dos|das|nome|meta|objetivo|e|seja|para)\b/gi, '')
+          .replace(/\s+/g, ' ')
+          .trim();
+
+        if (extracted.length >= 2) {
+          return extracted.charAt(0).toUpperCase() + extracted.slice(1);
+        }
+      }
+    }
+
+    // 2. Remoção profunda de comandos, preposições, valores, moedas, datas e meses
+    let clean = normText
+      // Remover valores monetários e números soltos
       .replace(/r\$\s*\d+(?:[.,]\d+)?/gi, '')
       .replace(/\b\d+(?:[.,]\d+)?\s*(?:reais|real|mil)?\b/gi, '')
-      .replace(/\b(?:minha|meta|[ée]|quero|criar|uma|um|reserva|de|financeira|poupança|poupanca|em|meses|mes|anos|ano|até|ate|guardar|guardando|acumular|juntar|no valor de|valor de|hoje)\b/gi, '')
+
+      // Remover expressões completas de data e meses
+      .replace(/\b(?:ate|para|em)\s+(?:janeiro|fevereiro|marco|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro)(?:\s+(?:de\s+)?\d{4})?\b/gi, '')
+      .replace(/\b(?:janeiro|fevereiro|marco|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro)\b/gi, '')
+      .replace(/\b\d{4}\b/g, '')
+
+      // Remover verbos de comando
+      .replace(/\b(?:cria|crie|criar|criando|adicione|adicionar|adicionando|quero|queria|gostaria|vou|guardar|guardando|poupando|poupar|acumular|juntar|economizar|definir|fazer|montar|estabelecer)\b/gi, '')
+
+      // Remover artigos, preposições e pronomes
+      .replace(/\b(?:minha|meu|meta|reserva|fundo|objetivo|financeira|financeiro|poupanca|emergencia)\b/gi, '')
+      .replace(/\b(?:com|para|de|da|do|dos|das|na|no|nas|nos|em|por|sobre|uma|um|o|a|os|as)\b/gi, '')
+
+      // Remover designações e ruídos comuns
+      .replace(/\b(?:nome|chamada|chamado|intitulada|intitulado|valor|alvo|no|reais|real|mil|r\$|e|que|seria|meses|mes|anos|ano|dias|dia|prazo|data|limite|hoje)\b/gi, '')
+
       .replace(/\s+/g, ' ')
       .trim();
 
-    if (clean.length >= 3) {
-      return clean.charAt(0).toUpperCase() + clean.slice(1);
+    // 3. Se após a limpeza restar um termo válido de ao menos 2 caracteres
+    if (clean.length >= 2) {
+      clean = clean.replace(/^(?:o|a|de|da|do|em|para|com|e)\s+/i, '').trim();
+      if (clean.length >= 2) {
+        return clean.charAt(0).toUpperCase() + clean.slice(1);
+      }
     }
 
-    return goalType;
+    // 4. Fallback natural
+    return goalType || 'Meta Financeira';
   }
 
   createEmptyGoalResult(rawText) {

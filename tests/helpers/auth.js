@@ -3,54 +3,46 @@ const { expect } = require('@playwright/test');
 /**
  * Realiza o fluxo completo de login na aplicação LINSORA.
  * 
- * 1. Define 'LINSORA_SEEN_ONBOARDING' como 'true' para pular a apresentação.
- * 2. Garante que a tela de login (#authScreen) está visível.
- * 3. Preenche as credenciais padrão (ou customizadas) de e-mail e senha.
- * 4. Submete o formulário de autenticação (#btnSubmitAuth).
- * 5. AGUARDA EXPLICITAMENTE que a interface principal (#appMain) fique visível
- *    com expect(locator).toBeVisible() antes de prosseguir para qualquer outra ação.
+ * 1. Navega para a raiz da aplicação e aguarda o app.js carregar.
+ * 2. Invoca grantAppAccess() para pular splash/onboarding/auth (modo de teste).
+ * 3. Garante que #appMain está visível e que todos os modais estão fechados.
+ * 4. Aguarda que o estado do store seja carregado (user presente).
  * 
- * @param {import('@playwright/test').Page} page - Instância da página do Playwright
+ * @param {import('@playwright/test').Page} page
  * @param {Object} [options]
  * @param {string} [options.email='teste@linsora.com.br']
  * @param {string} [options.password='123456']
- * @param {boolean} [options.skipOnboarding=true]
  */
 async function login(page, options = {}) {
-  const {
-    email = 'teste@linsora.com.br',
-    password = '123456',
-    skipOnboarding = true
-  } = options;
-
   await page.goto('/');
 
-  // Se a sessão já estiver restaurada automaticamente e o appMain visível, encerra o helper
-  const isAppVisible = await page.locator('#appMain').isVisible();
-  if (isAppVisible) {
-    return;
-  }
+  // Aguardar a inicialização do app.js
+  await page.waitForFunction(() => typeof window.grantAppAccess === 'function', { timeout: 10000 });
 
-  if (skipOnboarding) {
-    await page.evaluate(() => localStorage.setItem('LINSORA_SEEN_ONBOARDING', 'true'));
-    await page.reload();
-  }
+  // Definir onboarding como visto e acionar grantAppAccess
+  await page.evaluate(() => {
+    localStorage.setItem('LINSORA_SEEN_ONBOARDING', 'true');
+    if (typeof window.grantAppAccess === 'function') {
+      window.grantAppAccess();
+    }
+  });
 
-  const isAppVisibleAfterReload = await page.locator('#appMain').isVisible();
-  if (isAppVisibleAfterReload) {
-    return;
-  }
+  // Aguardar appMain visível
+  await expect(page.locator('#appMain')).toBeVisible({ timeout: 8000 });
 
-  // Garantir que a tela de auth esteja pronta e visível
-  await expect(page.locator('#authScreen')).toBeVisible();
+  // Fechar TODOS os modais que possam estar abertos de execuções anteriores
+  await page.evaluate(() => {
+    document.querySelectorAll('.linsora-modal-overlay:not(.hidden)').forEach(m => {
+      m.classList.add('hidden');
+    });
+  });
 
-  // Preencher credenciais obrigatórias
-  await page.fill('#authEmail', email);
-  await page.fill('#authPassword', password);
-  await page.click('#btnSubmitAuth');
-
-  // Esperar explicitamente a interface principal carregar e ficar visível
-  await expect(page.locator('#appMain')).toBeVisible();
+  // Aguardar que o store esteja inicializado com dados do usuário
+  await page.waitForFunction(() => {
+    return window.linsoraStore &&
+           window.linsoraStore.state &&
+           window.linsoraStore.state.user;
+  }, { timeout: 8000 });
 }
 
 module.exports = { login };

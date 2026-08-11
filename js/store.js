@@ -48,7 +48,11 @@ class LinsoraStore {
 
   notify() {
     if (this.state && this.state.user) {
-      window.supabaseRepo.saveDbData(this.state, this.state.user.id);
+      try {
+        window.supabaseRepo.saveDbData(this.state, this.state.user.id);
+      } catch (err) {
+        console.warn('[LINSORA Store] Falha ao salvar estado remoto (modo offline):', err?.message || err);
+      }
     }
     this.listeners.forEach(fn => fn(this.state));
   }
@@ -304,20 +308,54 @@ class LinsoraStore {
      OPERAÇÕES DE METAS
      ------------------------------------------------------------------------ */
   async addGoal(goalData) {
-    const icons = ['🎯', '✈️', '🚗', '🏠', '💎', '📈'];
+    const icons = ['🎯', '✈️', '🚗', '🏠', '💎', '📈', '🛡️', '💰'];
     const newGoal = {
       id: 'goal_' + Date.now(),
       userId: (this.state && this.state.user) ? this.state.user.id : 'usr_guest',
-      title: goalData.title,
+      title: goalData.title || 'Nova Meta',
       target: parseFloat(goalData.target) || 1000,
       current: parseFloat(goalData.current) || 0,
-      category: 'Economia',
+      category: goalData.category || 'Economia',
       deadline: goalData.deadline || '2026-12-31',
-      icon: icons[this.state.goals.length % icons.length]
+      icon: goalData.icon || icons[this.state.goals.length % icons.length],
+      color: goalData.color || '#10B981',
+      monthlyContribution: parseFloat(goalData.monthlyContribution) || 0
     };
     this.state.goals.push(newGoal);
-    if (window.LinsoraLogger) window.LinsoraLogger.write('Meta Financeira', { title: newGoal.title, target: newGoal.target }, this.state?.user?.id);
+    if (window.LinsoraLogger) window.LinsoraLogger.write('Meta Financeira Criada', { title: newGoal.title, target: newGoal.target }, this.state?.user?.id);
     this.notify();
+    return newGoal;
+  }
+
+  async updateGoal(goalId, goalData) {
+    if (!goalId) return false;
+    const goal = this.state.goals.find(g => g.id === goalId);
+    if (goal) {
+      if (goalData.title) goal.title = goalData.title;
+      if (goalData.target !== undefined) goal.target = parseFloat(goalData.target) || 0;
+      if (goalData.current !== undefined) goal.current = parseFloat(goalData.current) || 0;
+      if (goalData.deadline) goal.deadline = goalData.deadline;
+      if (goalData.icon) goal.icon = goalData.icon;
+      if (goalData.color) goal.color = goalData.color;
+      if (goalData.monthlyContribution !== undefined) goal.monthlyContribution = parseFloat(goalData.monthlyContribution) || 0;
+
+      if (window.LinsoraLogger) window.LinsoraLogger.update('Meta Atualizada', { goalId, title: goal.title }, this.state?.user?.id);
+      this.notify();
+      return true;
+    }
+    return false;
+  }
+
+  async deleteGoal(goalId) {
+    if (!goalId) return false;
+    const initialLen = this.state.goals.length;
+    this.state.goals = this.state.goals.filter(g => g.id !== goalId);
+    if (this.state.goals.length < initialLen) {
+      if (window.LinsoraLogger) window.LinsoraLogger.update('Meta Excluída', { goalId }, this.state?.user?.id);
+      this.notify();
+      return true;
+    }
+    return false;
   }
 
   async depositToGoal(goalId, amount) {

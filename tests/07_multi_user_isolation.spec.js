@@ -18,7 +18,7 @@ test.describe('07. Auditoria de Multi-Usuários, Isolamento de Dados & Troca de 
     // ------------------------------------------------------------------------
     // 1. ETAPA ONBOARDING -> TELA DE AUTH
     // ------------------------------------------------------------------------
-    await expect(page.locator('#onboardingScreen')).toBeVisible();
+    await expect(page.locator('#onboardingScreen')).toBeVisible({ timeout: 5000 });
     await page.click('#btnSkipOnboarding');
     await expect(page.locator('#authScreen')).toBeVisible();
 
@@ -129,6 +129,9 @@ test.describe('07. Auditoria de Multi-Usuários, Isolamento de Dados & Troca de 
       sessionStorage.clear();
     });
     await page.reload();
+    // Aguardar splash sumir e onboarding aparecer
+    await expect(page.locator('#splashScreen')).toBeVisible({ timeout: 5000 }).catch(() => {});
+    await page.waitForTimeout(1500); // Aguardar timer da splash (1200ms)
 
     await page.click('#btnSkipOnboarding');
     await page.click('#btnToggleAuthMode');

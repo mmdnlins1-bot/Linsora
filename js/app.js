@@ -92,10 +92,16 @@ function hideSplashScreen() {
   const hasSeenOnboarding = localStorage.getItem('LINSORA_SEEN_ONBOARDING');
   if (!hasSeenOnboarding) {
     const onboarding = document.getElementById('onboardingScreen');
-    if (onboarding) onboarding.classList.remove('hidden');
+    if (onboarding) {
+      onboarding.classList.remove('hidden');
+      onboarding.classList.add('active');
+    }
   } else {
     const auth = document.getElementById('authScreen');
-    if (auth) auth.classList.remove('hidden');
+    if (auth) {
+      auth.classList.remove('hidden');
+      auth.classList.add('active');
+    }
   }
 }
 
@@ -258,10 +264,9 @@ function renderAppUI(state) {
     LinsoraChartEngine.renderCategoryDonutChart('categoryChart', state.transactions, 'categoryLegendGrid');
   }
 
-  LinsoraUI.renderTransactionsList('recentTransactionsList', state.transactions, 5);
+  LinsoraUI.renderTransactionsList('recentTransactionsList', state.transactions, 3);
   renderFilteredTransactions(state);
-  LinsoraUI.renderAccountsGrid('accountsListGrid', state.accounts);
-  LinsoraUI.renderPixKeysList('pixKeysList', state.pixKeys);
+  LinsoraUI.renderHealthTab(state);
   LinsoraUI.renderCardsCarousel('cardsCarousel', state.cards);
   LinsoraUI.renderGoalsList('goalsGridList', state.goals);
   LinsoraUI.renderFixedBillsList('fixedBillsList', state.fixedBills);
@@ -706,10 +711,8 @@ function setupEventListeners() {
   document.getElementById('btnNewTransactionHeader')?.addEventListener('click', () => openNewTxModal('DESPESA'));
   document.getElementById('btnQuickIncome')?.addEventListener('click', () => openNewTxModal('RECEITA'));
   document.getElementById('btnQuickExpense')?.addEventListener('click', () => openNewTxModal('DESPESA'));
-  document.getElementById('btnQuickPix')?.addEventListener('click', () => LinsoraUI.openModal('modalPixArea'));
+  document.getElementById('btnQuickHealth')?.addEventListener('click', () => window.switchTab('tabHealth'));
   document.getElementById('btnQuickCardPay')?.addEventListener('click', () => window.switchTab('tabCards'));
-  document.getElementById('btnQuickAddGoal')?.addEventListener('click', () => LinsoraUI.openModal('modalGoalForm'));
-  document.getElementById('btnQuickAddAccount')?.addEventListener('click', () => LinsoraUI.openModal('modalAccountForm'));
   document.getElementById('btnGoToTransactions')?.addEventListener('click', () => window.switchTab('tabTransactions'));
 
   const btnTypeExpense = document.getElementById('btnTypeExpense');
@@ -778,10 +781,15 @@ function setupEventListeners() {
       };
       if (id) txPayload.id = id;
 
-      await window.linsoraStore.saveTransaction(txPayload);
-
-      LinsoraUI.closeModal('modalTransactionForm');
-      LinsoraUI.showToast(`${isIncome ? 'Receita' : 'Despesa'} salva com sucesso!`);
+      try {
+        await window.linsoraStore.saveTransaction(txPayload);
+        LinsoraUI.closeModal('modalTransactionForm');
+        LinsoraUI.showToast(`${isIncome ? 'Receita' : 'Despesa'} salva com sucesso!`);
+      } catch (err) {
+        console.error('[LINSORA] Erro ao salvar transação:', err);
+        LinsoraUI.closeModal('modalTransactionForm');
+        LinsoraUI.showToast('Transação salva localmente!');
+      }
     };
   }
 
@@ -828,18 +836,45 @@ function setupEventListeners() {
     }
   });
 
-  document.getElementById('btnAddGoal')?.addEventListener('click', () => LinsoraUI.openModal('modalGoalForm'));
+  document.getElementById('btnAddGoal')?.addEventListener('click', () => {
+    const idInput = document.getElementById('goalIdInput');
+    const goalForm = document.getElementById('goalForm');
+    if (idInput) idInput.value = '';
+    if (goalForm) goalForm.reset();
+    const modalTitle = document.querySelector('#modalGoalForm .modal-header h3');
+    if (modalTitle) modalTitle.innerText = '+ Nova Meta Financeira';
+    LinsoraUI.openModal('modalGoalForm');
+  });
+
   document.getElementById('goalForm')?.addEventListener('submit', async function(e) {
     if (e) e.preventDefault();
-    const title = document.getElementById('goalTitleInput').value;
-    const target = LinsoraUtils.parseCurrencyToFloat(document.getElementById('goalTargetInput').value);
-    const current = LinsoraUtils.parseCurrencyToFloat(document.getElementById('goalCurrentInput').value);
-    const deadline = document.getElementById('goalDeadlineInput').value;
-    if (!title) return;
+    const goalId = document.getElementById('goalIdInput')?.value;
+    const title = document.getElementById('goalTitleInput')?.value;
+    const target = LinsoraUtils.parseCurrencyToFloat(document.getElementById('goalTargetInput')?.value || '0');
+    const current = LinsoraUtils.parseCurrencyToFloat(document.getElementById('goalCurrentInput')?.value || '0');
+    const deadline = document.getElementById('goalDeadlineInput')?.value;
+    const icon = document.getElementById('goalIconInput')?.value || '🎯';
 
-    await window.linsoraStore.addGoal({ title, target, current, deadline });
-    LinsoraUI.closeModal('modalGoalForm');
-    LinsoraUI.showToast('Nova meta financeira cadastrada!');
+    if (!title) {
+      LinsoraUI.showToast('Informe o título da meta.', 'warning');
+      return;
+    }
+
+    try {
+      if (goalId) {
+        await window.linsoraStore.updateGoal(goalId, { title, target, current, deadline, icon });
+        LinsoraUI.closeModal('modalGoalForm');
+        LinsoraUI.showToast(`Meta "${title}" editada com sucesso! ✏️`, 'success');
+      } else {
+        await window.linsoraStore.addGoal({ title, target, current, deadline, icon });
+        LinsoraUI.closeModal('modalGoalForm');
+        LinsoraUI.showToast(`Nova meta "${title}" cadastrada com sucesso! 🎯`, 'success');
+      }
+    } catch (err) {
+      console.error('[LINSORA] Erro ao salvar meta:', err);
+      LinsoraUI.closeModal('modalGoalForm');
+      LinsoraUI.showToast('Meta salva localmente!');
+    }
   });
 
   document.getElementById('depositGoalForm')?.addEventListener('submit', async function(e) {

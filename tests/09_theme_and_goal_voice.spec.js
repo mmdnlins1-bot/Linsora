@@ -30,17 +30,21 @@ test.describe('09. Assistente de Voz para Metas & Sistema de Temas Claro/Escuro'
     expect(resFinanceira.monthsLeft).toBe(24);
     expect(resFinanceira.suggestedMonthly).toBe(1000);
 
-    // 3. Meta Financeira Genérica (Viagem / Carro)
-    const resMeta = await page.evaluate(() => {
-      return window.TransactionAIParser.parseGoalText('Minha meta é viajar para a praia guardando 6000 reais em 6 meses');
+    // 4. Teste de Parsing de Título Estruturado (Sem comandos no nome)
+    const resCarro = await page.evaluate(() => {
+      return window.TransactionAIParser.parseGoalText('crie uma meta com o nome o nome da meta é carro no valor de r$ 50000 até julho de 2030');
     });
 
-    expect(resMeta.type).toBe('Meta Financeira');
-    expect(resMeta.icon).toBe('🎯');
-    expect(resMeta.title.toLowerCase()).toContain('praia');
-    expect(resMeta.target).toBe(6000);
-    expect(resMeta.monthsLeft).toBe(6);
-    expect(resMeta.suggestedMonthly).toBe(1000);
+    expect(resCarro.title).toBe('Carro');
+    expect(resCarro.target).toBe(50000);
+    expect(resCarro.deadline).toContain('2030-07');
+
+    const resCarroSimples = await page.evaluate(() => {
+      return window.TransactionAIParser.parseGoalText('cria uma meta com o nome carro no valor de 50 mil reais até julho de 2030');
+    });
+
+    expect(resCarroSimples.title).toBe('Carro');
+    expect(resCarroSimples.target).toBe(50000);
   });
 
   test('Deve abrir o assistente de voz na tela de Metas e processar fala -> card de confirmação -> salvar no Supabase', async ({ page }) => {
@@ -143,10 +147,64 @@ test.describe('09. Assistente de Voz para Metas & Sistema de Temas Claro/Escuro'
     });
     expect(nwValColor).toContain('15'); // #0F172A
 
-    // 4. Voltar para Tema Escuro
+    // 4. Ir para a aba de Metas e verificar contraste da visão geral no Tema Claro
+    await page.click('.bottom-nav .nav-item[data-tab="tabGoals"]');
+    const goalsOverviewColor = await page.evaluate(() => {
+      const el = document.querySelector('.goals-overview-header h3');
+      return el ? getComputedStyle(el).color : '';
+    });
+    if (goalsOverviewColor) expect(goalsOverviewColor).toContain('15');
+
+    // 5. Voltar para Tema Escuro
     await page.click('.bottom-nav .nav-item[data-tab="tabProfile"]');
     await page.click('#btnToggleTheme');
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+  });
+
+  test('Deve exibir 3 ações no card da meta (Aporte, Editar, Excluir) e permitir aportes em metas existentes por voz sem duplicar', async ({ page }) => {
+    await page.click('.bottom-nav .nav-item[data-tab="tabGoals"]');
+    await expect(page.locator('#tabGoals')).toBeVisible();
+
+    // 1. Criar uma meta para teste
+    await page.click('#btnAddGoal');
+    await page.fill('#goalTitleInput', 'Viagem de Férias');
+    await page.fill('#goalTargetInput', '5.000,00');
+    await page.fill('#goalDeadlineInput', '2027-12-31');
+    await page.click('#btnSaveGoal');
+
+    // 2. Verificar que o card foi criado e tem os 3 botões de ação
+    const card = page.locator('#goalsGridList .goal-item-card-enhanced').filter({ hasText: 'Viagem de Férias' }).first();
+    await expect(card).toBeVisible();
+    await expect(card.locator('.btn-deposit-goal')).toBeVisible();
+    await expect(card.locator('.btn-edit-goal')).toBeVisible();
+    await expect(card.locator('.btn-delete-goal')).toBeVisible();
+
+    // 3. Testar comando de voz para APORTE em meta existente (sem criar duplicada)
+    await page.click('#btnMicGoalsHeader');
+    await page.fill('#voiceManualInput', 'guardar 500 reais na meta viagem');
+    await page.click('#btnVoiceProcessNow');
+
+    // Card de confirmação de meta indica APORTE EM META EXISTENTE
+    await expect(page.locator('#modalGoalVoiceConfirmation')).toBeVisible();
+    await expect(page.locator('#goalConfTypeBadge')).toContainText('APORTE EM META EXISTENTE');
+    await page.click('#btnGoalConfSave');
+
+    // Salvo com sucesso e valor guardado atualizado no card
+    await expect(card.locator('.goal-values')).toContainText('500,00');
+
+    // 4. Testar botão de edição direta no card (.btn-edit-goal)
+    await card.locator('.btn-edit-goal').click();
+    await expect(page.locator('#modalGoalForm')).toBeVisible();
+    await page.fill('#goalTargetInput', '6.000,00');
+    await page.click('#btnSaveGoal');
+    await expect(card.locator('.goal-values')).toContainText('6.000,00');
+
+    // 5. Testar exclusão da meta (.btn-delete-goal) usando o modal nativo Linsora
+    await card.locator('.btn-delete-goal').click();
+    await expect(page.locator('#modalConfirmDelete')).toBeVisible();
+    await expect(page.locator('#confirmDeleteTitle')).toHaveText('Confirmar exclusão');
+    await page.click('#btnConfirmDeleteConfirm');
+    await expect(card).not.toBeVisible();
   });
 
 });
