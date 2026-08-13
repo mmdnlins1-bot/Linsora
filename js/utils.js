@@ -232,6 +232,11 @@ const LinsoraUtils = {
       'Saúde': '🏥',
       'Salário': '💼',
       'Investimentos': '📈',
+      'Transferência': '💸',
+      'Pix': '💸',
+      'Serviços': '⚙️',
+      'Compras': '🛍️',
+      'Educação': '🎓',
       'Outros': '📦'
     };
     return map[category] || '📦';
@@ -242,9 +247,9 @@ const LinsoraUtils = {
    */
   getCategoriesByType(type) {
     if (type === 'RECEITA') {
-      return ['Salário', 'Investimentos', 'Freelance', 'Venda', 'Outros'];
+      return ['Salário', 'Investimentos', 'Transferência', 'Freelance', 'Venda', 'Outros'];
     }
-    return ['Alimentação', 'Moradia', 'Transporte', 'Lazer', 'Saúde', 'Educação', 'Outros'];
+    return ['Alimentação', 'Moradia', 'Transporte', 'Lazer', 'Saúde', 'Transferência', 'Educação', 'Outros'];
   },
 
   /**

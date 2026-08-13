@@ -20,6 +20,8 @@
 
   <!-- Configurações PWA & Aplicativo Android Mobile -->
   <meta name="theme-color" content="#070B12">
+  <link rel="icon" type="image/png" href="./icon-192.png">
+  <link rel="apple-touch-icon" href="./icon-192.png">
   <link rel="manifest" href="manifest.webmanifest">
 
   <!-- Estilos Globais & Design System Unificado -->
@@ -235,6 +237,11 @@
           <!-- TAB 1: DASHBOARD REFINADO -->
           <section class="tab-page active" id="tabDashboard">
             
+            <!-- FEED DE CONTEXTO DINÂMICO & CONSELHEIRO ESTRATÉGICO -->
+            <div class="strategic-feed-wrapper" id="strategicFeedContainer">
+              <!-- Renderizado dinamicamente por LinsoraStrategicAdvisor -->
+            </div>
+
             <!-- 0. INDICADOR DE SAÚDE FINANCEIRA CONDICIONAL -->
             <div class="financial-health-banner" id="healthScoreWidget">
               <!-- Renderizado dinamicamente -->
@@ -326,13 +333,6 @@
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="5" y1="12" x2="19" y2="12"/></svg>
                   </div>
                   <span>- Despesa</span>
-                </button>
-
-                <button type="button" class="action-tile" id="btnQuickPix">
-                  <div class="tile-icon pix-bg">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
-                  </div>
-                  <span>Área Pix</span>
                 </button>
 
                 <button type="button" class="action-tile" id="btnQuickCardPay">
@@ -624,7 +624,7 @@
 
             <div class="linsora-card user-profile-card">
               <div class="profile-card-header">
-                <div class="profile-avatar-wrapper" id="btnChangeAvatar" title="Clique para alterar a foto de perfil">
+                <label for="profileAvatarInput" class="profile-avatar-wrapper" id="btnChangeAvatar" title="Clique para alterar a foto de perfil" style="cursor: pointer;">
                   <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80" alt="Avatar" class="profile-avatar-lg" id="profileAvatarImg">
                   <div class="avatar-edit-overlay">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
@@ -632,7 +632,7 @@
                   <div class="avatar-upload-spinner hidden" id="avatarUploadSpinner">
                     <div class="spinner-ring"></div>
                   </div>
-                </div>
+                </label>
                 <input type="file" id="profileAvatarInput" accept="image/*" style="display: none;">
                 
                 <div class="profile-info-wrap">
@@ -640,7 +640,7 @@
                   <span style="font-size: 13px; color: var(--text-muted);" id="profileEmailDisplay">usuario@linsora.com.br</span>
                   <div style="margin-top: 6px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
                     <span class="badge-status-chip success">Conta PRO Premium</span>
-                    <button type="button" class="change-photo-btn" id="btnTriggerPhotoUpload">📷 Alterar Foto</button>
+                    <label for="profileAvatarInput" class="change-photo-btn" id="btnTriggerPhotoUpload" style="cursor: pointer;">📷 Alterar Foto</label>
                   </div>
                 </div>
               </div>
@@ -1050,6 +1050,34 @@
         </div>
       </div>
 
+      <!-- MODAL ALTERAR FOTO DE PERFIL (GALERIA OU LINK/URL) -->
+      <div class="linsora-modal-overlay hidden" id="modalChangePhotoOptions">
+        <div class="linsora-modal-content floating-center-card" style="max-width: 360px;">
+          <div class="modal-header">
+            <h3>📷 Alterar Foto de Perfil</h3>
+            <button type="button" class="modal-close" data-close-modal="modalChangePhotoOptions">✕</button>
+          </div>
+          <div class="modal-body-content" style="padding: 10px 0;">
+            <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 16px;">
+              Escolha uma imagem da sua galeria ou informe o link direto de uma foto:
+            </p>
+
+            <button type="button" class="linsora-btn primary block lg" id="btnChoosePhotoFile" style="margin-bottom: 16px; display: flex; align-items: center; justify-content: center; gap: 8px;">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+              <span>Abrir Galeria de Fotos</span>
+            </button>
+
+            <div style="border-top: 1px solid rgba(255, 255, 255, 0.1); padding-top: 14px;">
+              <label for="photoUrlInput" style="font-size: 12px; font-weight: 600; color: var(--text-muted); display: block; margin-bottom: 6px;">Ou informe o Link/URL da Imagem:</label>
+              <div class="input-icon-wrapper" style="display: flex; gap: 8px;">
+                <input type="url" id="photoUrlInput" class="linsora-input" placeholder="https://... /foto.jpg" style="flex: 1;">
+                <button type="button" class="linsora-btn secondary sm" id="btnApplyPhotoUrl">Aplicar</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- MODAL NOVO CARTÃO DE CRÉDITO -->
       <div class="linsora-modal-overlay hidden" id="modalCardForm">
         <div class="linsora-modal-content floating-center-card">
@@ -1387,6 +1415,49 @@
         </div>
       </div>
 
+      <!-- MODAL DO CONSELHEIRO ESTRATÉGICO LINSORA AI -->
+      <div class="linsora-modal-overlay hidden" id="modalStrategicAdvisor">
+        <div class="linsora-modal-content strategic-advisor-modal">
+          <div class="modal-header advisor-modal-header">
+            <div class="advisor-title-wrap">
+              <div class="advisor-avatar-icon">🧠</div>
+              <div>
+                <h3 class="modal-title">Conselheiro Estratégico</h3>
+                <span class="modal-subtitle">Mentor Financeiro & Análise Crítica LINSORA</span>
+              </div>
+            </div>
+            <button type="button" class="modal-close" data-close-modal="modalStrategicAdvisor">✕</button>
+          </div>
+
+          <div class="advisor-modal-body">
+            <!-- Sugestões de Perguntas Rápidas -->
+            <div class="advisor-quick-queries">
+              <span class="quick-title">Consultas Rápidas:</span>
+              <div class="quick-tags">
+                <button type="button" class="advisor-chip" data-query="Diagnóstico geral do meu orçamento">📊 Diagnóstico Geral</button>
+                <button type="button" class="advisor-chip" data-query="Qual meu maior gargalo de gastos?">🔍 Maior Gargalo</button>
+                <button type="button" class="advisor-chip" data-query="Posso gastar 300 reais hoje?">💳 Análise de Compra</button>
+              </div>
+            </div>
+
+            <!-- Histórico de Chat / Cartões de Resposta -->
+            <div class="advisor-chat-history" id="advisorChatHistory">
+              <!-- Mensagens do Usuário e Respostas Analíticas -->
+            </div>
+
+            <!-- Formulário de Pergunta -->
+            <form id="formStrategicAdvisorQuery" class="advisor-input-form" onsubmit="return false;">
+              <div class="input-icon-wrapper">
+                <input type="text" id="advisorQueryInput" class="linsora-input" placeholder="Ex: 'Posso gastar 250 em um jantar hoje?'">
+                <button type="submit" class="btn-send-advisor" id="btnSubmitAdvisorQuery" title="Enviar Consulta">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="18" height="18"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+
       <!-- MODAL DE CONFIRMAÇÃO NATIVO (substitui window.confirm) -->
       <div class="linsora-modal-overlay hidden" id="modalConfirmDelete">
         <div class="linsora-modal-content confirm-delete-card" role="alertdialog" aria-modal="true" aria-labelledby="confirmDeleteTitle" aria-describedby="confirmDeleteMsg">
@@ -1417,6 +1488,7 @@
   <script src="js/utils.js"></script>
   <script src="js/store.js"></script>
   <script src="js/ai-transaction-parser.js"></script>
+  <script src="js/strategic-advisor.js"></script>
   <script src="js/voice-recognition.js"></script>
   <script src="js/voice-assistant-ui.js"></script>
   <script src="js/charts.js"></script>

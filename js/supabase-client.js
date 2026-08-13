@@ -434,17 +434,22 @@ class SupabaseRepository {
     return msg;
   }
 
-  /* ------------------------------------------------------------------------
-     BANCO DE DADOS ISOLADO POR USUÁRIO (ESTADO INICIAL 100% ZERADO E RLS)
-     ------------------------------------------------------------------------ */
+  getUserAvatar(userId) {
+    if (!userId) return null;
+    return localStorage.getItem(`LINSORA_USER_AVATAR_${userId}`) ||
+           localStorage.getItem('LINSORA_USER_AVATAR_guest') ||
+           localStorage.getItem('LINSORA_USER_AVATAR_usr_guest') || null;
+  }
 
   getEmptyUserData(userObj) {
+    const activeId = userObj?.id || 'usr_guest';
+    const dedicatedAvatar = this.getUserAvatar(activeId);
     return {
       user: {
-        id: userObj?.id || 'usr_guest',
+        id: activeId,
         name: userObj?.name || 'Novo Usuário',
         email: userObj?.email ? String(userObj.email).toLowerCase().trim() : 'usuario@linsora.com.br',
-        avatar: userObj?.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80',
+        avatar: dedicatedAvatar || userObj?.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80',
         plan: 'PRO',
         isPinEnabled: false,
         pinCode: '1234',
@@ -465,36 +470,74 @@ class SupabaseRepository {
     const stored = localStorage.getItem(key);
     let localCache = stored ? JSON.parse(stored) : null;
 
-    // Migração automática de dados de visitante (guest) se o cache do novo usuário estiver zerado
+    // Migração/Preservação automática de dados de visitante (guest) ou caches anteriores se o cache do novo usuário estiver zerado
     if (!localCache || (
       (!localCache.transactions || localCache.transactions.length === 0) &&
       (!localCache.accounts || localCache.accounts.length === 0) &&
       (!localCache.goals || localCache.goals.length === 0)
     )) {
-      const guestStored = localStorage.getItem('LINSORA_DB_CACHE_usr_guest') || localStorage.getItem('LINSORA_DB_CACHE_guest');
-      if (guestStored) {
-        try {
-          const guestCache = JSON.parse(guestStored);
-          if (guestCache && (guestCache.transactions?.length || guestCache.accounts?.length || guestCache.goals?.length)) {
-            console.log('🔄 Migrando dados locais de visitante para o usuário:', activeId);
-            localCache = {
-              user: {
-                ...(guestCache.user || {}),
-                id: activeId,
-                name: userObj?.name || guestCache.user?.name || 'Usuário',
-                email: userObj?.email ? String(userObj.email).toLowerCase().trim() : (guestCache.user?.email || '')
-              },
-              accounts: (guestCache.accounts || []).map(a => ({ ...a, userId: activeId })),
-              cards: (guestCache.cards || []).map(c => ({ ...c, userId: activeId })),
-              transactions: (guestCache.transactions || []).map(t => ({ ...t, userId: activeId })),
-              goals: (guestCache.goals || []).map(g => ({ ...g, userId: activeId })),
-              pixKeys: (guestCache.pixKeys || []).map(p => ({ ...p, userId: activeId })),
-              fixedBills: (guestCache.fixedBills || []).map(f => ({ ...f, userId: activeId }))
-            };
-            localStorage.setItem(key, JSON.stringify(localCache));
+      let cleanEmail = userObj?.email ? String(userObj.email).toLowerCase().trim() : '';
+      if (!cleanEmail) {
+        const localSession = this.getActiveLocalSession();
+        if (localSession?.email) cleanEmail = String(localSession.email).toLowerCase().trim();
+      }
+      if (!cleanEmail) {
+        const registeredUsers = this.getLocalRegisteredUsers();
+        for (const [em, rec] of Object.entries(registeredUsers)) {
+          if (rec.id === activeId || (rec.email && rec.email.toLowerCase().trim() === cleanEmail)) {
+            cleanEmail = em.toLowerCase().trim();
+            break;
           }
+        }
+      }
+
+      const expectedLocalUserId = cleanEmail ? this.generateLocalUserId(cleanEmail) : null;
+      let bestFallbackCache = null;
+
+      // Tentar encontrar caches existentes no localStorage com dados reais
+      for (let i = 0; i < localStorage.length; i++) {
+        const lsKey = localStorage.key(i);
+        if (lsKey && lsKey.startsWith('LINSORA_DB_CACHE_') && lsKey !== key) {
+          try {
+            const raw = localStorage.getItem(lsKey);
+            if (!raw) continue;
+            const parsed = JSON.parse(raw);
+            if (parsed && (parsed.transactions?.length || parsed.accounts?.length || parsed.goals?.length)) {
+              const parsedEmail = parsed.user?.email ? String(parsed.user.email).toLowerCase().trim() : '';
+              const isGuestKey = lsKey.includes('guest') || parsed.user?.id === 'guest' || parsed.user?.id === 'usr_guest';
+              const isTargetLocalId = expectedLocalUserId && lsKey === `LINSORA_DB_CACHE_${expectedLocalUserId}`;
+              
+              if ((cleanEmail && parsedEmail === cleanEmail) || isTargetLocalId) {
+                bestFallbackCache = parsed;
+                break; // Encontrado cache exato do mesmo e-mail!
+              } else if (isGuestKey && !bestFallbackCache) {
+                bestFallbackCache = parsed; // Fallback para Visitante
+              }
+            }
+          } catch (_) {}
+        }
+      }
+
+      if (bestFallbackCache) {
+        try {
+          console.log('🔄 Migrando/preservando dados locais para o usuário:', activeId);
+          localCache = {
+            user: {
+              ...(bestFallbackCache.user || {}),
+              id: activeId,
+              name: userObj?.name || bestFallbackCache.user?.name || 'Usuário',
+              email: cleanEmail || (bestFallbackCache.user?.email || '')
+            },
+            accounts: (bestFallbackCache.accounts || []).map(a => ({ ...a, userId: activeId })),
+            cards: (bestFallbackCache.cards || []).map(c => ({ ...c, userId: activeId })),
+            transactions: (bestFallbackCache.transactions || []).map(t => ({ ...t, userId: activeId })),
+            goals: (bestFallbackCache.goals || []).map(g => ({ ...g, userId: activeId })),
+            pixKeys: (bestFallbackCache.pixKeys || []).map(p => ({ ...p, userId: activeId })),
+            fixedBills: (bestFallbackCache.fixedBills || []).map(f => ({ ...f, userId: activeId }))
+          };
+          localStorage.setItem(key, JSON.stringify(localCache));
         } catch (e) {
-          console.warn('Falha na migração automática de dados de visitante:', e);
+          console.warn('Falha na migração automática de dados locais:', e);
         }
       }
     }
@@ -552,7 +595,7 @@ class SupabaseRepository {
               id: activeId,
               name: userObj?.name || localCache?.user?.name || 'Usuário',
               email: userObj?.email ? String(userObj.email).toLowerCase().trim() : (localCache?.user?.email || 'usuario@linsora.com.br'),
-              avatar: userObj?.avatar || localCache?.user?.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80',
+              avatar: localStorage.getItem(`LINSORA_USER_AVATAR_${activeId}`) || localCache?.user?.avatar || userObj?.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80',
               plan: 'PRO',
               isPinEnabled: localCache?.user?.isPinEnabled || false,
               pinCode: localCache?.user?.pinCode || '1234',
@@ -580,7 +623,13 @@ class SupabaseRepository {
       if (userObj) {
         if (userObj.name) localCache.user.name = userObj.name;
         if (userObj.email) localCache.user.email = String(userObj.email).toLowerCase().trim();
-        if (userObj.avatar) localCache.user.avatar = userObj.avatar;
+      }
+      // Avatar: chave dedicada vence sempre, depois cache local, depois metadata de OAuth
+      const dedicatedAvatar = this.getUserAvatar(activeId);
+      if (dedicatedAvatar) {
+        localCache.user.avatar = dedicatedAvatar;
+      } else if (userObj && userObj.avatar && !localCache.user.avatar) {
+        localCache.user.avatar = userObj.avatar;
       }
       if (window.LinsoraLogger) window.LinsoraLogger.read('Local Cache DB', { accounts: (localCache.accounts || []).length, transactions: (localCache.transactions || []).length }, activeId);
       return localCache;

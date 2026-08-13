@@ -16,6 +16,7 @@ class TransactionAIParser {
       { name: 'Serviços', targetType: 'DESPESA', keywords: ['tv box', 'tvbox', 'streaming', 'plano', 'assinatura', 'wifi', 'wi-fi', 'celular', 'barbeiro', 'cabeleireiro', 'salao', 'salão', 'manutencao', 'manutenção', 'tv por assinatura'] },
       { name: 'Salário', targetType: 'RECEITA', keywords: ['salario', 'salário', 'pro-labore', 'pró-labore', 'holerite', 'remuneração', 'contracheque', 'ordenado'] },
       { name: 'Investimentos', targetType: 'AMBOS', keywords: ['aporte', 'acoes', 'ações', 'fii', 'tesouro', 'investimento', 'poupanca', 'poupança', 'crypto', 'cripto', 'cdb'] },
+      { name: 'Transferência', targetType: 'AMBOS', keywords: ['pix', 'pics', 'piks', 'transferencia', 'transferência', 'transfira', 'transfiri', 'ted', 'doc', 'chave pix'] },
       { name: 'Educação', targetType: 'DESPESA', keywords: ['curso', 'faculdade', 'escola', 'livro', 'mensalidade', 'aula', 'treinamento'] },
       { name: 'Compras', targetType: 'DESPESA', keywords: ['roupa', 'sapato', 'loja', 'eletronico', 'eletrônico', 'shopping', 'amazon', 'mercado livre', 'magalu', 'presente'] },
       { name: 'Outros', targetType: 'AMBOS', keywords: ['outros', 'diversos', 'extra', 'taxa', 'tarifa'] }
@@ -71,7 +72,8 @@ class TransactionAIParser {
   detectType(lowerText) {
     const incomeKeywords = [
       'recebi', 'receita', 'ganhei', 'salario', 'salário', 'deposito', 'depósito',
-      'pix recebido', 'vendi', 'venda', 'reembolso', 'rendimento', 'comissao', 'comissão',
+      'pix recebido', 'recebi pix', 'recebi um pix', 'me mandou pix', 'pix de',
+      'vendi', 'venda', 'reembolso', 'rendimento', 'comissao', 'comissão',
       'proventos', 'entrada', 'recebimento', 'resgate'
     ];
 
@@ -79,7 +81,9 @@ class TransactionAIParser {
       'gastei', 'despesa', 'comprei', 'compra', 'paguei', 'pagamento', 'pagar',
       'uber', '99', 'almoço', 'almoco', 'jantar', 'janta', 'mercado', 'supermercado',
       'gasolina', 'combustivel', 'combustível', 'conta', 'farmacia', 'farmácia',
-      'pix enviado', 'saida', 'saída', 'custou', 'multa', 'tarifa', 'taxa'
+      'pix enviado', 'pix feito', 'pics feito', 'fiz um pix', 'mandei um pix', 'enviei um pix',
+      'pix para', 'paguei no pix', 'pix', 'pics', 'piks', 'transferi', 'transfira',
+      'saida', 'saída', 'custou', 'multa', 'tarifa', 'taxa'
     ];
 
     let incomeScore = 0;
@@ -566,6 +570,30 @@ class TransactionAIParser {
 
     // 4. Fallback natural
     return goalType || 'Meta Financeira';
+  }
+
+  /**
+   * Identifica se o texto possui intenção de Consulta Estratégica / Conselho Orçamentário.
+   * @param {string} rawText 
+   * @returns {boolean}
+   */
+  hasAdviceQueryIntent(rawText) {
+    if (!rawText || typeof rawText !== 'string') return false;
+    const lower = rawText.trim().toLowerCase();
+
+    const adviceKeywords = [
+      'posso gastar', 'posso comprar', 'posso jantar', 'posso pagar', 'posso investir',
+      'consigo gastar', 'consigo comprar', 'consigo pagar', 'consigo jantar',
+      'dá para gastar', 'da pra gastar', 'dá para comprar', 'da pra comprar',
+      'minha vida financeira', 'vida financeira', 'vai me afetar', 'me afeta',
+      'como está meu orçamento', 'como esta meu orcamento', 'meu orçamento', 'meu orcamento',
+      'diagnóstico', 'diagnostico', 'gargalo', 'maior gasto', 'maior despesa',
+      'onde estou gastando', 'análise', 'analise', 'conselho', 'recomendação', 'recomendacao',
+      'como economizar', 'cabe no orçamento', 'cabe no orcamento', 'cabe no meu saldo',
+      'vale a pena', 'devo comprar', 'devo gastar', 'quanto posso gastar', 'quanto posso'
+    ];
+
+    return adviceKeywords.some(kw => lower.includes(kw));
   }
 
   createEmptyGoalResult(rawText) {

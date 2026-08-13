@@ -183,6 +183,11 @@ function renderAppUI(state) {
     elGreeting.innerText = text;
   }
 
+  // -1. FEED DE CONTEXTO DINÂMICO & CONSELHEIRO ESTRATÉGICO
+  if (window.LinsoraStrategicAdvisor) {
+    window.LinsoraStrategicAdvisor.renderHomeFeed();
+  }
+
   // 0. INDICADOR DE SAÚDE FINANCEIRA CONDICIONAL
   const healthObj = window.linsoraStore.calculateFinancialHealthScore();
   LinsoraUI.renderFinancialHealthScore(healthObj);
@@ -1096,37 +1101,20 @@ function setupEventListeners() {
       const compressedDataUrl = await LinsoraUtils.processAndCompressImage(file, 300, 300, 0.8);
       let finalUrl = compressedDataUrl;
 
-      // Se o cliente Supabase estiver autenticado, tenta salvar no bucket de avatars
-      if (window.supabaseRepo && window.supabaseRepo.supabase && window.supabaseRepo.currentUserId && !window.supabaseRepo.currentUserId.startsWith('usr_')) {
-        try {
-          const userId = window.supabaseRepo.currentUserId;
-          const fileName = `avatar_${userId}.jpg`;
-          const blob = LinsoraUtils.dataURItoBlob(compressedDataUrl);
+      // Salvar imediatamente no DOM para feedback rápido
+      const userId = window.linsoraStore?.state?.user?.id || window.supabaseRepo?.currentUserId || 'guest';
+      document.querySelectorAll('#profileAvatarImg, #userAvatar').forEach(img => {
+        if (img) img.src = finalUrl;
+      });
 
-          const { data, error } = await window.supabaseRepo.supabase.storage
-            .from('avatars')
-            .upload(fileName, blob, { upsert: true, contentType: 'image/jpeg' });
+      // Persistir em chave dedicada — imune a mesclagem do DB cache
+      localStorage.setItem(`LINSORA_USER_AVATAR_${userId}`, finalUrl);
 
-          if (!error && data) {
-            const { data: publicUrlData } = window.supabaseRepo.supabase.storage
-              .from('avatars')
-              .getPublicUrl(fileName);
-            if (publicUrlData && publicUrlData.publicUrl) {
-              finalUrl = publicUrlData.publicUrl;
-            }
-          }
-        } catch (supErr) {
-          console.warn('Fallback para imagem de cache local:', supErr);
-        }
-      }
-
+      // Salvar no estado global
       if (window.linsoraStore && window.linsoraStore.state && window.linsoraStore.state.user) {
         window.linsoraStore.state.user.avatar = finalUrl;
         window.linsoraStore.notify();
       }
-
-      const avatarImg = document.getElementById('profileAvatarImg');
-      if (avatarImg) avatarImg.src = finalUrl;
 
       LinsoraUI.showToast('Foto de perfil atualizada com sucesso!', 'success');
     } catch (err) {
@@ -1137,6 +1125,7 @@ function setupEventListeners() {
       e.target.value = '';
     }
   });
+
 
   document.getElementById('btnTogglePrivacy')?.addEventListener('click', () => window.linsoraStore.togglePrivacy());
   
@@ -1186,6 +1175,27 @@ function setupEventListeners() {
       window.linsoraStore.filterType = this.getAttribute('data-value');
       renderFilteredTransactions(window.linsoraStore.state);
     };
+  });
+
+  // CONSELHEIRO ESTRATÉGICO LINSORA AI
+  const advisorForm = document.getElementById('formStrategicAdvisorQuery');
+  if (advisorForm) {
+    advisorForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const input = document.getElementById('advisorQueryInput');
+      if (input && input.value.trim() && window.LinsoraStrategicAdvisor) {
+        window.LinsoraStrategicAdvisor.submitAdvisorQuery(input.value.trim());
+      }
+    });
+  }
+
+  document.querySelectorAll('.advisor-chip').forEach(chip => {
+    chip.addEventListener('click', function() {
+      const query = this.getAttribute('data-query');
+      if (query && window.LinsoraStrategicAdvisor) {
+        window.LinsoraStrategicAdvisor.submitAdvisorQuery(query);
+      }
+    });
   });
 
   document.getElementById('btnLogout')?.addEventListener('click', async () => {

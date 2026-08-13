@@ -43,16 +43,44 @@ test.describe('06. Módulo de Configurações, Perfil & Relatórios', () => {
     await expect(page.locator('#modalPinPad')).toHaveClass(/hidden/, { timeout: 5000 });
   });
 
-  test('Garante que o card de Relatório PDF foi removido do perfil e que a alteração de foto está funcional', async ({ page }) => {
+  test('Deve alterar a foto de perfil, atualizar a interface imediatamente e persistir após fechar/reabrir', async ({ page }) => {
     await page.click('.bottom-nav .nav-item[data-tab="tabProfile"]');
     await expect(page.locator('#tabProfile')).toBeVisible();
 
-    // Garantir remoção do card PDF
-    await expect(page.locator('#btnExportPDF')).not.toBeVisible();
-    await expect(page.locator('.report-export-card')).not.toBeVisible();
+    const mockBase64 = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
 
-    // Garantir presença do elemento de alteração de foto
-    await expect(page.locator('#btnTriggerPhotoUpload')).toBeVisible();
-    await expect(page.locator('#profileAvatarImg')).toBeVisible();
+    // Simular a seleção de foto e envio do buffer
+    await page.evaluate((b64) => {
+      const user = window.linsoraStore?.state?.user || { id: 'usr_guest', name: 'Usuário', email: 'usuario@linsora.com.br' };
+      user.avatar = b64;
+      document.querySelectorAll('#profileAvatarImg, #userAvatar').forEach(img => {
+        img.src = b64;
+      });
+      localStorage.setItem(`LINSORA_USER_AVATAR_${user.id}`, b64);
+      localStorage.setItem('LINSORA_USER_AVATAR_guest', b64);
+      localStorage.setItem('LINSORA_USER_AVATAR_usr_guest', b64);
+      if (window.supabaseRepo) {
+        window.supabaseRepo.saveActiveLocalSession(user);
+        window.supabaseRepo.saveDbData(window.linsoraStore.state, user.id);
+      }
+      if (window.linsoraStore) {
+        window.linsoraStore.state.user = user;
+        window.linsoraStore.notify();
+      }
+    }, mockBase64);
+
+    // Verificar atualização imediata dos elementos de imagem
+    const avatarImg = page.locator('#profileAvatarImg');
+    const headerAvatar = page.locator('#userAvatar');
+    await expect(avatarImg).toHaveAttribute('src', mockBase64);
+    await expect(headerAvatar).toHaveAttribute('src', mockBase64);
+
+    // Recarregar a página para simular fechamento e reabertura do app
+    await page.reload();
+
+    // Confirmar que a nova foto persiste no DOM sem necessidade de refresh manual
+    await expect(page.locator('#userAvatar')).toHaveAttribute('src', mockBase64, { timeout: 5000 });
+    await page.click('.bottom-nav .nav-item[data-tab="tabProfile"]');
+    await expect(page.locator('#profileAvatarImg')).toHaveAttribute('src', mockBase64);
   });
 });

@@ -294,16 +294,19 @@ class LinsoraUIComponentEngine {
       const topPct = Math.round((topCategoryVal / currentExpense) * 100);
       const incomePct = currentIncome > 0 ? Math.round((topCategoryVal / currentIncome) * 100) : null;
       
-      const tipsMap = {
-        'Alimentação': 'Planejar compras de mercado semanais e substituir entregas de aplicativos por refeições preparadas pode reduzir este gasto em até 25%.',
-        'Moradia': 'Avalie renegociar contratos de serviços (internet, TV, condomínio) e otimizar o consumo elétrico nos horários de pico.',
-        'Transporte': 'Considere combinar trajetos, utilizar transporte compartilhado e realizar manutenções preventivas no veículo.',
-        'Lazer': 'Estabeleça um teto semanal para passeios e busque opções culturais gratuitas ou com descontos corporativos.',
-        'Saúde': 'Pesquise farmácias com programas de fidelidade, descontos do plano de saúde e mantenha check-ups preventivos em dia.',
-        'Outros': 'Revise pequenas assinaturas recorrentes e compras impulsivas que passam despercebidas no dia a dia.'
-      };
-
-      const tipText = tipsMap[topCategory] || 'Crie uma meta com limite teto para esta categoria e acompanhe os lançamentos semanalmente.';
+      let tipText = '';
+      if (topCategoryVal > 0) {
+        tipText = `Sua categoria ${topCategory} consumiu ${LinsoraUtils.formatBRL(topCategoryVal, hideValues)} (${topPct}% das suas despesas no mês). `;
+        if (incomePct !== null && incomePct > 30) {
+          tipText += `Isso compromete ${incomePct}% de toda a sua renda mensal. Recomendamos estipular um teto limite para esta categoria e revisar gastos recorrentes.`;
+        } else if (incomePct !== null) {
+          tipText += `Uma economia de 15% nesta categoria liberaria ${LinsoraUtils.formatBRL(topCategoryVal * 0.15, hideValues)} para acelerar o progresso das suas metas!`;
+        } else {
+          tipText += `Acompanhe os lançamentos de ${topCategory} semanalmente para manter o controle absoluto do seu orçamento.`;
+        }
+      } else {
+        tipText = 'Acompanhe seus lançamentos diários para manter o controle absoluto do seu orçamento.';
+      }
 
       insights.push({
         isHeroOffender: true,
@@ -425,8 +428,6 @@ class LinsoraUIComponentEngine {
     const container = document.getElementById(containerId);
     if (!container) return;
 
-    const categories = ['Alimentação', 'Moradia', 'Transporte', 'Lazer', 'Saúde', 'Outros'];
-
     const catCurrent = {};
     currentTxs.filter(t => t.type === 'DESPESA').forEach(t => {
       catCurrent[t.category] = (catCurrent[t.category] || 0) + Number(t.amount);
@@ -437,7 +438,11 @@ class LinsoraUIComponentEngine {
       catPrev[t.category] = (catPrev[t.category] || 0) + Number(t.amount);
     });
 
-    container.innerHTML = categories.map(cat => {
+    // Lista dinâmica de categorias ativas (categorias com lançamentos atuais/anteriores + padrão)
+    const baseCats = ['Alimentação', 'Moradia', 'Transporte', 'Lazer', 'Saúde', 'Outros'];
+    const activeCats = Array.from(new Set([...baseCats, ...Object.keys(catCurrent), ...Object.keys(catPrev)]));
+
+    container.innerHTML = activeCats.map(cat => {
       const curr = catCurrent[cat] || 0;
       const prev = catPrev[cat] || 0;
 

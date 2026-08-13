@@ -25,8 +25,8 @@ class VoiceAssistantUIController {
     const statusEl = document.getElementById('voiceStatusSubtitle');
     const waveEl = document.getElementById('voiceWaveAnimation');
 
-    if (transcriptEl) transcriptEl.innerText = 'Fale agora, ex: "Gastei 45 reais no mercado hoje"...';
-    if (statusEl) statusEl.innerText = 'Ouvindo lançamento em tempo real...';
+    if (transcriptEl) transcriptEl.innerText = 'Fale um lançamento ou pergunta ex: "Gastei 45 no mercado" ou "Posso gastar 100 hoje?"...';
+    if (statusEl) statusEl.innerText = 'Ouvindo comando de voz ou consulta financeira...';
     if (waveEl) waveEl.classList.add('active');
 
     LinsoraUI.openModal('modalVoiceListening');
@@ -108,9 +108,14 @@ class VoiceAssistantUIController {
     LinsoraUI.closeModal('modalVoiceListening');
 
     const lowerText = (rawText || '').toLowerCase();
-    const isGoalIntent = this.currentMode === 'GOAL' || (window.TransactionAIParser && window.TransactionAIParser.hasGoalIntent(lowerText));
+    const isAdviceIntent = window.TransactionAIParser && window.TransactionAIParser.hasAdviceQueryIntent(lowerText);
+    const isGoalIntent = !isAdviceIntent && (this.currentMode === 'GOAL' || (window.TransactionAIParser && window.TransactionAIParser.hasGoalIntent(lowerText)));
 
-    if (isGoalIntent) {
+    if (isAdviceIntent) {
+      if (window.LinsoraStrategicAdvisor) {
+        window.LinsoraStrategicAdvisor.openAdvisorModal(rawText, { autoSpeak: true });
+      }
+    } else if (isGoalIntent) {
       const parsedGoal = window.TransactionAIParser.parseGoalText(rawText);
       this.currentParsedGoal = parsedGoal;
       this.openGoalConfirmationCard(parsedGoal);
