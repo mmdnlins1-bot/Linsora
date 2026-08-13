@@ -48,25 +48,7 @@
         <div class="splash-content">
           <div class="splash-logo-wrapper">
             <div class="splash-icon">
-              <!-- LOGO VECTOR FUTURISTA LINSORA -->
-              <svg viewBox="0 0 100 100" width="64" height="64" fill="none">
-                <defs>
-                  <linearGradient id="linsoraGlowGrad1" x1="0%" y1="0%" x2="100%" y2="100%">
-                    <stop offset="0%" stop-color="#10B981" />
-                    <stop offset="50%" stop-color="#06B6D4" />
-                    <stop offset="100%" stop-color="#6366F1" />
-                  </linearGradient>
-                  <linearGradient id="linsoraGlowGrad2" x1="100%" y1="0%" x2="0%" y2="100%">
-                    <stop offset="0%" stop-color="#34D399" />
-                    <stop offset="100%" stop-color="#10B981" />
-                  </linearGradient>
-                </defs>
-                <!-- Camadas Geométricas 3D de Diamantes & Cartões -->
-                <path d="M50 12L85 32L50 52L15 32Z" fill="url(#linsoraGlowGrad1)" opacity="0.95" />
-                <path d="M15 42L50 62L85 42" stroke="url(#linsoraGlowGrad2)" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" />
-                <path d="M15 54L50 74L85 54" stroke="url(#linsoraGlowGrad1)" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" opacity="0.75" />
-                <circle cx="50" cy="32" r="6" fill="#FFFFFF" />
-              </svg>
+              <img src="./icon-192.png" alt="LINSORA" class="splash-logo-img">
             </div>
             <h1 class="splash-brand">LINSORA</h1>
             <span class="splash-tagline">Finanças com Inteligência & Clareza</span>
@@ -624,7 +606,7 @@
 
             <div class="linsora-card user-profile-card">
               <div class="profile-card-header">
-                <label for="profileAvatarInput" class="profile-avatar-wrapper" id="btnChangeAvatar" title="Clique para alterar a foto de perfil" style="cursor: pointer;">
+                <div class="profile-avatar-wrapper" id="btnChangeAvatar" title="Clique para alterar a foto de perfil" style="cursor: pointer;">
                   <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80" alt="Avatar" class="profile-avatar-lg" id="profileAvatarImg">
                   <div class="avatar-edit-overlay">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
@@ -632,7 +614,7 @@
                   <div class="avatar-upload-spinner hidden" id="avatarUploadSpinner">
                     <div class="spinner-ring"></div>
                   </div>
-                </label>
+                </div>
                 <input type="file" id="profileAvatarInput" accept="image/*" style="display: none;">
                 
                 <div class="profile-info-wrap">
@@ -640,7 +622,7 @@
                   <span style="font-size: 13px; color: var(--text-muted);" id="profileEmailDisplay">usuario@linsora.com.br</span>
                   <div style="margin-top: 6px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
                     <span class="badge-status-chip success">Conta PRO Premium</span>
-                    <label for="profileAvatarInput" class="change-photo-btn" id="btnTriggerPhotoUpload" style="cursor: pointer;">📷 Alterar Foto</label>
+                    <button type="button" class="change-photo-btn" id="btnTriggerPhotoUpload" style="cursor: pointer;">📷 Alterar Foto</button>
                   </div>
                 </div>
               </div>
@@ -1194,10 +1176,21 @@
             <input type="hidden" id="goalIdInput" value="">
             
             <div class="form-group">
-              <label for="goalTitleInput">Título da Meta</label>
+              <label for="goalTypeSelect">Tipo de Planejamento</label>
+              <div class="input-icon-wrapper">
+                <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+                <select id="goalTypeSelect" class="linsora-input select-input">
+                  <option value="META">🎯 Meta Financeira (Objetivo com Prazo/Alvo)</option>
+                  <option value="RESERVA">🛡️ Reserva de Emergência (Aporte Mensal Acumulativo)</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label for="goalTitleInput">Título do Objetivo</label>
               <div class="input-icon-wrapper">
                 <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
-                <input type="text" id="goalTitleInput" class="linsora-input" placeholder="Ex: Entrada do Apê, Viagem Europa" required>
+                <input type="text" id="goalTitleInput" class="linsora-input" placeholder="Ex: Entrada do Apê, Reserva de Emergência" required>
               </div>
             </div>
             

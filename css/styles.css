@@ -198,6 +198,132 @@
   color: var(--text-primary);
 }
 
+/* Correção de Inconsistência de Cores nos Cards em Tema Claro */
+[data-theme="light"] .health-score-card {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.1), #FFFFFF) !important;
+  border: 1px solid rgba(16, 185, 129, 0.3) !important;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04) !important;
+}
+
+[data-theme="light"] .health-score-number,
+[data-theme="light"] .health-score-title {
+  color: #0F172A !important;
+}
+
+[data-theme="light"] .health-score-summary {
+  color: #475569 !important;
+}
+
+[data-theme="light"] .health-progress-bar-container {
+  background: rgba(0, 0, 0, 0.08) !important;
+}
+
+[data-theme="light"] .health-metric-card {
+  background: #FFFFFF !important;
+  border: 1px solid rgba(0, 0, 0, 0.08) !important;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.03) !important;
+}
+
+[data-theme="light"] .health-metric-title,
+[data-theme="light"] .health-metric-value {
+  color: #0F172A !important;
+}
+
+[data-theme="light"] .health-diag-card,
+[data-theme="light"] .health-insight-card {
+  background: #FFFFFF !important;
+  border: 1px solid rgba(0, 0, 0, 0.08) !important;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.03) !important;
+  color: #0F172A !important;
+}
+
+[data-theme="light"] .health-diag-title,
+[data-theme="light"] .health-insight-title {
+  color: #0F172A !important;
+}
+
+[data-theme="light"] .health-diag-text,
+[data-theme="light"] .health-insight-text {
+  color: #475569 !important;
+}
+
+/* Strategic Feed Card em Tema Claro */
+[data-theme="light"] .strategic-feed-card {
+  background: #FFFFFF !important;
+  border: 1px solid rgba(0, 0, 0, 0.1) !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.05) !important;
+}
+
+[data-theme="light"] .strategic-feed-card.severity-danger {
+  background: #FEF2F2 !important;
+  border-color: #FCA5A5 !important;
+}
+
+[data-theme="light"] .strategic-feed-card.severity-warning {
+  background: #FFFBEB !important;
+  border-color: #FDE68A !important;
+}
+
+[data-theme="light"] .strategic-feed-card.severity-success {
+  background: #ECFDF5 !important;
+  border-color: #A7F3D0 !important;
+}
+
+[data-theme="light"] .strategic-feed-card.severity-info {
+  background: #F0FDFA !important;
+  border-color: #99F6E4 !important;
+}
+
+[data-theme="light"] .feed-headline {
+  color: #0F172A !important;
+}
+
+[data-theme="light"] .feed-critique {
+  color: #334155 !important;
+}
+
+[data-theme="light"] .feed-action-text {
+  color: #0F172A !important;
+}
+
+[data-theme="light"] .feed-stat-box {
+  background: rgba(255, 255, 255, 0.8) !important;
+  border: 1px solid rgba(0, 0, 0, 0.08) !important;
+}
+
+[data-theme="light"] .feed-stat-label {
+  color: #64748B !important;
+}
+
+[data-theme="light"] .feed-stat-val {
+  color: #0F172A !important;
+}
+
+/* Estado Vazio de Metas & Economia em Tema Claro */
+[data-theme="light"] .inspired-empty-state {
+  background: linear-gradient(180deg, #FFFFFF 0%, #F8FAFC 100%) !important;
+  border: 2px dashed rgba(16, 185, 129, 0.35) !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.03) !important;
+}
+
+[data-theme="light"] .inspired-empty-title {
+  color: #0F172A !important;
+}
+
+[data-theme="light"] .inspired-empty-desc {
+  color: #475569 !important;
+}
+
+[data-theme="light"] .empty-state-card {
+  background: #FFFFFF !important;
+  border: 1px dashed rgba(0, 0, 0, 0.15) !important;
+  color: #475569 !important;
+}
+
+[data-theme="light"] .empty-state-card p {
+  color: #0F172A !important;
+}
+
 [data-theme="light"] .linsora-input,
 [data-theme="light"] select.linsora-input,
 [data-theme="light"] textarea.linsora-input,
@@ -632,6 +758,13 @@ body.frame-mode .device-notch { display: block; }
   margin: 0 auto 10px auto !important;
   box-shadow: 0 0 35px rgba(16, 185, 129, 0.35), 0 0 15px rgba(6, 182, 212, 0.25) !important;
   animation: logoGlowPulse 3s infinite ease-in-out !important;
+}
+
+.splash-logo-img {
+  width: 72px !important;
+  height: 72px !important;
+  border-radius: 18px !important;
+  object-fit: contain !important;
 }
 
 @keyframes logoGlowPulse {

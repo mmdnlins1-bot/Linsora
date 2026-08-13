@@ -51,6 +51,7 @@ class TransactionAIParser {
     const date = this.extractDate(lowerText);
     const category = this.detectCategory(lowerText, type, customCategories);
     const description = this.extractDescription(cleanText, amount, category, type);
+    const recurrenceInfo = this.detectRecurrence(lowerText, category);
 
     const confidence = (amount > 0 ? 0.4 : 0) + (category ? 0.3 : 0) + (type ? 0.2 : 0) + 0.1;
 
@@ -62,8 +63,64 @@ class TransactionAIParser {
       description: description || 'Lançamento por Voz',
       date: date || new Date().toISOString().split('T')[0],
       rawText: cleanText,
-      confidence: Math.min(confidence, 1.0)
+      confidence: Math.min(confidence, 1.0),
+      isRecurrent: recurrenceInfo.isRecurrent,
+      isAmbiguous: recurrenceInfo.isAmbiguous
     };
+  }
+
+  /**
+   * Detecta se o lançamento corresponde a uma despesa recorrente mensal
+   */
+  detectRecurrence(lowerText, category) {
+    const recurrentKeywords = [
+      'aluguel', 'apartamento', 'apê', 'ape', 'condominio', 'condomínio',
+      'energia', 'luz', 'luz elétrica', 'agua', 'água', 'saneamento',
+      'internet', 'wifi', 'wi-fi', 'banda larga', 'telefone', 'celular',
+      'plano de saude', 'plano de saúde', 'convenio', 'convênio', 'academia',
+      'financiamento', 'prestacao', 'prestação', 'parcela', 'escola', 'faculdade',
+      'creche', 'seguro', 'seguro auto', 'streaming', 'netflix', 'spotify',
+      'prime', 'hbo', 'disney', 'iptu', 'ipva'
+    ];
+
+    const oneTimeKeywords = [
+      'supermercado', 'mercado', 'restaurante', 'ifood', 'combustivel', 'combustível',
+      'gasolina', 'farmacia', 'farmácia', 'roupas', 'roupa', 'lazer', 'cinema', 'bar', 'festa', 'uber', '99'
+    ];
+
+    const ambiguousKeywords = ['conta', 'fatura', 'pagamento', 'mensalidade'];
+
+    let isRecurrent = false;
+    let isAmbiguous = false;
+
+    for (const kw of recurrentKeywords) {
+      if (lowerText.includes(kw)) {
+        isRecurrent = true;
+        break;
+      }
+    }
+
+    if (!isRecurrent) {
+      for (const kw of ambiguousKeywords) {
+        if (lowerText.includes(kw)) {
+          isRecurrent = true;
+          isAmbiguous = true;
+          break;
+        }
+      }
+    }
+
+    if (isRecurrent) {
+      for (const kw of oneTimeKeywords) {
+        if (lowerText.includes(kw)) {
+          isRecurrent = false;
+          isAmbiguous = false;
+          break;
+        }
+      }
+    }
+
+    return { isRecurrent, isAmbiguous };
   }
 
   /**

@@ -581,6 +581,56 @@ class LinsoraUIComponentEngine {
     });
 
     container.innerHTML = goalCalculations.map(g => {
+      const isReserve = g.type === 'RESERVA' || g.category === 'RESERVA_EMERGENCIA' || (g.title && g.title.toLowerCase().includes('reserva'));
+      const monthlyContribution = parseFloat(g.monthlyContribution || g.monthly_contribution) || 150;
+
+      if (isReserve) {
+        const storeState = window.linsoraStore?.state || {};
+        const transactions = storeState.transactions || [];
+        const now = new Date();
+        const monthTx = transactions.filter(t => {
+          const d = new Date(t.date || t.created_at);
+          return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear() && t.type === 'DESPESA';
+        });
+        const monthExpense = monthTx.reduce((sum, t) => sum + (Number(t.amount) || 0), 0) || 1500;
+        const monthsCovered = (g.currentVal / Math.max(1, monthExpense)).toFixed(1);
+
+        return `
+          <div class="goal-item-card-enhanced reserve-card-theme" style="border-left: 4px solid #10B981;">
+            <div class="goal-top">
+              <span class="goal-title">🛡️ ${LinsoraUtils.escapeHTML(g.title)}</span>
+              <span class="badge-status-chip success">Reserva de Emergência</span>
+            </div>
+
+            <div class="goal-values" style="margin-top: 10px;">
+              <span>Acumulado Total: <strong>${LinsoraUtils.formatBRL(g.currentVal, hideValues)}</strong></span>
+              <span>Aporte Mensal: <strong style="color: var(--accent-green-neon);">${LinsoraUtils.formatBRL(monthlyContribution, hideValues)}/mês</strong></span>
+            </div>
+
+            <div class="goal-monthly-suggestion" style="background: rgba(16, 185, 129, 0.1); border-color: rgba(16, 185, 129, 0.3); color: var(--accent-green-neon);">
+              🛡️ Segurança Financeira: Seu saldo acumulado garante <strong>~${monthsCovered} meses</strong> de despesas cobertas!
+            </div>
+
+            <div class="goal-time-rhythm">
+              <span>🔄 Função Acumulativa Contínua (Aportes Automáticos)</span>
+              <span>Total Guardado: ${LinsoraUtils.formatBRL(g.currentVal, hideValues)}</span>
+            </div>
+
+            <div class="goal-card-actions">
+              <button type="button" class="linsora-btn primary sm btn-deposit-goal" data-deposit-goal="${g.id}" data-deposit-title="${LinsoraUtils.escapeHTML(g.title)}">
+                ➕ Registrar Aporte
+              </button>
+              <button type="button" class="linsora-btn secondary sm btn-edit-goal" data-goal-id="${g.id}">
+                ✏️ Editar
+              </button>
+              <button type="button" class="linsora-btn danger sm btn-delete-goal" data-goal-id="${g.id}" data-goal-title="${LinsoraUtils.escapeHTML(g.title)}">
+                🗑️ Excluir
+              </button>
+            </div>
+          </div>
+        `;
+      }
+
       return `
         <div class="goal-item-card-enhanced">
           <div class="goal-top">

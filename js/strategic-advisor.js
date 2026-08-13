@@ -195,8 +195,45 @@ class StrategicAdvisorEngine {
       recommendation: ''
     };
 
-    // 1. Pergunta sobre viabilidade de gasto em linguagem natural (ex: "posso gastar R$ 150 hoje?")
-    const spendKeywords = ['posso', 'consigo', 'dá para', 'da pra', 'cabe', 'devo', 'quanto posso', 'gastar', 'comprar', 'pagar', 'jantar'];
+    // 1. Consulta sobre Contas Pendentes ou Vencidas ("esqueci de pagar alguma conta?")
+    const pendingKeywords = ['esqueci', 'pendente', 'vencida', 'vencer', 'contas a pagar', 'falta pagar', 'conta pendente'];
+    if (pendingKeywords.some(kw => query.includes(kw))) {
+      const storeState = window.linsoraStore?.state || {};
+      const fixedBills = storeState.fixedBills || [];
+      const now = new Date();
+      const currentDay = now.getDate();
+
+      const unpaidBills = fixedBills.filter(b => !b.paid && !b.isPaid);
+      const overdueBills = unpaidBills.filter(b => Number(b.due_day || b.dueDay) <= currentDay);
+      const upcomingBills = unpaidBills.filter(b => Number(b.due_day || b.dueDay) > currentDay);
+
+      const overdueTotal = overdueBills.reduce((sum, b) => sum + (Number(b.amount) || 0), 0);
+      const upcomingTotal = upcomingBills.reduce((sum, b) => sum + (Number(b.amount) || 0), 0);
+
+      if (overdueBills.length > 0) {
+        response.severity = 'danger';
+        response.title = '🚨 Contas Pendentes com Vencimento Ativo!';
+        response.diagnosis = `Você possui ${overdueBills.length} conta(s) recorrente(s) pendente(s) com vencimento até hoje (dia ${currentDay}).`;
+        response.impact = `O valor total dessas contas é de ${LinsoraUtils.formatBRL(overdueTotal)} (${overdueBills.map(b => `${b.title}: ${LinsoraUtils.formatBRL(b.amount)}`).join(', ')}).`;
+        response.recommendation = `Efetue o pagamento ou marque como pago imediatamente para evitar juros e manter seu teto seguro atualizado.`;
+      } else if (upcomingBills.length > 0) {
+        response.severity = 'info';
+        response.title = '✅ Nenhuma Conta Vencida! Próximos Vencimentos:';
+        response.diagnosis = `Todas as contas recorrentes até o dia ${currentDay} estão em dia.`;
+        response.impact = `Há ${upcomingBills.length} conta(s) a vencer nos próximos dias deste mês, totalizando ${LinsoraUtils.formatBRL(upcomingTotal)} (${upcomingBills.map(b => `${b.title}: ${LinsoraUtils.formatBRL(b.amount)} no dia ${b.due_day || b.dueDay}`).join(', ')}).`;
+        response.recommendation = `O valor de ${LinsoraUtils.formatBRL(upcomingTotal)} já está reservado e deduzido no seu cálculo de saldo seguro diário.`;
+      } else {
+        response.severity = 'success';
+        response.title = '🎉 Todas as Contas Recorrentes estão Pagas!';
+        response.diagnosis = 'Não há nenhuma conta fixa ou recorrente pendente para este mês.';
+        response.impact = 'Seu orçamento está totalmente livre de compromissos pendentes até o próximo ciclo.';
+        response.recommendation = 'Aproveite o superávit para alocar recursos na sua Reserva de Emergência ou metas ativas.';
+      }
+      return response;
+    }
+
+    // 2. Pergunta sobre viabilidade de gasto em linguagem natural (ex: "posso gastar R$ 150 hoje?")
+    const spendKeywords = ['posso', 'consigo', 'dá para', 'da pra', 'cabe', 'devo', 'quanto posso', 'gastar', 'comprar', 'jantar'];
     const isSpendQuery = spendKeywords.some(kw => query.includes(kw));
 
     const spendMatch = query.match(/(?:posso|consigo|dá para|da pra|cabe|devo)?\s*(?:gastar|comprar|pagar|jantar|fazer)?\s*(?:com|em|um|uma)?\s*R?\$?\s*(\d+(?:[\.,]\d+)?)/i)
@@ -286,7 +323,7 @@ class StrategicAdvisorEngine {
       }
     }
 
-    // 2. Consulta de Gargalo ou Maior Despesa
+    // 3. Consulta de Gargalo ou Maior Despesa
     if (query.includes('gargalo') || query.includes('maior gasto') || query.includes('maior despesa') || query.includes('onde estou gastando')) {
       if (metrics.topCategory.amount > 0) {
         response.severity = 'warning';

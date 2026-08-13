@@ -1086,9 +1086,17 @@ function setupEventListeners() {
   });
 
   // FLUXO COMPLETO DE UPLOAD DE FOTO DE PERFIL
-  const triggerAvatarSelect = () => document.getElementById('profileAvatarInput')?.click();
+  const triggerAvatarSelect = (e) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    const input = document.getElementById('profileAvatarInput');
+    if (input) input.click();
+  };
   document.getElementById('btnChangeAvatar')?.addEventListener('click', triggerAvatarSelect);
   document.getElementById('btnTriggerPhotoUpload')?.addEventListener('click', triggerAvatarSelect);
+  document.getElementById('profileAvatarImg')?.addEventListener('click', triggerAvatarSelect);
 
   document.getElementById('profileAvatarInput')?.addEventListener('change', async (e) => {
     const file = e.target.files && e.target.files[0];

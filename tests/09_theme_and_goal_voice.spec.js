@@ -78,7 +78,7 @@ test.describe('09. Assistente de Voz para Metas & Sistema de Temas Claro/Escuro'
     // 7. Card fecha e a meta aparece na tela
     await expect(page.locator('#modalGoalVoiceConfirmation')).toHaveClass(/hidden/);
     await expect(page.locator('#goalsGridList')).toContainText('Reserva de Emergência');
-    await expect(page.locator('#goalsGridList')).toContainText('15.000,00');
+    await expect(page.locator('#goalsGridList')).toContainText('Aporte Mensal');
   });
 
   test('Deve permitir a opção "Editar" no card de voz de metas, preenchendo o formulário modalGoalForm', async ({ page }) => {
