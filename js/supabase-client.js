@@ -59,6 +59,7 @@ class SupabaseRepository {
     try {
       if (userProfile && userProfile.id) {
         localStorage.setItem('LINSORA_ACTIVE_LOCAL_SESSION', JSON.stringify(userProfile));
+        localStorage.setItem('LINSORA_SEEN_ONBOARDING', 'true');
       }
     } catch (e) {
       console.warn('Falha ao salvar sessão local:', e);
@@ -75,9 +76,19 @@ class SupabaseRepository {
   }
 
   async checkActiveSession() {
+    const localSession = this.getActiveLocalSession();
+    if (localSession && localSession.id) {
+      this.currentUserId = localSession.id;
+      const db = await this.getDbData(localSession.id, localSession);
+      return { success: true, user: db.user, db };
+    }
+
     if (this.supabase) {
       try {
-        const { data: { session }, error } = await this.supabase.auth.getSession();
+        const getSessionPromise = this.supabase.auth.getSession();
+        const timeoutPromise = new Promise(resolve => setTimeout(() => resolve({ data: { session: null } }), 300));
+        const { data: { session }, error } = await Promise.race([getSessionPromise, timeoutPromise]);
+
         if (!error && session && session.user) {
           this.currentUserId = session.user.id;
           const userMeta = session.user.user_metadata || {};
@@ -93,13 +104,6 @@ class SupabaseRepository {
       } catch (e) {
         console.warn('Sessão ativa Supabase não encontrada:', e);
       }
-    }
-
-    const localSession = this.getActiveLocalSession();
-    if (localSession && localSession.id) {
-      this.currentUserId = localSession.id;
-      const db = await this.getDbData(localSession.id, localSession);
-      return { success: true, user: db.user, db };
     }
 
     return { success: false };
@@ -257,16 +261,15 @@ class SupabaseRepository {
     if (this.supabase) {
       try {
         const { data, error } = await this.supabase.auth.signInWithPassword({ email: cleanEmail, password });
-        if (error) throw error;
-        this.currentUserId = data.user.id;
-        const db = await this.getDbData(data.user.id, { id: data.user.id, email: data.user.email, name: cleanEmail.split('@')[0] });
-        this.saveActiveLocalSession(db.user);
-        if (window.LinsoraLogger) window.LinsoraLogger.auth('signInWithEmail Supabase com sucesso', { email: cleanEmail }, data.user.id);
-        return { success: true, user: db.user };
+        if (!error && data && data.user) {
+          this.currentUserId = data.user.id;
+          const db = await this.getDbData(data.user.id, { id: data.user.id, email: data.user.email, name: cleanEmail.split('@')[0] });
+          this.saveActiveLocalSession(db.user);
+          if (window.LinsoraLogger) window.LinsoraLogger.auth('signInWithEmail Supabase com sucesso', { email: cleanEmail }, data.user.id);
+          return { success: true, user: db.user };
+        }
       } catch (err) {
-        const errMsg = this.mapAuthErrorMessage(err.message);
-        if (window.LinsoraLogger) window.LinsoraLogger.error('Falha no signInWithEmail Supabase', errMsg);
-        return { success: false, message: errMsg };
+        if (window.LinsoraLogger) window.LinsoraLogger.warn('Supabase remoto indisponível/falhou no signIn, tentando auth local:', err?.message);
       }
     }
 
@@ -396,7 +399,7 @@ class SupabaseRepository {
     try {
       localStorage.removeItem('LINSORA_ACTIVE_LOCAL_SESSION');
       if (this.supabase) {
-        await this.supabase.auth.signOut();
+        await this.supabase.auth.signOut().catch(e => console.warn('Supabase signOut remoto:', e?.message));
       }
     } catch (e) {
       if (window.LinsoraLogger) window.LinsoraLogger.error('Erro ao encerrar sessão', e, previousUserId);
@@ -542,10 +545,10 @@ class SupabaseRepository {
       }
     }
 
-    // Se estiver conectado ao Supabase remoto, busca via PostgREST/RLS
+    // Se estiver conectado ao Supabase remoto, busca via PostgREST/RLS com timeout guard
     if (this.supabase && activeId !== 'guest' && !activeId.startsWith('usr_')) {
       try {
-        const [accRes, cardsRes, txRes, goalsRes, pixRes, billsRes] = await Promise.all([
+        const fetchPromise = Promise.all([
           this.supabase.from('accounts').select('*').eq('user_id', activeId),
           this.supabase.from('cards').select('*').eq('user_id', activeId),
           this.supabase.from('transactions').select('*').eq('user_id', activeId).order('date', { ascending: false }),
@@ -553,6 +556,8 @@ class SupabaseRepository {
           this.supabase.from('pix_keys').select('*').eq('user_id', activeId),
           this.supabase.from('fixed_bills').select('*').eq('user_id', activeId)
         ]);
+        const timeoutPromise = new Promise(resolve => setTimeout(() => resolve([{ data: [] }, { data: [] }, { data: [] }, { data: [] }, { data: [] }, { data: [] }]), 400));
+        const [accRes, cardsRes, txRes, goalsRes, pixRes, billsRes] = await Promise.race([fetchPromise, timeoutPromise]);
 
         // Verificar e logar erros individuais por tabela sem abortar o merge
         const selectErrors = [

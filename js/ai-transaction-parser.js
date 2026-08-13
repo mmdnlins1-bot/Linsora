@@ -428,7 +428,7 @@ class TransactionAIParser {
       const extractedAmount = this.extractAmount(cleanText) || explicitAporte || 0;
       const currentVal = parseFloat(matchedGoal.current) || 0;
       const targetVal = parseFloat(matchedGoal.target) || 1000;
-      const newCurrent = Math.min(targetVal, currentVal + extractedAmount);
+      const newCurrent = currentVal + extractedAmount;
 
       return {
         success: extractedAmount > 0,

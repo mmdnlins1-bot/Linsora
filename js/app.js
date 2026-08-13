@@ -58,29 +58,33 @@ window.switchTab = function(tabId) {
 document.addEventListener('DOMContentLoaded', async () => {
   console.log('🚀 LINSORA Finances — Inicializando aplicativo comercial...');
 
-  await window.linsoraStore.init();
-  window.linsoraStore.subscribe(renderAppUI);
-  setupEventListeners();
-  LinsoraUtils.attachCurrencyMasks();
-  renderAppUI(window.linsoraStore.state);
-
   const splashTimer = setTimeout(() => {
     hideSplashScreen();
   }, 1200);
 
-  const sessionRes = await window.supabaseRepo.checkActiveSession();
-  if (sessionRes.success) {
-    clearTimeout(splashTimer);
-    await window.linsoraStore.loadUserData(sessionRes.user);
-    const userState = window.linsoraStore.state.user;
+  try {
+    await window.linsoraStore.init();
+    window.linsoraStore.subscribe(renderAppUI);
+    setupEventListeners();
+    LinsoraUtils.attachCurrencyMasks();
+    renderAppUI(window.linsoraStore.state);
 
-    if (userState && userState.isPinEnabled) {
-      hideSplashScreen();
-      openPinPad('UNLOCK');
-      triggerBiometricAuth();
-    } else {
-      grantAppAccess();
+    const sessionRes = await window.supabaseRepo.checkActiveSession();
+    if (sessionRes.success) {
+      clearTimeout(splashTimer);
+      await window.linsoraStore.loadUserData(sessionRes.user);
+      const userState = window.linsoraStore.state.user;
+
+      if (userState && userState.isPinEnabled) {
+        hideSplashScreen();
+        openPinPad('UNLOCK');
+        triggerBiometricAuth();
+      } else {
+        grantAppAccess();
+      }
     }
+  } catch (err) {
+    console.error('Erro na inicialização:', err);
   }
 });
 
@@ -89,6 +93,12 @@ function hideSplashScreen() {
   if (splash) {
     splash.classList.remove('active');
     splash.classList.add('hidden');
+  }
+
+  const activeSession = window.supabaseRepo?.getActiveLocalSession();
+  if (activeSession && activeSession.id) {
+    grantAppAccess();
+    return;
   }
 
   const hasSeenOnboarding = localStorage.getItem('LINSORA_SEEN_ONBOARDING');
@@ -136,7 +146,7 @@ function grantAppAccess() {
 }
 
 function renderAppUI(state) {
-  if (!state) return;
+  if (!state || !state.user) return;
 
   const hideValues = window.linsoraStore.isHideValues;
 
@@ -1085,49 +1095,125 @@ function setupEventListeners() {
     }
   });
 
-  // FLUXO COMPLETO DE UPLOAD DE FOTO DE PERFIL
-  const triggerAvatarSelect = (e) => {
-    if (e) {
-      e.preventDefault();
-      e.stopPropagation();
-    }
-    const input = document.getElementById('profileAvatarInput');
-    if (input) input.click();
+  // FLUXO COMPLETO E SEGURO DE ALTERAÇÃO DE FOTO DE PERFIL (MOBILE NATIVE & WEB)
+  const openAvatarSourceModal = (e) => {
+    if (e) e.stopPropagation();
+    const modal = document.getElementById('modalAvatarSourceChoice');
+    if (modal) modal.classList.remove('hidden');
   };
-  document.getElementById('btnChangeAvatar')?.addEventListener('click', triggerAvatarSelect);
-  document.getElementById('btnTriggerPhotoUpload')?.addEventListener('click', triggerAvatarSelect);
-  document.getElementById('profileAvatarImg')?.addEventListener('click', triggerAvatarSelect);
 
-  document.getElementById('profileAvatarInput')?.addEventListener('change', async (e) => {
-    const file = e.target.files && e.target.files[0];
-    if (!file) return;
+  const closeAvatarSourceModal = () => {
+    const modal = document.getElementById('modalAvatarSourceChoice');
+    if (modal) modal.classList.add('hidden');
+  };
 
+  const triggerAvatarFromSource = async (sourceType) => {
+    closeAvatarSourceModal();
+
+    if (window.LinsoraLogger) window.LinsoraLogger.write(`[AVATAR] Origem selecionada: ${sourceType}`);
+
+    const isNative = window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform();
+    const cameraPlugin = window.Capacitor?.Plugins?.Camera || window.Capacitor?.Camera;
+
+    if (isNative && cameraPlugin) {
+      const spinner = document.getElementById('avatarUploadSpinner');
+      if (spinner) spinner.classList.remove('hidden');
+
+      try {
+        const photo = await cameraPlugin.getPhoto({
+          quality: 85,
+          allowEditing: false,
+          resultType: 'dataUrl',
+          source: sourceType === 'CAMERA' ? 'CAMERA' : 'PHOTOS'
+        });
+
+        if (photo && photo.dataUrl) {
+          const rawUrl = photo.dataUrl.startsWith('data:') ? photo.dataUrl : `data:image/jpeg;base64,${photo.dataUrl}`;
+          await applyAvatarImage(rawUrl);
+        }
+      } catch (err) {
+        console.warn('[AVATAR] Seleção via Plugin Camera cancelada ou falhou:', err);
+        if (err?.message && !err.message.includes('cancelled') && !err.message.includes('User cancelled')) {
+          LinsoraUI.showToast('Erro ao acessar foto do dispositivo: ' + err.message, 'error');
+        }
+      } finally {
+        if (spinner) spinner.classList.add('hidden');
+      }
+    } else {
+      // Fallback para ambiente Web
+      const input = document.getElementById('profileAvatarInput');
+      if (input) {
+        try {
+          input.click();
+        } catch (err) {
+          console.warn('[AVATAR] Erro ao disparar seletor de arquivo web:', err);
+        }
+      }
+    }
+  };
+
+  document.getElementById('btnChangeAvatar')?.addEventListener('click', openAvatarSourceModal);
+  document.getElementById('btnTriggerPhotoUpload')?.addEventListener('click', openAvatarSourceModal);
+  document.getElementById('btnAvatarFromGallery')?.addEventListener('click', () => triggerAvatarFromSource('PHOTOS'));
+  document.getElementById('btnAvatarFromCamera')?.addEventListener('click', () => triggerAvatarFromSource('CAMERA'));
+  document.getElementById('btnAvatarSourceCancel')?.addEventListener('click', closeAvatarSourceModal);
+  document.getElementById('modalAvatarSourceChoice')?.addEventListener('click', (e) => {
+    if (e.target.id === 'modalAvatarSourceChoice') closeAvatarSourceModal();
+  });
+
+  const applyAvatarImage = async (fileOrDataUrl) => {
     const spinner = document.getElementById('avatarUploadSpinner');
     if (spinner) spinner.classList.remove('hidden');
 
     try {
-      const userId = window.linsoraStore?.state?.user?.id || window.supabaseRepo?.currentUserId || 'guest';
-      const uploadRes = await window.supabaseRepo.uploadAvatarToSupabase(file, userId);
-      const finalUrl = uploadRes.avatarUrl || await LinsoraUtils.processAndCompressImage(file, 300, 300, 0.8);
+      let finalUrl = null;
+      if (typeof fileOrDataUrl === 'string') {
+        finalUrl = fileOrDataUrl;
+      } else if (fileOrDataUrl instanceof File || fileOrDataUrl instanceof Blob) {
+        finalUrl = await LinsoraUtils.processAndCompressImage(fileOrDataUrl, 300, 300, 0.8);
+      }
 
-      // Salvar imediatamente no DOM para feedback rápido
+      if (!finalUrl) throw new Error('Falha ao processar arquivo de imagem');
+
+      const userId = window.linsoraStore?.state?.user?.id || window.supabaseRepo?.currentUserId || 'usr_guest';
+
+      // 1. Atualizar imagem no DOM imediatamente para feedback visual instantâneo
       document.querySelectorAll('#profileAvatarImg, #userAvatar').forEach(img => {
         if (img) img.src = finalUrl;
       });
 
-      // Salvar no estado global e sessão ativa
+      // 2. Persistir localmente no LocalStorage por User ID
+      localStorage.setItem(`LINSORA_USER_AVATAR_${userId}`, finalUrl);
+
+      // 3. Atualizar estado global no Store
       if (window.linsoraStore && window.linsoraStore.state && window.linsoraStore.state.user) {
         window.linsoraStore.state.user.avatar = finalUrl;
         window.supabaseRepo.saveActiveLocalSession(window.linsoraStore.state.user);
         window.linsoraStore.notify();
       }
 
+      // 4. Upload assíncrono para o Supabase (se online)
+      if (fileOrDataUrl instanceof File) {
+        window.supabaseRepo.uploadAvatarToSupabase(fileOrDataUrl, userId).catch(e => console.warn('[AVATAR] Sync Supabase background:', e));
+      }
+
+      if (window.LinsoraLogger) window.LinsoraLogger.write('[AVATAR] Foto de perfil atualizada e armazenada com sucesso para o ID: ' + userId);
       LinsoraUI.showToast('Foto de perfil atualizada com sucesso!', 'success');
     } catch (err) {
-      console.error('Erro no upload de foto:', err);
+      console.error('[AVATAR] Erro no processamento de foto:', err);
       LinsoraUI.showToast('Não foi possível alterar a foto: ' + (err.message || 'Erro de leitura'), 'error');
     } finally {
       if (spinner) spinner.classList.add('hidden');
+    }
+  };
+
+  document.getElementById('btnChangeAvatar')?.addEventListener('click', triggerAvatarSelect);
+  document.getElementById('btnTriggerPhotoUpload')?.addEventListener('click', triggerAvatarSelect);
+
+  document.getElementById('profileAvatarInput')?.addEventListener('change', async (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (file) {
+      await applyAvatarImage(file);
       e.target.value = '';
     }
   });
@@ -1168,10 +1254,12 @@ function setupEventListeners() {
 
   const searchInput = document.getElementById('txSearchInput');
   if (searchInput) {
-    searchInput.oninput = function(e) {
+    const handleSearch = function(e) {
       window.linsoraStore.searchQuery = e.target.value;
       renderFilteredTransactions(window.linsoraStore.state);
     };
+    searchInput.addEventListener('input', handleSearch);
+    searchInput.addEventListener('keyup', handleSearch);
   }
 
   document.querySelectorAll('.chip-filter').forEach(chip => {
@@ -1204,17 +1292,36 @@ function setupEventListeners() {
     });
   });
 
-  document.getElementById('btnLogout')?.addEventListener('click', async () => {
-    await window.supabaseRepo.signOut();
-    if (window.linsoraStore) {
-      window.linsoraStore.clearState();
+  document.getElementById('btnLogout')?.addEventListener('click', async (e) => {
+    if (e) e.preventDefault();
+    try {
+      await window.supabaseRepo.signOut();
+    } catch (err) {
+      console.warn('Erro ao deslogar repo:', err);
+    }
+    try {
+      if (window.linsoraStore) {
+        window.linsoraStore.clearState();
+      }
+    } catch (err) {
+      console.warn('Erro ao limpar store:', err);
     }
 
-    if (window.resetAuthMode) window.resetAuthMode();
+    try {
+      if (window.resetAuthMode) window.resetAuthMode();
+    } catch (err) {
+      console.warn('Erro ao resetar auth mode:', err);
+    }
 
     const main = document.getElementById('appMain');
-    if (main) main.classList.add('hidden');
+    if (main) {
+      main.classList.remove('active');
+      main.classList.add('hidden');
+    }
     const auth = document.getElementById('authScreen');
-    if (auth) auth.classList.remove('hidden');
+    if (auth) {
+      auth.classList.remove('hidden');
+      auth.classList.add('active');
+    }
   });
 }

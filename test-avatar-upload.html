@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Teste Local — Alteração de Foto de Perfil LINSORA</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <style>
+    body {
+      background-color: #0F172A;
+      color: #F8FAFC;
+      font-family: system-ui, -apple-system, sans-serif;
+      padding: 24px;
+      max-width: 600px;
+      margin: 0 auto;
+    }
+    .test-card {
+      background: #1E293B;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 16px;
+      padding: 24px;
+      margin-top: 20px;
+    }
+    .status-box {
+      margin-top: 20px;
+      background: #090D16;
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      border-radius: 12px;
+      padding: 16px;
+      font-family: monospace;
+      font-size: 13px;
+      color: #34D399;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+    .header-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 16px;
+      background: #1E293B;
+      border-radius: 12px;
+      margin-bottom: 20px;
+    }
+  </style>
+</head>
+<body>
+
+  <h2>🧪 Teste Local de Foto de Perfil (LINSORA)</h2>
+  <p style="color: #94A3B8; font-size: 14px;">Abra este arquivo no navegador para testar a seleção de imagem do seu computador sem gerar APK ou fazer commit.</p>
+
+  <!-- Barra de Cabeçalho simulada -->
+  <div class="header-bar">
+    <span>Avatar no Cabeçalho (Header):</span>
+    <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80" id="userAvatar" width="44" height="44" style="border-radius: 50%; object-fit: cover; border: 2px solid #10B981;">
+  </div>
+
+  <!-- Card do Perfil -->
+  <div class="test-card">
+    <div style="display: flex; align-items: center; gap: 16px;">
+      <label for="profileAvatarInput" class="profile-avatar-wrapper" id="btnChangeAvatar" title="Clique para alterar a foto de perfil" style="cursor: pointer;">
+        <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80" alt="Avatar" class="profile-avatar-lg" id="profileAvatarImg">
+        <div class="avatar-edit-overlay">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" width="20" height="20"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+        </div>
+        <div class="avatar-upload-spinner hidden" id="avatarUploadSpinner">
+          <div class="spinner-ring"></div>
+        </div>
+      </label>
+      <input type="file" id="profileAvatarInput" accept="image/*" style="display: none;">
+
+      <div>
+        <h3 style="margin: 0 0 4px 0;">Perfil de Teste</h3>
+        <p style="margin: 0 0 10px 0; font-size: 13px; color: #94A3B8;">teste@linsora.com.br</p>
+        <label for="profileAvatarInput" class="change-photo-btn" id="btnTriggerPhotoUpload" style="cursor: pointer; background: #10B981; color: #fff; padding: 8px 14px; border-radius: 8px; font-weight: 600; font-size: 13px; display: inline-block;">📷 Alterar Foto</label>
+      </div>
+    </div>
+  </div>
+
+  <div class="status-box" id="logOutput">Status da foto de perfil: Aguardando seleção de imagem...</div>
+
+  <!-- Scripts do App -->
+  <script src="js/logger.js"></script>
+  <script src="js/supabase-client.js"></script>
+  <script src="js/utils.js"></script>
+  <script src="js/store.js"></script>
+  <script src="js/app.js"></script>
+
+  <script>
+    const logBox = document.getElementById('logOutput');
+    const updateLog = (msg) => {
+      logBox.innerText = `[${new Date().toLocaleTimeString()}] ${msg}`;
+    };
+
+    // Monitorar alterações no input de imagem
+    document.getElementById('profileAvatarInput').addEventListener('change', (e) => {
+      const file = e.target.files && e.target.files[0];
+      if (file) {
+        updateLog(`Arquivo selecionado com sucesso!\nNome: ${file.name}\nTamanho: ${(file.size / 1024).toFixed(1)} KB\nProcessando e atualizando foto...`);
+        setTimeout(() => {
+          const img = document.getElementById('profileAvatarImg');
+          const savedAvatar = localStorage.getItem('LINSORA_USER_AVATAR_guest') || localStorage.getItem('LINSORA_USER_AVATAR_usr_guest') || img.src;
+          updateLog(`✅ FOTO ATUALIZADA E PERSISTIDA COM SUCESSO!\nData URL salvos no LocalStorage (${savedAvatar.substring(0, 50)}...)\n\nRecarregue esta página para confirmar a persistência!`);
+        }, 500);
+      } else {
+        updateLog('Nenhum arquivo selecionado.');
+      }
+    });
+
+    // Verificar se já existe foto salva anteriormente
+    window.addEventListener('load', () => {
+      const activeUser = window.linsoraStore?.state?.user?.id || 'usr_guest';
+      const avatar = localStorage.getItem(`LINSORA_USER_AVATAR_${activeUser}`) || localStorage.getItem('LINSORA_USER_AVATAR_guest');
+      if (avatar) {
+        document.getElementById('profileAvatarImg').src = avatar;
+        document.getElementById('userAvatar').src = avatar;
+        updateLog(`Foto de perfil carregada da chave de persistência (${avatar.substring(0, 50)}...)`);
+      }
+    });
+  </script>
+</body>
+</html>

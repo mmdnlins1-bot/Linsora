@@ -33,8 +33,9 @@ class LinsoraStore {
   }
 
   async init(userObj = null) {
-    const userId = userObj?.id || window.supabaseRepo.currentUserId || 'guest';
-    this.state = await window.supabaseRepo.getDbData(userId, userObj);
+    const activeSession = window.supabaseRepo?.getActiveLocalSession();
+    const userId = userObj?.id || activeSession?.id || window.supabaseRepo?.currentUserId || 'guest';
+    this.state = await window.supabaseRepo.getDbData(userId, userObj || activeSession);
     this.currentTheme = localStorage.getItem('LINSORA_THEME') || 'dark';
     document.documentElement.setAttribute('data-theme', this.currentTheme);
     this.notify();
@@ -403,7 +404,7 @@ class LinsoraStore {
     if (goal) {
       const currentVal = parseFloat(goal.current) || 0;
       const targetVal = parseFloat(goal.target) || 999999999;
-      goal.current = Math.min(targetVal, currentVal + numericAmount);
+      goal.current = currentVal + numericAmount;
       if (window.LinsoraLogger) window.LinsoraLogger.update('Aporte em Meta', { goalTitle: goal.title, amount: numericAmount, newTotal: goal.current }, this.state?.user?.id);
       this.notify();
       return true;

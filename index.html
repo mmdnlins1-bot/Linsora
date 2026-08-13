@@ -123,9 +123,9 @@
       <section class="screen auth-screen hidden" id="authScreen">
         <div class="auth-container">
           <div class="auth-header">
-            <div class="brand-logo-small">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
-              <span>LINSORA</span>
+            <div class="brand-logo-small" style="display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 15px;">
+              <img src="./assets/app-icon.png" alt="Linsora" style="width: 32px; height: 32px; object-fit: contain;">
+              <span style="font-size: 24px; font-weight: 800; letter-spacing: 2px;">LINSORA</span>
             </div>
             <h2 id="authTitle">Seja bem-vindo(a)</h2>
             <p id="authSubtitle">Entre na sua conta para gerenciar seu patrimônio com inteligência.</p>
@@ -606,7 +606,7 @@
 
             <div class="linsora-card user-profile-card">
               <div class="profile-card-header">
-                <div class="profile-avatar-wrapper" id="btnChangeAvatar" title="Clique para alterar a foto de perfil" style="cursor: pointer;">
+                <label for="profileAvatarInput" class="profile-avatar-wrapper" id="btnChangeAvatar" title="Clique para alterar a foto de perfil" style="cursor: pointer;">
                   <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80" alt="Avatar" class="profile-avatar-lg" id="profileAvatarImg">
                   <div class="avatar-edit-overlay">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
@@ -614,15 +614,15 @@
                   <div class="avatar-upload-spinner hidden" id="avatarUploadSpinner">
                     <div class="spinner-ring"></div>
                   </div>
-                </div>
-                <input type="file" id="profileAvatarInput" accept="image/*" style="display: none;">
+                </label>
+                <input type="file" id="profileAvatarInput" accept="image/*" style="position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; clip: rect(0,0,0,0); pointer-events: none;">
                 
                 <div class="profile-info-wrap">
                   <h3 id="profileNameDisplay">Usuário</h3>
                   <span style="font-size: 13px; color: var(--text-muted);" id="profileEmailDisplay">usuario@linsora.com.br</span>
                   <div style="margin-top: 6px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
                     <span class="badge-status-chip success">Conta PRO Premium</span>
-                    <button type="button" class="change-photo-btn" id="btnTriggerPhotoUpload" style="cursor: pointer;">📷 Alterar Foto</button>
+                    <label for="profileAvatarInput" class="change-photo-btn" id="btnTriggerPhotoUpload" style="cursor: pointer;">📷 Alterar Foto</label>
                   </div>
                 </div>
               </div>
@@ -1464,6 +1464,45 @@
           <div class="confirm-delete-actions">
             <button type="button" class="linsora-btn outline" id="btnConfirmDeleteCancel">Cancelar</button>
             <button type="button" class="linsora-btn danger" id="btnConfirmDeleteConfirm">🗑️ Excluir</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- MODAL DE SELEÇÃO DA ORIGEM DA FOTO DE PERFIL (LAYOUT LINSORA PREMIUM) -->
+      <div class="linsora-modal-overlay hidden" id="modalAvatarSourceChoice">
+        <div class="linsora-modal-content avatar-source-modal-card" role="dialog" aria-modal="true">
+          <div class="avatar-source-header">
+            <div class="avatar-source-icon-wrap">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+            </div>
+            <div>
+              <h3 style="margin: 0; font-size: 17px; font-weight: 700;">Alterar Foto de Perfil</h3>
+              <p style="margin: 3px 0 0 0; font-size: 13px; color: var(--text-muted);">Escolha a origem da sua foto</p>
+            </div>
+          </div>
+
+          <div class="avatar-source-options">
+            <button type="button" class="avatar-source-btn" id="btnAvatarFromGallery">
+              <div class="avatar-option-icon gallery-icon">🖼️</div>
+              <div class="avatar-option-text">
+                <strong>Escolher da Galeria</strong>
+                <span>Selecione uma foto salva no seu dispositivo</span>
+              </div>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+            </button>
+
+            <button type="button" class="avatar-source-btn" id="btnAvatarFromCamera">
+              <div class="avatar-option-icon camera-icon">📷</div>
+              <div class="avatar-option-text">
+                <strong>Tirar Foto com a Câmera</strong>
+                <span>Tire uma nova foto utilizando a câmera</span>
+              </div>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+            </button>
+          </div>
+
+          <div style="margin-top: 16px;">
+            <button type="button" class="linsora-btn outline full-width" id="btnAvatarSourceCancel">Cancelar</button>
           </div>
         </div>
       </div>
