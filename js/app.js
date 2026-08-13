@@ -1098,21 +1098,19 @@ function setupEventListeners() {
     if (spinner) spinner.classList.remove('hidden');
 
     try {
-      const compressedDataUrl = await LinsoraUtils.processAndCompressImage(file, 300, 300, 0.8);
-      let finalUrl = compressedDataUrl;
+      const userId = window.linsoraStore?.state?.user?.id || window.supabaseRepo?.currentUserId || 'guest';
+      const uploadRes = await window.supabaseRepo.uploadAvatarToSupabase(file, userId);
+      const finalUrl = uploadRes.avatarUrl || await LinsoraUtils.processAndCompressImage(file, 300, 300, 0.8);
 
       // Salvar imediatamente no DOM para feedback rápido
-      const userId = window.linsoraStore?.state?.user?.id || window.supabaseRepo?.currentUserId || 'guest';
       document.querySelectorAll('#profileAvatarImg, #userAvatar').forEach(img => {
         if (img) img.src = finalUrl;
       });
 
-      // Persistir em chave dedicada — imune a mesclagem do DB cache
-      localStorage.setItem(`LINSORA_USER_AVATAR_${userId}`, finalUrl);
-
-      // Salvar no estado global
+      // Salvar no estado global e sessão ativa
       if (window.linsoraStore && window.linsoraStore.state && window.linsoraStore.state.user) {
         window.linsoraStore.state.user.avatar = finalUrl;
+        window.supabaseRepo.saveActiveLocalSession(window.linsoraStore.state.user);
         window.linsoraStore.notify();
       }
 

@@ -645,6 +645,20 @@ class SupabaseRepository {
     if (!this.supabase || !userId || userId === 'guest' || userId.startsWith('usr_')) return { success: true, errors: [] };
     const errors = [];
     try {
+      if (data.user) {
+        const userProfile = {
+          id: userId,
+          full_name: data.user.name,
+          email: data.user.email,
+          avatar_url: data.user.avatar,
+          is_pin_enabled: Boolean(data.user.isPinEnabled),
+          pin_code: data.user.pinCode || '1234',
+          is_ai_enabled: data.user.isAiClassificationEnabled !== false,
+          updated_at: new Date().toISOString()
+        };
+        const { error: profileErr } = await this.supabase.from('profiles').upsert(userProfile);
+        if (profileErr) errors.push(`profiles: ${profileErr.message}`);
+      }
       if (data.accounts?.length) {
         const accs = data.accounts.map(a => ({ id: a.id, user_id: userId, name: a.name, type: a.type, balance: a.balance, color: a.color, icon: a.icon }));
         const { error } = await this.supabase.from('accounts').upsert(accs);
@@ -673,6 +687,55 @@ class SupabaseRepository {
       return { success: false, errors };
     }
     return { success: true, errors: [] };
+  }
+
+  async uploadAvatarToSupabase(file, userId) {
+    const targetId = userId || this.currentUserId || 'guest';
+    let finalUrl = null;
+
+    try {
+      if (file && typeof LinsoraUtils !== 'undefined') {
+        finalUrl = await LinsoraUtils.processAndCompressImage(file, 300, 300, 0.8);
+      }
+    } catch (e) {
+      console.warn('Compressão de imagem falhou, usando arquivo bruto:', e);
+    }
+
+    if (this.supabase && targetId && targetId !== 'guest' && !targetId.startsWith('usr_')) {
+      try {
+        const fileName = `${targetId}/avatar_${Date.now()}.png`;
+        const { data: uploadData, error: uploadErr } = await this.supabase.storage
+          .from('avatars')
+          .upload(fileName, file, { upsert: true, contentType: file.type || 'image/png' });
+
+        if (!uploadErr && uploadData) {
+          const { data: urlData } = this.supabase.storage.from('avatars').getPublicUrl(fileName);
+          if (urlData?.publicUrl) {
+            finalUrl = urlData.publicUrl;
+          }
+        }
+      } catch (stgErr) {
+        console.warn('Upload para o Supabase Storage indisponível, utilizando persistência em banco/cache:', stgErr);
+      }
+
+      try {
+        await this.supabase.from('profiles').upsert({
+          id: targetId,
+          avatar_url: finalUrl,
+          updated_at: new Date().toISOString()
+        });
+      } catch (profErr) {
+        console.warn('Atualização de avatar no profile do Supabase falhou:', profErr);
+      }
+    }
+
+    if (finalUrl) {
+      localStorage.setItem(`LINSORA_USER_AVATAR_${targetId}`, finalUrl);
+      localStorage.setItem('LINSORA_USER_AVATAR_guest', finalUrl);
+      localStorage.setItem('LINSORA_USER_AVATAR_usr_guest', finalUrl);
+    }
+
+    return { success: true, avatarUrl: finalUrl };
   }
 
   /* ------------------------------------------------------------------------

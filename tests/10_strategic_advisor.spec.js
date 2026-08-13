@@ -57,6 +57,23 @@ test.describe('10 - Assistente Pessoal Inteligente & Conselheiro Estratégico', 
     await expect(responseCard).toContainText('Recomendação Prática');
   });
 
+  test('Deve responder com alerta de risco e limite recomendado para um gasto excessivo (cenário negativo)', async ({ page }) => {
+    await page.click('#btnOpenAdvisorFromFeed');
+    await expect(page.locator('#modalStrategicAdvisor')).not.toHaveClass(/hidden/);
+
+    const input = page.locator('#advisorQueryInput');
+    await input.fill('posso gastar R$ 50000 hoje?');
+    await page.click('#btnSubmitAdvisorQuery');
+
+    const responseCard = page.locator('.advisor-res-card').last();
+    await expect(responseCard).toBeVisible({ timeout: 5000 });
+
+    await expect(responseCard).toContainText('ALERTA DE RISCO');
+    await expect(responseCard).toContainText('Gasto Não Recomendado');
+    await expect(responseCard).toContainText('próximo salário');
+    await expect(responseCard).toContainText('valor máximo seguro');
+  });
+
   test('Deve interpretar comando de voz/texto de consulta orçamentária e direcionar para o Conselheiro', async ({ page }) => {
     await page.evaluate(() => {
       if (window.VoiceAssistantUIController) {

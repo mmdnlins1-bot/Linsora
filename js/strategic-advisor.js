@@ -210,22 +210,34 @@ class StrategicAdvisorEngine {
       const currentMonth = todayDate.getMonth();
       const currentYear = todayDate.getFullYear();
 
-      // Determinar próximo salário (padrão dia 5)
-      let nextSalaryDate = new Date(currentYear, currentMonth, 5);
-      if (currentDay >= 5) {
-        nextSalaryDate = new Date(currentYear, currentMonth + 1, 5);
+      const storeState = window.linsoraStore?.state || {};
+      const transactions = storeState.transactions || [];
+      const accounts = storeState.accounts || [];
+      const fixedBills = storeState.fixedBills || [];
+      const cards = storeState.cards || [];
+
+      // Determinar próximo salário (detectado do perfil, transações ou padrão dia 5)
+      let salaryDay = storeState.user?.salaryDay || 5;
+      if (!storeState.user?.salaryDay && transactions.length > 0) {
+        const salaryTx = transactions.find(t => t.type === 'RECEITA' && (
+          (t.category && t.category.toLowerCase().includes('salário')) ||
+          (t.description && /salário|salario|holerite|pro-labore/i.test(t.description))
+        ));
+        if (salaryTx && salaryTx.date) {
+          const txDay = new Date(salaryTx.date).getDate();
+          if (txDay >= 1 && txDay <= 31) salaryDay = txDay;
+        }
+      }
+
+      let nextSalaryDate = new Date(currentYear, currentMonth, salaryDay);
+      if (currentDay >= salaryDay) {
+        nextSalaryDate = new Date(currentYear, currentMonth + 1, salaryDay);
       }
       const daysRemaining = Math.max(1, Math.ceil((nextSalaryDate - todayDate) / (1000 * 60 * 60 * 24)));
 
       const nextSalaryDay = nextSalaryDate.getDate();
       const isNextMonth = nextSalaryDate.getMonth() !== currentMonth;
       const nextSalaryMonthStr = isNextMonth ? 'do mês que vem' : 'deste mês';
-
-      // Calcular contas e despesas pendentes com dados reais
-      const storeState = window.linsoraStore?.state || {};
-      const accounts = storeState.accounts || [];
-      const fixedBills = storeState.fixedBills || [];
-      const cards = storeState.cards || [];
 
       let accountBalance = accounts.reduce((acc, a) => acc + (Number(a.balance) || 0), 0);
       if (accountBalance <= 0 && metrics.monthIncome > 0) {
