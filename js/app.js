@@ -618,8 +618,25 @@ function setupEventListeners() {
   const btnBiometric = document.getElementById('btnBiometricAuth');
   if (btnBiometric) {
     btnBiometric.onclick = async () => {
-      openPinPad('UNLOCK');
-      await triggerBiometricAuth();
+      let userToLog = null;
+      try {
+        const rawSession = localStorage.getItem('LINSORA_ACTIVE_LOCAL_SESSION');
+        if (rawSession) {
+          userToLog = JSON.parse(rawSession);
+        } else {
+          const allUsersRaw = localStorage.getItem('LINSORA_REGISTERED_USERS');
+          const allUsers = allUsersRaw ? JSON.parse(allUsersRaw) : [];
+          userToLog = allUsers.find(u => u.isPinEnabled && u.pinCode) || allUsers[0];
+        }
+      } catch(e) {}
+
+      if (userToLog) {
+         await window.linsoraStore.loadUserData(userToLog);
+         openPinPad('UNLOCK');
+         await triggerBiometricAuth();
+      } else {
+         LinsoraUI.showToast('Nenhuma conta salva com PIN. Faça login com e-mail e senha.', 'error');
+      }
     };
   }
 
@@ -682,6 +699,13 @@ function setupEventListeners() {
   }
 
   function processPinEntry() {
+    if (!window.linsoraStore.state.user) {
+      enteredPin = '';
+      updatePinDots();
+      LinsoraUI.closeModal('modalPinPad');
+      LinsoraUI.showToast('Erro: Sessão não encontrada. Faça login com e-mail.', 'error');
+      return;
+    }
     const savedPin = window.linsoraStore.state.user?.pinCode;
 
     if (currentPinMode === 'SETUP') {
