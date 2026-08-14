@@ -616,6 +616,19 @@ class SupabaseRepository {
         const { error } = await this.supabase.from('transactions').upsert(txs);
         if (error) errors.push(`transactions: ${error.message}`);
       }
+      if (data.user) {
+        const profile = {
+          id: userId,
+          full_name: data.user.name,
+          avatar_url: data.user.avatar,
+          plan: data.user.plan,
+          pin_code: data.user.pinCode,
+          is_pin_enabled: data.user.isPinEnabled,
+          is_ai_enabled: data.user.isAiClassificationEnabled
+        };
+        const { error } = await this.supabase.from('profiles').upsert([profile]);
+        if (error) errors.push(`profiles: ${error.message}`);
+      }
     } catch (e) {
       errors.push(`sync_exception: ${e?.message || e}`);
     }

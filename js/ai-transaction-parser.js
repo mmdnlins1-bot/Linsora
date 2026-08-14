@@ -45,24 +45,84 @@ class TransactionAIParser {
     const cleanText = rawText.trim();
     const lowerText = cleanText.toLowerCase();
 
+    // PIX intercept
+    const pixMatch = this.detectPix(lowerText, cleanText);
+    if (pixMatch) {
+        return {
+           ...pixMatch,
+           confidence: 1.0
+        };
+    }
+
     const type = this.detectType(lowerText);
     const amount = this.extractAmount(cleanText);
     const date = this.extractDate(lowerText);
-    const category = this.detectCategory(lowerText, type, customCategories);
+    const categoryResult = this.detectCategory(lowerText, type, customCategories);
+    const category = categoryResult.name;
     const description = this.extractDescription(cleanText, amount, category, type);
 
-    const confidence = (amount > 0 ? 0.4 : 0) + (category ? 0.3 : 0) + (type ? 0.2 : 0) + 0.1;
+    const confidence = (amount > 0 ? 0.4 : 0) + (categoryResult.matched ? 0.3 : 0) + (type ? 0.2 : 0) + 0.1;
 
     return {
       success: amount > 0,
       type: type || 'DESPESA',
       amount: amount || 0,
       category: category || 'Outros',
+      matchedCategory: categoryResult.matched,
       description: description || 'Lançamento por Voz',
       date: date || new Date().toISOString().split('T')[0],
       rawText: cleanText,
       confidence: Math.min(confidence, 1.0)
     };
+  }
+
+  detectPix(lowerText, cleanText) {
+      if (!lowerText.includes('pix')) return null;
+
+      const isReceived = lowerText.includes('recebi') || lowerText.includes('recebido') || lowerText.includes('ganhei');
+      const amount = this.extractAmount(cleanText) || 0;
+      const date = this.extractDate(lowerText);
+
+      // "pix para joao" ou "pix de 50 para maria"
+      let person = 'Desconhecido';
+      
+      // Remove palavras de valor para não confundir a extração do nome
+      let textForName = lowerText
+        .replace(/r\$\s*\d+(?:[.,]\d+)?/gi, '')
+        .replace(/\b\d+(?:[.,]\d+)?\s*(?:reais|real|mil)?\b/gi, '')
+        .replace(/\b(?:um|dois|tres|quatro|cinco|seis|sete|oito|nove|dez|cem|mil|reais|real|valor|no|de)\b/gi, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+        
+      // Restaura "de" apenas se for seguido por um nome (tentativa de manter 'do', 'da', 'para')
+      // Na verdade, 'do', 'da', 'para', 'pra' sobrevivem à limpeza acima.
+      const paraMatch = textForName.match(/(?:para|pra|ao|a)\s+([a-zA-ZÀ-ÿ]{2,}(?:\s+[a-zA-ZÀ-ÿ]+)*)/i);
+      const deMatch = textForName.match(/(?:do|da)\s+([a-zA-ZÀ-ÿ]{2,}(?:\s+[a-zA-ZÀ-ÿ]+)*)/i);
+
+      if (isReceived && deMatch && deMatch[1]) {
+          person = deMatch[1].trim();
+          person = person.charAt(0).toUpperCase() + person.slice(1);
+      } else if (!isReceived && paraMatch && paraMatch[1]) {
+          person = paraMatch[1].trim();
+          person = person.charAt(0).toUpperCase() + person.slice(1);
+      } else {
+          // Fallback se usou "de" e foi limpo: buscar no texto original
+          const originalDeMatch = lowerText.match(/(?:do|da|de)\s+([a-zA-ZÀ-ÿ]{3,})/i);
+          if (isReceived && originalDeMatch && !originalDeMatch[1].includes('reais') && !originalDeMatch[1].includes('mil')) {
+             person = originalDeMatch[1].trim();
+             person = person.charAt(0).toUpperCase() + person.slice(1);
+          }
+      }
+
+      return {
+          success: amount > 0,
+          type: isReceived ? 'RECEITA' : 'DESPESA',
+          amount: amount,
+          category: 'Transferência',
+          description: isReceived ? `Pix recebido de ${person}` : `Pix para ${person}`,
+          date: date || new Date().toISOString().split('T')[0],
+          rawText: cleanText
+      };
   }
 
   /**
@@ -165,7 +225,15 @@ class TransactionAIParser {
     }
 
     currentTotal += tempSum;
-    return foundNumber ? currentTotal : 0;
+    // Modificação: Só consideramos como um valor monetário real se for maior que 0 E se tiver "reais", "real", "mil"
+    // Caso contrário, pode ser a palavra "uma" (ex: "uma reserva"). Se for menor que 10 e não tiver essas palavras, descartamos, exceto se houver um indicativo claro.
+    if (foundNumber) {
+       if (currentTotal < 10 && !lowerText.includes('reais') && !lowerText.includes('real') && !lowerText.includes('mil')) {
+           return 0; // Previne "uma reserva" de retornar 1
+       }
+       return currentTotal;
+    }
+    return 0;
   }
 
   /**
@@ -246,7 +314,13 @@ class TransactionAIParser {
       let count = 0;
 
       for (const kw of keywords) {
-        if (lowerText.includes(kw.toLowerCase())) {
+        // Usa fronteira de palavra (\b) exceto para palavras que contêm hífens ou caracteres especiais no início/fim
+        // Se a keyword tiver caracteres especiais, escapamos
+        const escapedKw = kw.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        // Para acentuação funcionar com \b no Javascript, precisamos de um regex mais tolerante, ou usar regex unicode,
+        // mas de forma mais simples e efetiva: [^a-záàâãéèêíïóôõöúçñ]
+        const regex = new RegExp(`(^|[^a-záàâãéèêíïóôõöúçñ])(${escapedKw})([^a-záàâãéèêíïóôõöúçñ]|$)`, 'i');
+        if (regex.test(lowerText)) {
           count += kw.length; // Dá peso maior a palavras-chave mais específicas
         }
       }
@@ -258,12 +332,12 @@ class TransactionAIParser {
     }
 
     if (!bestCategory) {
-      if (txType === 'DESPESA') return 'Outros';
-      if (txType === 'RECEITA') return 'Salário';
-      return 'Outros';
+      if (txType === 'DESPESA') return { name: 'Outros', matched: false };
+      if (txType === 'RECEITA') return { name: 'Salário', matched: false };
+      return { name: 'Outros', matched: false };
     }
 
-    return bestCategory;
+    return { name: bestCategory, matched: true };
   }
 
   /**
@@ -362,12 +436,12 @@ class TransactionAIParser {
       explicitAporte = parseFloat(valStr) || 0;
     }
 
-    // Se identificarmos uma meta existente e o comando for aporte/contribuição:
-    if (matchedGoal && (isDepositIntent || (!lowerText.includes('nova meta') && !lowerText.includes('criar meta')))) {
+    // Se identificarmos uma meta existente e o comando for aporte/contribuição/somar ou apenas indicar a meta:
+    if (matchedGoal && (isDepositIntent || (!lowerText.includes('nova meta') && !lowerText.includes('criar meta') && !lowerText.includes('crie')))) {
       const extractedAmount = this.extractAmount(cleanText) || explicitAporte || 0;
       const currentVal = parseFloat(matchedGoal.current) || 0;
-      const targetVal = parseFloat(matchedGoal.target) || 1000;
-      const newCurrent = Math.min(targetVal, currentVal + extractedAmount);
+      const targetVal = parseFloat(matchedGoal.target) || 0;
+      const newCurrent = targetVal > 0 ? Math.min(targetVal, currentVal + extractedAmount) : currentVal + extractedAmount;
 
       return {
         success: extractedAmount > 0,
@@ -477,15 +551,15 @@ class TransactionAIParser {
     const suggestedMonthly = explicitAporte > 0 ? explicitAporte : (target > 0 ? (target / monthsLeft) : 0);
 
     return {
-      success: target > 0 || explicitAporte > 0,
+      success: target > 0 || explicitAporte > 0 || goalType === 'Reserva de Emergência',
       type: goalType,
       icon,
       title,
-      target,
+      target: goalType === 'Reserva de Emergência' ? (target === 1 && !cleanText.includes('um real') ? 0 : target) : target,
       current: 0,
-      deadline: deadlineFormatted,
-      monthsLeft,
-      suggestedMonthly,
+      deadline: goalType === 'Reserva de Emergência' ? null : deadlineFormatted,
+      monthsLeft: goalType === 'Reserva de Emergência' ? null : monthsLeft,
+      suggestedMonthly: goalType === 'Reserva de Emergência' ? 0 : suggestedMonthly,
       rawText: cleanText
     };
   }

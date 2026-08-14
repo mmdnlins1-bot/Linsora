@@ -108,6 +108,16 @@ class VoiceAssistantUIController {
     LinsoraUI.closeModal('modalVoiceListening');
 
     const lowerText = (rawText || '').toLowerCase();
+    
+    // Intercept: se for uma pergunta, redireciona para o Consultor (Strategic Advisor)
+    if (window.LinsoraStrategicAdvisor) {
+      const intent = window.LinsoraStrategicAdvisor.detectIntent(lowerText);
+      if (intent === 'QUESTION') {
+        window.LinsoraStrategicAdvisor.openAdvisorModal(rawText);
+        return;
+      }
+    }
+
     const isGoalIntent = this.currentMode === 'GOAL' || (window.TransactionAIParser && window.TransactionAIParser.hasGoalIntent(lowerText));
 
     if (isGoalIntent) {

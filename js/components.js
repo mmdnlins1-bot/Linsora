@@ -580,19 +580,21 @@ class LinsoraUIComponentEngine {
         <div class="goal-item-card-enhanced">
           <div class="goal-top">
             <span class="goal-title">${g.icon || '🎯'} ${LinsoraUtils.escapeHTML(g.title)}</span>
-            <span class="cat-pct-chip">${g.pct}%</span>
+            ${g.targetVal > 0 ? `<span class="cat-pct-chip">${g.pct}%</span>` : ''}
           </div>
 
+          ${g.targetVal > 0 ? `
           <div class="limit-progress-bar">
             <div class="limit-progress-fill" style="width: ${g.pct}%; background: ${g.pct >= 100 ? '#10B981' : g.isExpired ? '#EF4444' : 'linear-gradient(90deg, #10B981, #06B6D4)'};"></div>
           </div>
+          ` : '<div style="margin-top: 10px;"></div>'}
 
           <div class="goal-values">
             <span>Guardado: <strong>${LinsoraUtils.formatBRL(g.currentVal, hideValues)}</strong></span>
-            <span>Alvo: <strong>${LinsoraUtils.formatBRL(g.targetVal, hideValues)}</strong></span>
+            ${g.targetVal > 0 ? `<span>Alvo: <strong>${LinsoraUtils.formatBRL(g.targetVal, hideValues)}</strong></span>` : ''}
           </div>
 
-          ${g.pct >= 100 ? `
+          ${g.targetVal === 0 ? '' : (g.pct >= 100 ? `
             <div class="goal-monthly-suggestion" style="background: rgba(16,185,129,0.12); border-color: rgba(16,185,129,0.3); color: var(--accent-green-neon);">
               🎉 Meta Concluída! Parabéns pelo seu objetivo alcançado!
             </div>
@@ -604,8 +606,9 @@ class LinsoraUIComponentEngine {
             <div class="goal-monthly-suggestion">
               💡 Guarde <strong>${LinsoraUtils.formatBRL(g.suggestedMonthly, hideValues)}/mês</strong> até ${g.formattedDate}
             </div>
-          `}
+          `)}
 
+          ${g.targetVal > 0 ? `
           <div class="goal-time-rhythm">
             ${g.isExpired ? `
               <span style="color: #EF4444; font-weight: 600;">⏱️ Status: Prazo Encerrado</span>
@@ -614,6 +617,7 @@ class LinsoraUIComponentEngine {
             `}
             <span>Faltam: ${LinsoraUtils.formatBRL(g.remainingVal, hideValues)}</span>
           </div>
+          ` : ''}
 
           <div class="goal-card-actions">
             ${g.pct < 100 ? `

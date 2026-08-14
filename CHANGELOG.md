@@ -1,6 +1,19 @@
 # CHANGELOG — Linsora Finanças
 
-Todas as alterações notáveis, correções e melhorias de UX/UI neste projeto serão documentadas neste arquivo.## [1.0.3] - 2026-08-11
+Todas as alterações notáveis, correções e melhorias de UX/UI neste projeto serão documentadas neste arquivo.
+
+## [1.0.7] - 2026-08-14
+
+### 🧠 Conselheiro Inteligente & AI Engine
+- **Revamp de Interface (Chat UI)**: Refatoração do layout do assistente para formato de balões de mensagens (`.bot-msg-bubble`), mais orgânico e alinhado aos padrões de chat.
+- **Transparência de Cálculos**: Ocultação da matemática completa (saldo total, despesas e limite diário) dentro da tag `<details>`, simplificando a visualização inicial e mantendo a verificação técnica acessível ao usuário (Ver detalhes 📊).
+- **Controle Total pelo Usuário**: Remoção da execução automática de transações e aportes para comandos explícitos, agora exigindo sempre confirmação explícita através do botão de registro no chat.
+- **Inteligência Contextual Expandida**: Cálculos de viabilidade aprimorados para englobar o "Saldo Total" real em contas.
+  - Alerta bloqueador para valores superiores ao saldo.
+  - Alerta de "uso de reservas" caso passe da renda livre mas caiba no saldo total.
+  - Confirmação super positiva ao respeitar o teto de gastos diários.
+
+## [1.0.3] - 2026-08-11
 
 ### 📷 Upload & Gestão de Foto de Perfil
 - **Fluxo Completo de Foto**: Permite selecionar da galeria ou tirar foto na tela Perfil & Configurações.

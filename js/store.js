@@ -344,7 +344,7 @@ class LinsoraStore {
       id: 'goal_' + Date.now(),
       userId: (this.state && this.state.user) ? this.state.user.id : 'usr_guest',
       title: goalData.title || 'Nova Meta',
-      target: parseFloat(goalData.target) || 1000,
+      target: goalData.target !== undefined && goalData.target !== null && goalData.target !== '' ? (parseFloat(goalData.target) || 0) : 1000,
       current: parseFloat(goalData.current) || 0,
       category: goalData.category || 'Economia',
       deadline: goalData.deadline || '2026-12-31',
@@ -371,6 +371,18 @@ class LinsoraStore {
       if (goalData.monthlyContribution !== undefined) goal.monthlyContribution = parseFloat(goalData.monthlyContribution) || 0;
 
       if (window.LinsoraLogger) window.LinsoraLogger.update('Meta Atualizada', { goalId, title: goal.title }, this.state?.user?.id);
+      this.notify();
+      return true;
+    }
+    return false;
+  }
+
+  async updateGoalProgress(goalId, amountToAdd) {
+    if (!goalId) return false;
+    const goal = this.state.goals.find(g => g.id === goalId);
+    if (goal) {
+      goal.current = (parseFloat(goal.current) || 0) + parseFloat(amountToAdd);
+      if (window.LinsoraLogger) window.LinsoraLogger.update('Progresso de Meta Atualizado', { goalId, amount: amountToAdd }, this.state?.user?.id);
       this.notify();
       return true;
     }

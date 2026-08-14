@@ -1105,62 +1105,79 @@ function setupEventListeners() {
   });
 
   // FLUXO COMPLETO DE UPLOAD DE FOTO DE PERFIL
-  const triggerAvatarSelect = () => document.getElementById('profileAvatarInput')?.click();
-  document.getElementById('btnChangeAvatar')?.addEventListener('click', triggerAvatarSelect);
-  document.getElementById('btnTriggerPhotoUpload')?.addEventListener('click', triggerAvatarSelect);
+  const triggerAvatarSelect = () => {
+    const input = document.getElementById('profileAvatarInput');
+    if (input) input.click();
+  };
+  
+  const btnChangeAvatar = document.getElementById('btnChangeAvatar');
+  if (btnChangeAvatar) btnChangeAvatar.addEventListener('click', triggerAvatarSelect);
+  
+  const btnTriggerPhotoUpload = document.getElementById('btnTriggerPhotoUpload');
+  if (btnTriggerPhotoUpload) btnTriggerPhotoUpload.addEventListener('click', triggerAvatarSelect);
 
-  document.getElementById('profileAvatarInput')?.addEventListener('change', async (e) => {
-    const file = e.target.files && e.target.files[0];
-    if (!file) return;
+  const profileAvatarInput = document.getElementById('profileAvatarInput');
+  if (profileAvatarInput) {
+    profileAvatarInput.addEventListener('change', async (e) => {
+      const file = e.target.files && e.target.files[0];
+      if (!file) return;
 
-    const spinner = document.getElementById('avatarUploadSpinner');
-    if (spinner) spinner.classList.remove('hidden');
+      const spinner = document.getElementById('avatarUploadSpinner');
+      if (spinner) spinner.classList.remove('hidden');
 
-    try {
-      const compressedDataUrl = await LinsoraUtils.processAndCompressImage(file, 300, 300, 0.8);
-      let finalUrl = compressedDataUrl;
+      try {
+        // Compressão via Canvas (Garante que funcione em WebView/Android)
+        const compressedDataUrl = await LinsoraUtils.processAndCompressImage(file, 400, 400, 0.7);
+        let finalUrl = compressedDataUrl;
 
-      // Se o cliente Supabase estiver autenticado, tenta salvar no bucket de avatars
-      if (window.supabaseRepo && window.supabaseRepo.supabase && window.supabaseRepo.currentUserId && !window.supabaseRepo.currentUserId.startsWith('usr_')) {
-        try {
-          const userId = window.supabaseRepo.currentUserId;
-          const fileName = `avatar_${userId}.jpg`;
-          const blob = LinsoraUtils.dataURItoBlob(compressedDataUrl);
+        // Se o cliente Supabase estiver autenticado, tenta salvar no bucket de avatars
+        if (window.supabaseRepo && window.supabaseRepo.supabase && window.supabaseRepo.currentUserId && window.supabaseRepo.currentUserId !== 'guest') {
+          try {
+            const userId = window.supabaseRepo.currentUserId;
+            const fileName = `avatar_${userId}_${Date.now()}.jpg`;
+            const blob = LinsoraUtils.dataURItoBlob(compressedDataUrl);
 
-          const { data, error } = await window.supabaseRepo.supabase.storage
-            .from('avatars')
-            .upload(fileName, blob, { upsert: true, contentType: 'image/jpeg' });
-
-          if (!error && data) {
-            const { data: publicUrlData } = window.supabaseRepo.supabase.storage
+            const { data, error } = await window.supabaseRepo.supabase.storage
               .from('avatars')
-              .getPublicUrl(fileName);
-            if (publicUrlData && publicUrlData.publicUrl) {
-              finalUrl = publicUrlData.publicUrl;
+              .upload(fileName, blob, { upsert: true, contentType: 'image/jpeg' });
+
+            if (!error && data) {
+              const { data: publicUrlData } = window.supabaseRepo.supabase.storage
+                .from('avatars')
+                .getPublicUrl(fileName);
+              if (publicUrlData && publicUrlData.publicUrl) {
+                finalUrl = publicUrlData.publicUrl;
+              }
             }
+          } catch (supErr) {
+            console.warn('Fallback para imagem de cache local:', supErr);
           }
-        } catch (supErr) {
-          console.warn('Fallback para imagem de cache local:', supErr);
         }
+
+        // Persistência no Estado (Garante salvamento no LocalStorage)
+        if (window.linsoraStore && window.linsoraStore.state && window.linsoraStore.state.user) {
+          window.linsoraStore.state.user.avatar = finalUrl;
+          window.linsoraStore.notify(); // Aciona syncUp e saveDbData
+        }
+
+        // Atualiza UI Instantaneamente
+        const avatarImg = document.getElementById('profileAvatarImg');
+        if (avatarImg) avatarImg.src = finalUrl;
+        const userAvatarHeader = document.getElementById('userAvatar');
+        if (userAvatarHeader) userAvatarHeader.src = finalUrl;
+
+        LinsoraUI.showToast('Foto de perfil atualizada com sucesso', 'success');
+
+      } catch (err) {
+        console.error('Erro ao processar foto:', err);
+        LinsoraUI.showToast('Erro ao processar foto. Tente novamente.', 'error');
+      } finally {
+        if (spinner) spinner.classList.add('hidden');
+        // Limpar input para permitir selecionar a mesma foto caso falhe
+        e.target.value = '';
       }
-
-      if (window.linsoraStore && window.linsoraStore.state && window.linsoraStore.state.user) {
-        window.linsoraStore.state.user.avatar = finalUrl;
-        window.linsoraStore.notify();
-      }
-
-      const avatarImg = document.getElementById('profileAvatarImg');
-      if (avatarImg) avatarImg.src = finalUrl;
-
-      LinsoraUI.showToast('Foto de perfil atualizada com sucesso!', 'success');
-    } catch (err) {
-      console.error('Erro no upload de foto:', err);
-      LinsoraUI.showToast('Não foi possível alterar a foto: ' + (err.message || 'Erro de leitura'), 'error');
-    } finally {
-      if (spinner) spinner.classList.add('hidden');
-      e.target.value = '';
-    }
-  });
+    });
+  }
 
   document.getElementById('btnTogglePrivacy')?.addEventListener('click', () => window.linsoraStore.togglePrivacy());
   
