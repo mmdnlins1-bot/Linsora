@@ -1,5 +1,14 @@
 apply plugin: 'com.android.application'
 
+def keystorePropertiesFile = rootProject.file('keystore.properties')
+if (!keystorePropertiesFile.exists()) {
+    keystorePropertiesFile = file('keystore.properties')
+}
+def keystoreProperties = new Properties()
+if (keystorePropertiesFile.exists()) {
+    keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
+}
+
 android {
     namespace = "com.linsora.app"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -16,12 +25,34 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        release {
+            if (keystorePropertiesFile.exists()) {
+                def storeFilePath = keystoreProperties['storeFile']
+                if (storeFilePath) {
+                    storeFile file(storeFilePath)
+                }
+                storePassword keystoreProperties['storePassword']
+                keyAlias keystoreProperties['keyAlias']
+                keyPassword keystoreProperties['keyPassword']
+            }
+        }
+    }
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
     }
     buildTypes {
+        debug {
+            applicationIdSuffix ".dev"
+        }
+        staging {
+            initWith debug
+            applicationIdSuffix ".beta"
+            matchingFallbacks = ['debug', 'release']
+        }
         release {
+            signingConfig signingConfigs.release
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
@@ -52,6 +83,12 @@ try {
     def servicesJSON = file('google-services.json')
     if (servicesJSON.text) {
         apply plugin: 'com.google.gms.google-services'
+        
+        gradle.taskGraph.whenReady { graph ->
+            graph.allTasks.findAll { it.name.contains('GoogleServices') && !it.name.contains('Release') }.each { task ->
+                task.enabled = false
+            }
+        }
     }
 } catch(Exception e) {
     logger.info("google-services.json not found, google-services plugin not applied. Push Notifications won't work")
