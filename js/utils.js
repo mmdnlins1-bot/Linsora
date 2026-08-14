@@ -372,31 +372,42 @@ const LinsoraUtils = {
       reader.onload = (event) => {
         const img = new Image();
         img.onload = () => {
-          const canvas = document.createElement('canvas');
-          let width = img.width;
-          let height = img.height;
+          try {
+            const canvas = document.createElement('canvas');
+            let width = img.width;
+            let height = img.height;
 
-          if (width > height) {
-            if (width > maxWidth) {
-              height = Math.round((height * maxWidth) / width);
-              width = maxWidth;
+            if (width > height) {
+              if (width > maxWidth) {
+                height = Math.round((height * maxWidth) / width);
+                width = maxWidth;
+              }
+            } else {
+              if (height > maxHeight) {
+                width = Math.round((width * maxHeight) / height);
+                height = maxHeight;
+              }
             }
-          } else {
-            if (height > maxHeight) {
-              width = Math.round((width * maxHeight) / height);
-              height = maxHeight;
-            }
+
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) throw new Error('Failed to get 2d context');
+            
+            ctx.drawImage(img, 0, 0, width, height);
+
+            const dataUrl = canvas.toDataURL('image/jpeg', quality);
+            if (!dataUrl || dataUrl === 'data:,') throw new Error('Canvas failed');
+            resolve(dataUrl);
+          } catch (e) {
+            console.warn('Canvas toDataURL failed (Headless?), fallback to original', e);
+            resolve(event.target.result);
           }
-
-          canvas.width = width;
-          canvas.height = height;
-          const ctx = canvas.getContext('2d');
-          ctx.drawImage(img, 0, 0, width, height);
-
-          const dataUrl = canvas.toDataURL('image/jpeg', quality);
-          resolve(dataUrl);
         };
-        img.onerror = (err) => reject(err);
+        img.onerror = (err) => {
+          console.warn('img.onerror triggered (Headless?), fallback to original', err);
+          resolve(event.target.result);
+        };
         img.src = event.target.result;
       };
       reader.onerror = (err) => reject(err);

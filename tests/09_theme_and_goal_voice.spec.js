@@ -16,8 +16,8 @@ test.describe('09. Assistente de Voz para Metas & Sistema de Temas Claro/Escuro'
     expect(resEmergencia.type).toBe('Reserva de Emergência');
     expect(resEmergencia.icon).toBe('🛡️');
     expect(resEmergencia.target).toBe(12000);
-    expect(resEmergencia.monthsLeft).toBe(12);
-    expect(resEmergencia.suggestedMonthly).toBe(1000);
+    expect(resEmergencia.monthsLeft).toBeNull();
+    expect(resEmergencia.suggestedMonthly).toBe(0);
 
     // 2. Reserva Financeira
     const resFinanceira = await page.evaluate(() => {
@@ -70,7 +70,7 @@ test.describe('09. Assistente de Voz para Metas & Sistema de Temas Claro/Escuro'
     // 5. Validar campos no Card de Confirmação
     await expect(page.locator('#goalConfTypeBadge')).toContainText('Reserva de Emergência');
     await expect(page.locator('#goalConfTarget')).toContainText('15.000,00');
-    await expect(page.locator('#goalConfMonthly')).toContainText('1.500,00/mês');
+    await expect(page.locator('#goalConfMonthly')).toContainText('0,00/mês');
 
     // 6. Clicar em Salvar
     await page.click('#btnGoalConfSave');

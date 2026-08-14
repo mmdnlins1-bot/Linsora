@@ -20,8 +20,6 @@
 
   <!-- Configurações PWA & Aplicativo Android Mobile -->
   <meta name="theme-color" content="#070B12">
-  <link rel="icon" type="image/png" href="./icon-192.png">
-  <link rel="apple-touch-icon" href="./icon-192.png">
   <link rel="manifest" href="manifest.webmanifest">
 
   <!-- Estilos Globais & Design System Unificado -->
@@ -48,7 +46,25 @@
         <div class="splash-content">
           <div class="splash-logo-wrapper">
             <div class="splash-icon">
-              <img src="./icon-192.png" alt="LINSORA" class="splash-logo-img">
+              <!-- LOGO VECTOR FUTURISTA LINSORA -->
+              <svg viewBox="0 0 100 100" width="64" height="64" fill="none">
+                <defs>
+                  <linearGradient id="linsoraGlowGrad1" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stop-color="#10B981" />
+                    <stop offset="50%" stop-color="#06B6D4" />
+                    <stop offset="100%" stop-color="#6366F1" />
+                  </linearGradient>
+                  <linearGradient id="linsoraGlowGrad2" x1="100%" y1="0%" x2="0%" y2="100%">
+                    <stop offset="0%" stop-color="#34D399" />
+                    <stop offset="100%" stop-color="#10B981" />
+                  </linearGradient>
+                </defs>
+                <!-- Camadas Geométricas 3D de Diamantes & Cartões -->
+                <path d="M50 12L85 32L50 52L15 32Z" fill="url(#linsoraGlowGrad1)" opacity="0.95" />
+                <path d="M15 42L50 62L85 42" stroke="url(#linsoraGlowGrad2)" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" />
+                <path d="M15 54L50 74L85 54" stroke="url(#linsoraGlowGrad1)" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" opacity="0.75" />
+                <circle cx="50" cy="32" r="6" fill="#FFFFFF" />
+              </svg>
             </div>
             <h1 class="splash-brand">LINSORA</h1>
             <span class="splash-tagline">Finanças com Inteligência & Clareza</span>
@@ -123,9 +139,9 @@
       <section class="screen auth-screen hidden" id="authScreen">
         <div class="auth-container">
           <div class="auth-header">
-            <div class="brand-logo-small" style="display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 15px;">
-              <img src="./assets/app-icon.png" alt="Linsora" style="width: 32px; height: 32px; object-fit: contain;">
-              <span style="font-size: 24px; font-weight: 800; letter-spacing: 2px;">LINSORA</span>
+            <div class="brand-logo-small">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+              <span>LINSORA</span>
             </div>
             <h2 id="authTitle">Seja bem-vindo(a)</h2>
             <p id="authSubtitle">Entre na sua conta para gerenciar seu patrimônio com inteligência.</p>
@@ -219,11 +235,6 @@
           <!-- TAB 1: DASHBOARD REFINADO -->
           <section class="tab-page active" id="tabDashboard">
             
-            <!-- FEED DE CONTEXTO DINÂMICO & CONSELHEIRO ESTRATÉGICO -->
-            <div class="strategic-feed-wrapper" id="strategicFeedContainer">
-              <!-- Renderizado dinamicamente por LinsoraStrategicAdvisor -->
-            </div>
-
             <!-- 0. INDICADOR DE SAÚDE FINANCEIRA CONDICIONAL -->
             <div class="financial-health-banner" id="healthScoreWidget">
               <!-- Renderizado dinamicamente -->
@@ -286,6 +297,9 @@
               </div>
             </div>
 
+            <!-- 2.1 FEED DO CONSELHEIRO ESTRATÉGICO -->
+            <div id="strategicFeedContainer"></div>
+
             <!-- 3. RESUMO FINANCEIRO -->
             <div class="section-block">
               <div class="section-header-row">
@@ -315,6 +329,13 @@
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="5" y1="12" x2="19" y2="12"/></svg>
                   </div>
                   <span>- Despesa</span>
+                </button>
+
+                <button type="button" class="action-tile" id="btnQuickPix">
+                  <div class="tile-icon pix-bg">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+                  </div>
+                  <span>Área Pix</span>
                 </button>
 
                 <button type="button" class="action-tile" id="btnQuickCardPay">
@@ -1032,34 +1053,6 @@
         </div>
       </div>
 
-      <!-- MODAL ALTERAR FOTO DE PERFIL (GALERIA OU LINK/URL) -->
-      <div class="linsora-modal-overlay hidden" id="modalChangePhotoOptions">
-        <div class="linsora-modal-content floating-center-card" style="max-width: 360px;">
-          <div class="modal-header">
-            <h3>📷 Alterar Foto de Perfil</h3>
-            <button type="button" class="modal-close" data-close-modal="modalChangePhotoOptions">✕</button>
-          </div>
-          <div class="modal-body-content" style="padding: 10px 0;">
-            <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 16px;">
-              Escolha uma imagem da sua galeria ou informe o link direto de uma foto:
-            </p>
-
-            <button type="button" class="linsora-btn primary block lg" id="btnChoosePhotoFile" style="margin-bottom: 16px; display: flex; align-items: center; justify-content: center; gap: 8px;">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
-              <span>Abrir Galeria de Fotos</span>
-            </button>
-
-            <div style="border-top: 1px solid rgba(255, 255, 255, 0.1); padding-top: 14px;">
-              <label for="photoUrlInput" style="font-size: 12px; font-weight: 600; color: var(--text-muted); display: block; margin-bottom: 6px;">Ou informe o Link/URL da Imagem:</label>
-              <div class="input-icon-wrapper" style="display: flex; gap: 8px;">
-                <input type="url" id="photoUrlInput" class="linsora-input" placeholder="https://... /foto.jpg" style="flex: 1;">
-                <button type="button" class="linsora-btn secondary sm" id="btnApplyPhotoUrl">Aplicar</button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
       <!-- MODAL NOVO CARTÃO DE CRÉDITO -->
       <div class="linsora-modal-overlay hidden" id="modalCardForm">
         <div class="linsora-modal-content floating-center-card">
@@ -1176,21 +1169,10 @@
             <input type="hidden" id="goalIdInput" value="">
             
             <div class="form-group">
-              <label for="goalTypeSelect">Tipo de Planejamento</label>
-              <div class="input-icon-wrapper">
-                <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
-                <select id="goalTypeSelect" class="linsora-input select-input">
-                  <option value="META">🎯 Meta Financeira (Objetivo com Prazo/Alvo)</option>
-                  <option value="RESERVA">🛡️ Reserva de Emergência (Aporte Mensal Acumulativo)</option>
-                </select>
-              </div>
-            </div>
-
-            <div class="form-group">
-              <label for="goalTitleInput">Título do Objetivo</label>
+              <label for="goalTitleInput">Título da Meta</label>
               <div class="input-icon-wrapper">
                 <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
-                <input type="text" id="goalTitleInput" class="linsora-input" placeholder="Ex: Entrada do Apê, Reserva de Emergência" required>
+                <input type="text" id="goalTitleInput" class="linsora-input" placeholder="Ex: Entrada do Apê, Viagem Europa" required>
               </div>
             </div>
             
@@ -1408,49 +1390,6 @@
         </div>
       </div>
 
-      <!-- MODAL DO CONSELHEIRO ESTRATÉGICO LINSORA AI -->
-      <div class="linsora-modal-overlay hidden" id="modalStrategicAdvisor">
-        <div class="linsora-modal-content strategic-advisor-modal">
-          <div class="modal-header advisor-modal-header">
-            <div class="advisor-title-wrap">
-              <div class="advisor-avatar-icon">🧠</div>
-              <div>
-                <h3 class="modal-title">Conselheiro Estratégico</h3>
-                <span class="modal-subtitle">Mentor Financeiro & Análise Crítica LINSORA</span>
-              </div>
-            </div>
-            <button type="button" class="modal-close" data-close-modal="modalStrategicAdvisor">✕</button>
-          </div>
-
-          <div class="advisor-modal-body">
-            <!-- Sugestões de Perguntas Rápidas -->
-            <div class="advisor-quick-queries">
-              <span class="quick-title">Consultas Rápidas:</span>
-              <div class="quick-tags">
-                <button type="button" class="advisor-chip" data-query="Diagnóstico geral do meu orçamento">📊 Diagnóstico Geral</button>
-                <button type="button" class="advisor-chip" data-query="Qual meu maior gargalo de gastos?">🔍 Maior Gargalo</button>
-                <button type="button" class="advisor-chip" data-query="Posso gastar 300 reais hoje?">💳 Análise de Compra</button>
-              </div>
-            </div>
-
-            <!-- Histórico de Chat / Cartões de Resposta -->
-            <div class="advisor-chat-history" id="advisorChatHistory">
-              <!-- Mensagens do Usuário e Respostas Analíticas -->
-            </div>
-
-            <!-- Formulário de Pergunta -->
-            <form id="formStrategicAdvisorQuery" class="advisor-input-form" onsubmit="return false;">
-              <div class="input-icon-wrapper">
-                <input type="text" id="advisorQueryInput" class="linsora-input" placeholder="Ex: 'Posso gastar 250 em um jantar hoje?'">
-                <button type="submit" class="btn-send-advisor" id="btnSubmitAdvisorQuery" title="Enviar Consulta">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="18" height="18"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      </div>
-
       <!-- MODAL DE CONFIRMAÇÃO NATIVO (substitui window.confirm) -->
       <div class="linsora-modal-overlay hidden" id="modalConfirmDelete">
         <div class="linsora-modal-content confirm-delete-card" role="alertdialog" aria-modal="true" aria-labelledby="confirmDeleteTitle" aria-describedby="confirmDeleteMsg">
@@ -1468,42 +1407,26 @@
         </div>
       </div>
 
-      <!-- MODAL DE SELEÇÃO DA ORIGEM DA FOTO DE PERFIL (LAYOUT LINSORA PREMIUM) -->
-      <div class="linsora-modal-overlay hidden" id="modalAvatarSourceChoice">
-        <div class="linsora-modal-content avatar-source-modal-card" role="dialog" aria-modal="true">
-          <div class="avatar-source-header">
-            <div class="avatar-source-icon-wrap">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+      <!-- MODAL CONSELHEIRO ESTRATÉGICO -->
+      <div class="linsora-modal-overlay hidden" id="modalStrategicAdvisor">
+        <div class="linsora-modal-content floating-center-card" style="max-width: 500px; width: 95%;">
+          <div class="modal-header">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <h3>🧠 Conselheiro Inteligente</h3>
             </div>
-            <div>
-              <h3 style="margin: 0; font-size: 17px; font-weight: 700;">Alterar Foto de Perfil</h3>
-              <p style="margin: 3px 0 0 0; font-size: 13px; color: var(--text-muted);">Escolha a origem da sua foto</p>
+            <button type="button" class="modal-close" data-close-modal="modalStrategicAdvisor">✕</button>
+          </div>
+          <form id="advisorForm" class="modal-form-unified" onsubmit="return false;" style="display: flex; flex-direction: column; max-height: 70vh;">
+            <div class="advisor-chat-history" id="advisorChatHistory" style="flex: 1; overflow-y: auto; padding: 12px 0; margin-bottom: 12px;"></div>
+            <div class="form-group" style="margin-bottom: 0;">
+              <div class="input-icon-wrapper" style="display: flex; gap: 8px; align-items: center;">
+                <input type="text" id="advisorQueryInput" class="linsora-input" placeholder="Ex: Posso gastar 50 em pizza hoje?" style="flex: 1; height: 48px;">
+                <button type="button" class="linsora-btn primary" id="btnSubmitAdvisorQuery" style="border-radius: 50%; width: 48px; height: 48px; padding: 0; display: flex; align-items: center; justify-content: center; flex-shrink: 0; box-shadow: 0 4px 12px rgba(130,10,209,0.25);" aria-label="Enviar">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width: 22px; height: 22px; margin-left: -2px; margin-top: 2px;"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+                </button>
+              </div>
             </div>
-          </div>
-
-          <div class="avatar-source-options">
-            <button type="button" class="avatar-source-btn" id="btnAvatarFromGallery">
-              <div class="avatar-option-icon gallery-icon">🖼️</div>
-              <div class="avatar-option-text">
-                <strong>Escolher da Galeria</strong>
-                <span>Selecione uma foto salva no seu dispositivo</span>
-              </div>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
-            </button>
-
-            <button type="button" class="avatar-source-btn" id="btnAvatarFromCamera">
-              <div class="avatar-option-icon camera-icon">📷</div>
-              <div class="avatar-option-text">
-                <strong>Tirar Foto com a Câmera</strong>
-                <span>Tire uma nova foto utilizando a câmera</span>
-              </div>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
-            </button>
-          </div>
-
-          <div style="margin-top: 16px;">
-            <button type="button" class="linsora-btn outline full-width" id="btnAvatarSourceCancel">Cancelar</button>
-          </div>
+          </form>
         </div>
       </div>
 

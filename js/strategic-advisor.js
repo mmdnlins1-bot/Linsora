@@ -1,498 +1,333 @@
 /**
  * ============================================================================
- * LINSORA — ASSISTENTE PESSOAL INTELIGENTE & CONSELHEIRO ESTRATÉGICO
- * (js/strategic-advisor.js)
- * Motor de Análise Crítica, Feed de Contexto Dinâmico na Home e System Prompt
+ * LINSORA — MÓDULO DE IA E CONSELHEIRO ESTRATÉGICO (strategic-advisor.js)
+ * Motor inteligente com contexto total de dados financeiros
  * ============================================================================
  */
 
-const LINSORA_SYSTEM_PROMPT = `
-Você é o LINSORA AI — Conselheiro Estratégico e Assistente Pessoal de Finanças de alta performance.
-Sua missão é atuar como um mentor financeiro extremamente crítico, analítico, direto e pragmático. Você NÃO é um chatbot passivo e NÃO usa linguagem bajuladora, genérica ou excessivamente polida.
-
-DIRETRIZES RIGOROSAS DE COMPORTAMENTO:
-1. ANÁLISE RIGOROSA E BASEADA EM DADOS:
-   - Analise os números reais do usuário: Receita Mensal, Despesas Totais, Saldo, Taxa de Poupança (%) e Maiores Categorias de Gasto.
-   - Aponte sem rodeios se o comprometimento de renda estiver acima de 70% ou se a taxa de poupança for inferior a 20%.
-
-2. CRÍTICA CONSTRUTIVA E CONTRAPONTO:
-   - Quando o usuário perguntar se pode realizar uma compra discricionária, confronte o valor com as metas ativas e a reserva de emergência antes de dar um veredito.
-   - Exemplo: "Você quer gastar R$ 300 em um jantar, mas sua categoria Restaurantes já consumiu R$ 850 este mês (35% das suas despesas) e sua reserva cobre apenas 1,2 meses. Isso atrasará sua meta em 45 dias. Recomendação: limite a R$ 100 ou adie."
-
-3. ESTRUTURA CRÍTICA DAS RESPOSTAS:
-   - 🔴/🟡/🟢 DIAGNÓSTICO DIRETO: 1 frase assertiva com a postura financeira.
-   - 📊 IMPACTO ORÇAMENTÁRIO: Números concretos, percentuais de comprometimento e gargalos.
-   - 🎯 RECOMENDAÇÃO ACIONÁVEL: Decisão prática e clara a tomar imediatamente.
-
-4. TOM DE VOZ:
-   - Profissional, firme, analítico e orientador. Sem cumprimentos prolixos ("Espero que esteja bem") ou justificativas vagas.
-`;
-
 class StrategicAdvisorEngine {
   constructor() {
-    this.systemPrompt = LINSORA_SYSTEM_PROMPT;
-    this.chatHistory = [];
+    this.name = 'Conselheiro Linsora';
   }
 
   /**
-   * Calcula as métricas financeiras chave a partir do estado atual da linsoraStore.
+   * Ponto de entrada principal do Assistente
    */
-  calculateFinancialMetrics() {
-    const state = (window.linsoraStore && window.linsoraStore.state) || {};
-    const transactions = state.transactions || [];
-    const goals = state.goals || [];
-    const accounts = state.accounts || [];
+  processQuery(rawText) {
+    if (!rawText || typeof rawText !== 'string') return this.fallbackResponse();
+    
+    const lowerText = rawText.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    const state = window.linsoraStore?.state;
+    
+    if (!state || !state.user) {
+      return {
+        severity: 'warning',
+        title: '⚠️ Contexto Indisponível',
+        diagnosis: 'Não consegui acessar seus dados financeiros.',
+        impact: '-',
+        recommendation: 'Faça login para utilizar o assistente.'
+      };
+    }
 
-    const now = new Date();
-    const currentMonth = now.getMonth();
-    const currentYear = now.getFullYear();
-    const currentDay = now.getDate();
+    // 1. Detectar Intenção (Pergunta/Simulação vs Comando Explícito)
+    const intent = this.detectIntent(lowerText);
+    
+    // 2. Extrair Entidades (via TransactionAIParser)
+    // Precisamos ajustar o parseText para que não falhe se a intenção for Pix ou Meta
+    let parsedData;
+    if (window.TransactionAIParser?.hasGoalIntent(lowerText) || lowerText.includes('reserva')) {
+       parsedData = window.TransactionAIParser.parseGoalText(rawText);
+    } else {
+       parsedData = window.TransactionAIParser?.parseText(rawText);
+    }
+    
+    if (intent === 'QUESTION') {
+       parsedData.matchedCategory = false;
+       parsedData.category = '';
+    }
+    
+    const amount = parsedData.amount || parsedData.target || 0;
+    
+    // 3. Cruzar com Dados Reais
+    const metrics = this.calculateRealMetrics(state);
+
+    if (intent === 'EXPLICIT_COMMAND' && amount > 0) {
+      return this.handleExplicitCommand(parsedData, metrics);
+    } else if (intent === 'QUESTION' || (intent === 'AMBIGUOUS' && amount > 0)) {
+      return this.handleViabilityQuestion(parsedData, metrics, lowerText, intent);
+    } else {
+      return this.handleGeneralDiagnosis(metrics);
+    }
+  }
+
+  detectIntent(lowerText) {
+    const questionKeywords = ['posso', 'devo', 'vale a pena', 'é viável', 'consigo', 'da pra', 'dá pra', 'o que acha', 'simule', 'simulacao', 'qual', 'quanto', 'sera que'];
+    const commandKeywords = ['registre', 'adicione', 'comprei', 'gastei', 'paguei', 'lance', 'anote', 'debite', 'recebi', 'ganhei', 'pix de', 'pix para', 'transferi'];
+
+    const isQuestion = questionKeywords.some(kw => lowerText.includes(kw));
+    const isCommand = commandKeywords.some(kw => lowerText.includes(kw));
+
+    if (isQuestion && !isCommand) return 'QUESTION';
+    if (isCommand && !isQuestion) return 'EXPLICIT_COMMAND';
+    if (isCommand && isQuestion) return 'QUESTION'; // Em caso de dúvida, trate como simulação
+    
+    return 'AMBIGUOUS';
+  }
+
+  calculateRealMetrics(state) {
+    const today = new Date();
+    const currentMonth = today.getMonth();
+    const currentYear = today.getFullYear();
     const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+    const daysRemaining = Math.max(1, daysInMonth - today.getDate() + 1);
 
-    // Filtrar transações do mês atual
-    const monthTx = transactions.filter(t => {
-      const d = new Date(t.date || t.created_at);
-      return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
-    });
-
+    const txs = state.transactions || [];
     let monthIncome = 0;
     let monthExpense = 0;
-    const categoryTotals = {};
+    let monthFixedExpense = 0; // Aproximação de fixas
 
-    monthTx.forEach(t => {
-      const amt = Number(t.amount) || 0;
-      if (t.type === 'RECEITA') {
-        monthIncome += amt;
-      } else {
-        monthExpense += amt;
-        const cat = t.category || 'Outros';
-        categoryTotals[cat] = (categoryTotals[cat] || 0) + amt;
+    txs.forEach(t => {
+      const tDate = new Date(t.date);
+      if (tDate.getMonth() === currentMonth && tDate.getFullYear() === currentYear) {
+        if (t.type === 'RECEITA') monthIncome += parseFloat(t.amount);
+        if (t.type === 'DESPESA') {
+          const amt = parseFloat(t.amount);
+          monthExpense += amt;
+          if (['Moradia', 'Educação', 'Saúde', 'Transporte'].includes(t.category)) {
+            monthFixedExpense += amt;
+          }
+        }
       }
     });
 
-    // Calcular Saldo Total de Contas
-    const netWorth = accounts.reduce((acc, a) => acc + (Number(a.balance) || 0), 0);
-
-    // Identificar Maior Categoria de Gasto
-    let topCategory = { name: 'Sem gastos', amount: 0, percent: 0 };
-    let maxCatAmount = 0;
-    Object.keys(categoryTotals).forEach(cat => {
-      if (categoryTotals[cat] > maxCatAmount) {
-        maxCatAmount = categoryTotals[cat];
-        topCategory = {
-          name: cat,
-          amount: maxCatAmount,
-          percent: monthExpense > 0 ? Math.round((maxCatAmount / monthExpense) * 100) : 0
-        };
-      }
+    // Subtrair metas programadas (se houver lógica para isso)
+    const goals = state.goals || [];
+    let goalCommitments = 0;
+    goals.forEach(g => {
+       if (g.type !== 'Reserva de Emergência') {
+         goalCommitments += parseFloat(g.suggestedMonthly || 0);
+       }
     });
 
-    // Métricas Percentuais
-    const netMonthBalance = monthIncome - monthExpense;
-    const commitmentRate = monthIncome > 0 ? Math.round((monthExpense / monthIncome) * 100) : (monthExpense > 0 ? 100 : 0);
-    const savingsRate = monthIncome > 0 ? Math.round((netMonthBalance / monthIncome) * 100) : 0;
-    const dailyBurnRate = currentDay > 0 ? (monthExpense / currentDay) : 0;
-    const idealDailyBurn = monthIncome > 0 ? ((monthIncome * 0.70) / daysInMonth) : 0;
-
-    // Determinar Postura Financeira
-    let posture = 'EQUILIBRADO'; // CRITICO, ALERTA, EQUILIBRADO, PROSPERO
-    let postureColor = 'cyan';
-    let postureTitle = 'Postura Financeira Estável';
-
-    if (monthIncome > 0 && monthExpense > monthIncome) {
-      posture = 'CRITICO';
-      postureColor = 'danger';
-      postureTitle = 'Déficit Orçamentário Crítico';
-    } else if (commitmentRate > 80) {
-      posture = 'ALERTA';
-      postureColor = 'warning';
-      postureTitle = 'Comprometimento Elevado de Renda';
-    } else if (savingsRate >= 25) {
-      posture = 'PROSPERO';
-      postureColor = 'success';
-      postureTitle = 'Excelente Capacidade de Poupança';
-    }
+    const totalBalance = state.accounts.reduce((acc, a) => acc + parseFloat(a.balance), 0);
+    const baseFunds = monthIncome > 0 ? monthIncome : totalBalance;
+    const freeIncome = Math.max(0, baseFunds - monthFixedExpense - goalCommitments);
+    const availableBalanceForMonth = Math.max(0, freeIncome - (monthExpense - monthFixedExpense));
+    
+    const totalLiquidity = Math.max(totalBalance, availableBalanceForMonth);
+    
+    const currentDailyLimit = daysRemaining > 0 ? (availableBalanceForMonth / daysRemaining) : availableBalanceForMonth;
 
     return {
       monthIncome,
       monthExpense,
-      netMonthBalance,
-      netWorth,
-      commitmentRate,
-      savingsRate,
-      dailyBurnRate,
-      idealDailyBurn,
-      topCategory,
-      posture,
-      postureColor,
-      postureTitle,
-      goalsCount: goals.length,
-      currentDay,
-      daysInMonth
+      monthFixedExpense,
+      freeIncome,
+      availableBalanceForMonth,
+      currentDailyLimit,
+      daysRemaining,
+      totalBalance,
+      totalLiquidity
     };
   }
 
-  /**
-   * Gera os dados do Feed de Contexto Dinâmico para renderizar na Home.
-   */
-  generateDynamicFeedData() {
-    const metrics = this.calculateFinancialMetrics();
+  handleExplicitCommand(parsedData, metrics) {
+    const isGoal = parsedData.action === 'APORTE' || parsedData.type?.includes('Meta') || parsedData.type?.includes('Reserva');
+    const amt = parsedData.amount || parsedData.target;
+    const catOrType = isGoal ? parsedData.title : parsedData.category;
+    
+    return {
+      severity: 'info',
+      title: '📋 Resumo do Comando',
+      diagnosis: `Entendi que você deseja registrar ${isGoal ? 'um Aporte' : parsedData.type} de ${LinsoraUtils.formatBRL(amt)}.`,
+      impact: `Destino/Categoria: ${catOrType}. ${!isGoal && parsedData.type === 'DESPESA' ? 'O saldo será reduzido após a confirmação.' : 'O saldo será movimentado após a confirmação.'}`,
+      recommendation: 'Por favor, confirme a operação abaixo para gravar no banco de dados.',
+      action: {
+        type: isGoal ? 'EXECUTE_GOAL' : 'EXECUTE_TRANSACTION',
+        payload: parsedData,
+        buttonText: 'Confirmar Gravação'
+      }
+    };
+  }
 
-    let headline = '';
-    let critique = '';
-    let actionText = '';
+  handleViabilityQuestion(parsedData, metrics, rawText, intent) {
+    const isGoal = parsedData.action === 'APORTE' || parsedData.type?.includes('Meta') || parsedData.type?.includes('Reserva');
+    const amount = parsedData.amount || parsedData.target;
+    
+    if (isGoal) {
+        let rec = amount <= metrics.availableBalanceForMonth ? 'Aporte viável.' : 'Aporte compromete suas despesas livres mensais.';
+        if (intent === 'AMBIGUOUS') {
+          rec = 'Não ficou claro se é um registro ou simulação. ' + rec + ' Por favor, diga "Registre..." ou "Simule...".';
+        }
+        return {
+          severity: 'info',
+          title: intent === 'AMBIGUOUS' ? '🤔 Simulação ou Registro?' : '🔮 Simulação de Aporte/Meta',
+          diagnosis: `Você mencionou destinar ${LinsoraUtils.formatBRL(amount)} para ${parsedData.title}.`,
+          impact: `Livre no mês: ${LinsoraUtils.formatBRL(metrics.availableBalanceForMonth)}.`,
+          recommendation: rec,
+          action: null
+        };
+    }
+
+    if (!amount || amount === 0) {
+      return {
+        severity: 'info',
+        title: '💡 Limite Seguro',
+        diagnosis: `Com base nas suas receitas, despesas, reservas e saldo, o seu caixa livre no momento é de ${LinsoraUtils.formatBRL(metrics.availableBalanceForMonth)}.`,
+        impact: `Caixa Livre do Mês: ${LinsoraUtils.formatBRL(metrics.availableBalanceForMonth)} | Saldo em Contas: ${LinsoraUtils.formatBRL(metrics.totalBalance)} | Despesas: ${LinsoraUtils.formatBRL(metrics.monthExpense)}`,
+        recommendation: `Para não comprometer suas finanças, recomendo que seus gastos fiquem dentro de **${LinsoraUtils.formatBRL(metrics.currentDailyLimit)}** por dia até o próximo mês.`,
+        action: null
+      };
+    }
+
+    let diagnosis = '';
+    let recommendation = '';
     let severity = 'info';
 
-    if (metrics.monthIncome === 0 && metrics.monthExpense === 0) {
-      headline = 'Nenhuma movimentação registrada este mês.';
-      critique = 'O Conselheiro LINSORA precisa de dados reais para analisar seus riscos. Registre suas receitas e despesas ou use a voz.';
-      actionText = 'Registrar primeiro lançamento por voz ou formulário.';
-      severity = 'info';
-    } else if (metrics.posture === 'CRITICO') {
-      severity = 'danger';
-      headline = `Suas despesas excedem sua receita em ${LinsoraUtils.formatBRL(Math.abs(metrics.netMonthBalance))}.`;
-      critique = `Seu comprometimento é de ${metrics.commitmentRate}%. A categoria "${metrics.topCategory.name}" consome ${metrics.topCategory.percent}% de tudo que você gastou.`;
-      actionText = `Corte gastos não essenciais em ${metrics.topCategory.name} imediatamente para fechar o mês sem dívidas.`;
-    } else if (metrics.posture === 'ALERTA') {
-      severity = 'warning';
-      headline = `Você já comprometeu ${metrics.commitmentRate}% da sua receita deste mês.`;
-      critique = `Seu ritmo diário de consumo está em ${LinsoraUtils.formatBRL(metrics.dailyBurnRate)}/dia (o ideal seria até ${LinsoraUtils.formatBRL(metrics.idealDailyBurn)}/dia).`;
-      actionText = `Reduza despesas variáveis no restante do mês para garantir uma margem mínima de segurança de 15%.`;
-    } else if (metrics.posture === 'PROSPERO') {
-      severity = 'success';
-      headline = `Sua taxa de poupança está em ótimos ${metrics.savingsRate}%!`;
-      critique = `Você mantém um superávit mensal de ${LinsoraUtils.formatBRL(metrics.netMonthBalance)}. É o momento ideal para acelerar suas metas financeiras.`;
-      actionText = `Aloque parte deste saldo positivo para suas metas ativas ou reserva de emergência.`;
+    // Se ele não achou nenhuma keyword de categoria no NLP, omitimos a categoria da frase.
+    const catText = (parsedData.matchedCategory !== false) ? ` com ${parsedData.category}` : '';
+
+    if (intent === 'AMBIGUOUS') {
+      diagnosis = `Você mencionou ${LinsoraUtils.formatBRL(amount)}${catText}, mas não entendi se quer registrar ou apenas simular.`;
     } else {
-      severity = 'info';
-      headline = `Seu orçamento está equilibrado com ${metrics.commitmentRate}% de comprometimento.`;
-      critique = `Sua principal categoria de despesa é "${metrics.topCategory.name}" (${metrics.topCategory.percent}% do total gastador).`;
-      actionText = `Mantenha a disciplina nos próximos ${metrics.daysInMonth - metrics.currentDay} dias para fechar no positivo.`;
+      diagnosis = `Análise de viabilidade: Gasto de ${LinsoraUtils.formatBRL(amount)}${catText}.`;
+    }
+
+    if (amount > metrics.totalLiquidity) {
+      severity = 'danger';
+      recommendation = `Faltam fundos! Esse gasto de ${LinsoraUtils.formatBRL(amount)} é maior do que o seu saldo consolidado e renda livre.`;
+    } else if (amount > metrics.availableBalanceForMonth) {
+      severity = 'warning';
+      recommendation = `Você tem saldo nas contas para cobrir, mas esse gasto de ${LinsoraUtils.formatBRL(amount)} ultrapassa a sua renda livre do mês (${LinsoraUtils.formatBRL(metrics.availableBalanceForMonth)}). Você precisará entrar nas suas reservas acumuladas.`;
+    } else if (amount <= metrics.currentDailyLimit) {
+      severity = 'success';
+      recommendation = `Perfeito! O valor cabe perfeitamente no seu limite diário atual de ${LinsoraUtils.formatBRL(metrics.currentDailyLimit)}.`;
+    } else {
+      severity = 'warning';
+      recommendation = `É viável no mês, mas passa do seu teto diário de ${LinsoraUtils.formatBRL(metrics.currentDailyLimit)}. Se gastar isso hoje, vai precisar segurar a onda nos próximos dias.`;
+    }
+    
+    const impactMath = `Caixa Livre do Mês: ${LinsoraUtils.formatBRL(metrics.availableBalanceForMonth)} | Saldo em Contas: ${LinsoraUtils.formatBRL(metrics.totalBalance)} | Receitas do Mês: ${LinsoraUtils.formatBRL(metrics.monthIncome)} | Despesas do Mês: ${LinsoraUtils.formatBRL(metrics.monthExpense)} | Limite Diário: ${LinsoraUtils.formatBRL(metrics.currentDailyLimit)}`;
+
+    if (intent === 'AMBIGUOUS') {
+      recommendation = `Para me ajudar, por favor, seja mais direto: diga "Registre ${LinsoraUtils.formatBRL(amount)}${catText}" ou "Posso gastar ${LinsoraUtils.formatBRL(amount)}${catText}?".`;
     }
 
     return {
-      metrics,
       severity,
-      headline,
-      critique,
-      actionText
+      title: intent === 'AMBIGUOUS' ? '🤔 Simulação ou Registro?' : '🔮 Simulação de Gasto',
+      diagnosis,
+      impact: impactMath,
+      recommendation,
+      action: null
     };
   }
 
-  /**
-   * Processa uma consulta direta do usuário (texto ou voz) e gera um conselho crítico e analítico.
-   * @param {string} userQuery 
-   */
-  processQuery(userQuery) {
-    const metrics = this.calculateFinancialMetrics();
-    const query = (userQuery || '').trim().toLowerCase();
+  handleGeneralDiagnosis(metrics) {
+    let severity = 'success';
+    let msg = 'Seu orçamento está saudável.';
+    if (metrics.monthExpense > metrics.monthIncome && metrics.monthIncome > 0) {
+      severity = 'danger';
+      msg = 'Alerta: Você está gastando mais do que ganha este mês.';
+    } else if (metrics.availableBalanceForMonth < (metrics.freeIncome * 0.2) && metrics.freeIncome > 0) {
+      severity = 'warning';
+      msg = 'Atenção: Seu saldo livre para o mês está acabando rápido.';
+    }
 
-    let response = {
+    return {
+      severity,
+      title: '📊 Diagnóstico Orçamentário',
+      diagnosis: msg,
+      impact: `Limite diário disponível para os próximos ${metrics.daysRemaining} dias: ${LinsoraUtils.formatBRL(metrics.currentDailyLimit)}.`,
+      recommendation: 'Use linguagem natural para perguntar: "Posso gastar 50 em pizza hoje?" ou comande "Registre 50 de pizza".'
+    };
+  }
+
+  fallbackResponse() {
+    return {
       severity: 'info',
-      title: 'Análise Estratégica LINSORA',
-      diagnosis: '',
-      impact: '',
-      recommendation: ''
+      title: '🤖 Conselheiro Pronto',
+      diagnosis: 'Estou monitorando todas as suas contas, cartões e metas reais.',
+      impact: 'Faço cálculos instantâneos de limite diário e mensal.',
+      recommendation: 'Pergunte: "É viável comprar um tênis de 300?" ou mande "Pix de 50 para João".'
     };
-
-    // 1. Consulta sobre Contas Pendentes ou Vencidas ("esqueci de pagar alguma conta?")
-    const pendingKeywords = ['esqueci', 'pendente', 'vencida', 'vencer', 'contas a pagar', 'falta pagar', 'conta pendente'];
-    if (pendingKeywords.some(kw => query.includes(kw))) {
-      const storeState = window.linsoraStore?.state || {};
-      const fixedBills = storeState.fixedBills || [];
-      const now = new Date();
-      const currentDay = now.getDate();
-
-      const unpaidBills = fixedBills.filter(b => !b.paid && !b.isPaid);
-      const overdueBills = unpaidBills.filter(b => Number(b.due_day || b.dueDay) <= currentDay);
-      const upcomingBills = unpaidBills.filter(b => Number(b.due_day || b.dueDay) > currentDay);
-
-      const overdueTotal = overdueBills.reduce((sum, b) => sum + (Number(b.amount) || 0), 0);
-      const upcomingTotal = upcomingBills.reduce((sum, b) => sum + (Number(b.amount) || 0), 0);
-
-      if (overdueBills.length > 0) {
-        response.severity = 'danger';
-        response.title = '🚨 Contas Pendentes com Vencimento Ativo!';
-        response.diagnosis = `Você possui ${overdueBills.length} conta(s) recorrente(s) pendente(s) com vencimento até hoje (dia ${currentDay}).`;
-        response.impact = `O valor total dessas contas é de ${LinsoraUtils.formatBRL(overdueTotal)} (${overdueBills.map(b => `${b.title}: ${LinsoraUtils.formatBRL(b.amount)}`).join(', ')}).`;
-        response.recommendation = `Efetue o pagamento ou marque como pago imediatamente para evitar juros e manter seu teto seguro atualizado.`;
-      } else if (upcomingBills.length > 0) {
-        response.severity = 'info';
-        response.title = '✅ Nenhuma Conta Vencida! Próximos Vencimentos:';
-        response.diagnosis = `Todas as contas recorrentes até o dia ${currentDay} estão em dia.`;
-        response.impact = `Há ${upcomingBills.length} conta(s) a vencer nos próximos dias deste mês, totalizando ${LinsoraUtils.formatBRL(upcomingTotal)} (${upcomingBills.map(b => `${b.title}: ${LinsoraUtils.formatBRL(b.amount)} no dia ${b.due_day || b.dueDay}`).join(', ')}).`;
-        response.recommendation = `O valor de ${LinsoraUtils.formatBRL(upcomingTotal)} já está reservado e deduzido no seu cálculo de saldo seguro diário.`;
-      } else {
-        response.severity = 'success';
-        response.title = '🎉 Todas as Contas Recorrentes estão Pagas!';
-        response.diagnosis = 'Não há nenhuma conta fixa ou recorrente pendente para este mês.';
-        response.impact = 'Seu orçamento está totalmente livre de compromissos pendentes até o próximo ciclo.';
-        response.recommendation = 'Aproveite o superávit para alocar recursos na sua Reserva de Emergência ou metas ativas.';
-      }
-      return response;
-    }
-
-    // 2. Pergunta sobre viabilidade de gasto em linguagem natural (ex: "posso gastar R$ 150 hoje?")
-    const spendKeywords = ['posso', 'consigo', 'dá para', 'da pra', 'cabe', 'devo', 'quanto posso', 'gastar', 'comprar', 'jantar'];
-    const isSpendQuery = spendKeywords.some(kw => query.includes(kw));
-
-    const spendMatch = query.match(/(?:posso|consigo|dá para|da pra|cabe|devo)?\s*(?:gastar|comprar|pagar|jantar|fazer)?\s*(?:com|em|um|uma)?\s*R?\$?\s*(\d+(?:[\.,]\d+)?)/i)
-      || query.match(/R?\$?\s*(\d+(?:[\.,]\d+)?)/i);
-
-    if (isSpendQuery) {
-      const askedAmount = spendMatch ? parseFloat(spendMatch[1].replace(',', '.')) : 0;
-
-      const todayDate = new Date();
-      const currentDay = todayDate.getDate();
-      const currentMonth = todayDate.getMonth();
-      const currentYear = todayDate.getFullYear();
-
-      const storeState = window.linsoraStore?.state || {};
-      const transactions = storeState.transactions || [];
-      const accounts = storeState.accounts || [];
-      const fixedBills = storeState.fixedBills || [];
-      const cards = storeState.cards || [];
-
-      // Determinar próximo salário (detectado do perfil, transações ou padrão dia 5)
-      let salaryDay = storeState.user?.salaryDay || 5;
-      if (!storeState.user?.salaryDay && transactions.length > 0) {
-        const salaryTx = transactions.find(t => t.type === 'RECEITA' && (
-          (t.category && t.category.toLowerCase().includes('salário')) ||
-          (t.description && /salário|salario|holerite|pro-labore/i.test(t.description))
-        ));
-        if (salaryTx && salaryTx.date) {
-          const txDay = new Date(salaryTx.date).getDate();
-          if (txDay >= 1 && txDay <= 31) salaryDay = txDay;
-        }
-      }
-
-      let nextSalaryDate = new Date(currentYear, currentMonth, salaryDay);
-      if (currentDay >= salaryDay) {
-        nextSalaryDate = new Date(currentYear, currentMonth + 1, salaryDay);
-      }
-      const daysRemaining = Math.max(1, Math.ceil((nextSalaryDate - todayDate) / (1000 * 60 * 60 * 24)));
-
-      const nextSalaryDay = nextSalaryDate.getDate();
-      const isNextMonth = nextSalaryDate.getMonth() !== currentMonth;
-      const nextSalaryMonthStr = isNextMonth ? 'do mês que vem' : 'deste mês';
-
-      let accountBalance = accounts.reduce((acc, a) => acc + (Number(a.balance) || 0), 0);
-      if (accountBalance <= 0 && metrics.monthIncome > 0) {
-        accountBalance = Math.max(0, metrics.monthIncome - metrics.monthExpense);
-      }
-
-      // Soma de contas fixas pendentes
-      const pendingBillsTotal = fixedBills
-        .filter(b => !b.paid && !b.isPaid)
-        .reduce((sum, b) => sum + (Number(b.amount) || 0), 0);
-
-      // Soma de faturas de cartão pendentes
-      const cardBillsTotal = cards.reduce((sum, c) => sum + (Number(c.currentInvoice) || 0), 0);
-
-      const totalPendingCommitments = pendingBillsTotal + cardBillsTotal;
-      const safeBalance = Math.max(0, accountBalance - totalPendingCommitments);
-
-      const dailySafeLimit = safeBalance > 0 ? Math.round(safeBalance / daysRemaining) : 0;
-      const weeklySafeLimit = Math.round(dailySafeLimit * 7);
-
-      if (askedAmount > 0) {
-        const remainingAfterAsked = safeBalance - askedAmount;
-
-        if (askedAmount <= safeBalance && remainingAfterAsked >= 0) {
-          response.severity = 'success';
-          response.title = '🟢 Gasto Autorizado: Dentro do Saldo Seguro';
-          response.diagnosis = `Hoje é dia ${currentDay}, seu próximo salário será no dia ${nextSalaryDay} ${nextSalaryMonthStr}. Faltam ${daysRemaining} dias.`;
-          response.impact = `Com ${LinsoraUtils.formatBRL(accountBalance)} e considerando todas as contas cadastradas até lá, seu saldo seguro para uso é ${LinsoraUtils.formatBRL(safeBalance)}. Ou seja, cerca de ${LinsoraUtils.formatBRL(dailySafeLimit)} por dia ou ${LinsoraUtils.formatBRL(weeklySafeLimit)} por semana, sem comprometer as finanças.`;
-          response.recommendation = `Se gastar ${LinsoraUtils.formatBRL(askedAmount)} hoje, você ainda assim permanecerá dentro do saldo projetado até o próximo salário, mantendo as despesas previstas em dia.`;
-        } else {
-          response.severity = 'danger';
-          response.title = '🔴 ALERTA DE RISCO: Gasto Não Recomendado';
-          response.diagnosis = `Hoje é dia ${currentDay}, seu próximo salário será no dia ${nextSalaryDay} ${nextSalaryMonthStr}. Faltam ${daysRemaining} dias.`;
-          response.impact = `Com ${LinsoraUtils.formatBRL(accountBalance)} em conta e considerando ${LinsoraUtils.formatBRL(totalPendingCommitments)} em contas pendentes até lá, seu saldo seguro para uso é ${LinsoraUtils.formatBRL(safeBalance)} (cerca de ${LinsoraUtils.formatBRL(dailySafeLimit)} por dia). Gastar ${LinsoraUtils.formatBRL(askedAmount)} comprometeria o pagamento das suas despesas previstas.`;
-          response.recommendation = `A compra de ${LinsoraUtils.formatBRL(askedAmount)} não é recomendada no momento. O valor máximo seguro recomendado para gastar hoje é de até ${LinsoraUtils.formatBRL(Math.max(0, dailySafeLimit))} (ou no máximo ${LinsoraUtils.formatBRL(safeBalance)} até o próximo salário).`;
-        }
-
-        return response;
-      } else {
-        response.severity = 'info';
-        response.title = '💡 Saldo Seguro para Gastos Diários e Semanais';
-        response.diagnosis = `Hoje é dia ${currentDay}, seu próximo salário será no dia ${nextSalaryDay} ${nextSalaryMonthStr}. Faltam ${daysRemaining} dias.`;
-        response.impact = `Com ${LinsoraUtils.formatBRL(accountBalance)} em conta e ${LinsoraUtils.formatBRL(totalPendingCommitments)} em contas cadastradas até lá, seu saldo seguro para uso é ${LinsoraUtils.formatBRL(safeBalance)}.`;
-        response.recommendation = `Seu teto seguro de gastos é de cerca de ${LinsoraUtils.formatBRL(dailySafeLimit)} por dia ou ${LinsoraUtils.formatBRL(weeklySafeLimit)} por semana para não comprometer as contas previstas.`;
-        return response;
-      }
-    }
-
-    // 3. Consulta de Gargalo ou Maior Despesa
-    if (query.includes('gargalo') || query.includes('maior gasto') || query.includes('maior despesa') || query.includes('onde estou gastando')) {
-      if (metrics.topCategory.amount > 0) {
-        response.severity = 'warning';
-        response.title = '🔍 Análise do Maior Gargalo de Despesas';
-        response.diagnosis = `Sua maior categoria de despesa no mês é "${metrics.topCategory.name}".`;
-        response.impact = `Ela representa ${metrics.topCategory.percent}% do total de despesas (${LinsoraUtils.formatBRL(metrics.topCategory.amount)} de um total de ${LinsoraUtils.formatBRL(metrics.monthExpense)}).`;
-        response.recommendation = `Estabeleça um teto de gastos para ${metrics.topCategory.name} no próximo mês. Uma redução de 20% nesta categoria vai liberar ${LinsoraUtils.formatBRL(metrics.topCategory.amount * 0.2)} para seus investimentos.`;
-      } else {
-        response.severity = 'info';
-        response.title = '🔍 Análise do Orçamento';
-        response.diagnosis = 'Ainda não há despesas registradas no mês atual para determinar o gargalo principal.';
-        response.impact = 'Sem dados de despesas, sua taxa de poupança está em 100%.';
-        response.recommendation = 'Assim que registrar suas contas diárias, o Conselheiro identificará automaticamente onde seu dinheiro está vazando.';
-      }
-      return response;
-    }
-
-    // 3. Consulta Geral de Orçamento / Diagnóstico Global
-    const feedData = this.generateDynamicFeedData();
-    response.severity = feedData.severity;
-    response.title = `📊 Diagnóstico Orçamentário (${metrics.postureTitle})`;
-    response.diagnosis = feedData.headline;
-    response.impact = `${feedData.critique} Média diária de gastos atual: ${LinsoraUtils.formatBRL(metrics.dailyBurnRate)}. Meta diária recomendada: ${LinsoraUtils.formatBRL(metrics.idealDailyBurn)}.`;
-    response.recommendation = feedData.actionText;
-
-    return response;
   }
 
-  /**
-   * Síntese de Voz (Text-to-Speech) para ler o conselho em voz alta.
-   * @param {string} text
-   */
-  speakText(text) {
-    if (!('speechSynthesis' in window) || !window.speechSynthesis) return;
+  // ==============================
+  // UI & RENDERIZAÇÃO
+  // ==============================
 
-    try {
-      window.speechSynthesis.cancel();
-
-      const cleanText = text
-        .replace(/[*_~#`]/g, '')
-        .replace(/(📌|📊|🎯|🔴|🟡|🟢|⚡|🚀|⚠️|🚨)/g, '')
-        .trim();
-
-      if (!cleanText) return;
-
-      const utterance = new SpeechSynthesisUtterance(cleanText);
-      utterance.lang = 'pt-BR';
-      utterance.rate = 1.0;
-      utterance.pitch = 1.0;
-      utterance.volume = 1.0;
-
-      const voices = window.speechSynthesis.getVoices() || [];
-      const ptVoice = voices.find(v => v.lang && v.lang.toLowerCase().startsWith('pt'));
-      if (ptVoice) utterance.voice = ptVoice;
-
-      window.speechSynthesis.speak(utterance);
-    } catch (e) {
-      console.warn('Erro ao reproduzir voz sintética:', e);
-    }
-  }
-
-  /**
-   * Renderiza o Feed de Contexto Dinâmico no container da Home.
-   */
   renderHomeFeed() {
     const feedContainer = document.getElementById('strategicFeedContainer');
     if (!feedContainer) return;
 
-    const data = this.generateDynamicFeedData();
-    const m = data.metrics;
+    const state = window.linsoraStore?.state;
+    if (!state || !state.user) return;
 
-    const statusBadgeClass = data.severity === 'danger' ? 'danger' : (data.severity === 'warning' ? 'warning' : (data.severity === 'success' ? 'success' : 'info'));
-    const statusIcon = data.severity === 'danger' ? '🚨' : (data.severity === 'warning' ? '⚠️' : (data.severity === 'success' ? '🚀' : '💡'));
+    const metrics = this.calculateRealMetrics(state);
+    const advice = this.handleGeneralDiagnosis(metrics);
 
     feedContainer.innerHTML = `
-      <div class="strategic-feed-card severity-${data.severity}">
-        <div class="agent-live-tag">
-          <span class="agent-tag-badge">🧠 CONSELHEIRO ESTRATÉGICO • AGENTE IA</span>
-          <span class="pulse-dot"></span>
+      <div class="smart-insights-card actionable-insight-card severity-${advice.severity}">
+        <div class="insight-header">
+          <div class="insight-badge">🧠 Conselheiro IA</div>
+          <button type="button" class="linsora-btn small primary" id="btnOpenAdvisorFromFeed">Consultar</button>
         </div>
-
-        <div class="feed-header-row">
-          <div class="feed-badge ${statusBadgeClass}">
-            <span class="badge-icon">${statusIcon}</span>
-            <span class="badge-text">${m.postureTitle}</span>
-          </div>
-          <button type="button" class="feed-advisor-btn highlighted" id="btnOpenAdvisorFromFeed">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" width="16" height="16"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-            <span>Consultar Conselheiro</span>
-          </button>
-        </div>
-
-        <div class="feed-headline">
-          <h4>${data.headline}</h4>
-        </div>
-
-        <div class="feed-critique-box">
-          <p>${data.critique}</p>
-        </div>
-
-        <div class="feed-metrics-pills">
-          <div class="metric-pill">
-            <span class="pill-label">Comprometimento</span>
-            <span class="pill-value ${m.commitmentRate > 80 ? 'danger' : 'neutral'}">${m.commitmentRate}%</span>
-          </div>
-          <div class="metric-pill">
-            <span class="pill-label">Taxa de Poupança</span>
-            <span class="pill-value ${m.savingsRate >= 20 ? 'success' : 'warning'}">${m.savingsRate}%</span>
-          </div>
-          <div class="metric-pill">
-            <span class="pill-label">Maior Gargalo</span>
-            <span class="pill-value highlight">${m.topCategory.name} (${m.topCategory.percent}%)</span>
-          </div>
-        </div>
-
-        <div class="feed-recommendation-footer">
-          <span class="rec-tag">⚡ Ação Recomendada:</span>
-          <span class="rec-text">${data.actionText}</span>
+        <div class="insight-content">
+          <h4>${advice.title}</h4>
+          <p>${advice.diagnosis}</p>
+          <p><strong>Impacto:</strong> ${advice.impact}</p>
+          <p class="rec-text">⚡ ${advice.recommendation}</p>
         </div>
       </div>
     `;
 
-    // Conectar botão de abertura do conselheiro
-    const btnAdvisor = document.getElementById('btnOpenAdvisorFromFeed');
-    if (btnAdvisor) {
-      btnAdvisor.addEventListener('click', () => {
+    const btn = document.getElementById('btnOpenAdvisorFromFeed');
+    if (btn) {
+      btn.addEventListener('click', () => {
         this.openAdvisorModal();
       });
     }
   }
 
-  /**
-   * Abre o Modal/Drawer do Conselheiro Estratégico.
-   * @param {string} [initialQuery] 
-   * @param {Object} [options]
-   */
-  openAdvisorModal(initialQuery = null, options = {}) {
-    LinsoraUI.openModal('modalStrategicAdvisor');
+  openAdvisorModal(initialQuery = null) {
+    if (window.LinsoraUI) window.LinsoraUI.openModal('modalStrategicAdvisor');
 
     const chatContainer = document.getElementById('advisorChatHistory');
     const inputEl = document.getElementById('advisorQueryInput');
+    const btnSubmit = document.getElementById('btnSubmitAdvisorQuery');
+
+    if (btnSubmit && !btnSubmit.dataset.bound) {
+      btnSubmit.dataset.bound = 'true';
+      btnSubmit.addEventListener('click', () => this.submitAdvisorQuery());
+      if (inputEl) {
+        inputEl.addEventListener('keypress', (e) => {
+          if (e.key === 'Enter') this.submitAdvisorQuery();
+        });
+      }
+    }
 
     if (initialQuery && inputEl) {
       inputEl.value = initialQuery;
-      this.submitAdvisorQuery(initialQuery, options);
+      this.submitAdvisorQuery(initialQuery);
     } else if (chatContainer && chatContainer.children.length === 0) {
-      const defaultAdvice = this.processQuery('diagnostico geral');
-      this.appendAdvisorResponse(defaultAdvice, options);
+      const defaultAdvice = this.fallbackResponse();
+      this.appendAdvisorResponse(defaultAdvice);
     }
   }
 
-  /**
-   * Submete uma consulta e renderiza o cartão de resposta no modal.
-   * @param {string} text 
-   * @param {Object} [options]
-   */
-  submitAdvisorQuery(text, options = {}) {
-    const query = text || (document.getElementById('advisorQueryInput') && document.getElementById('advisorQueryInput').value);
+  submitAdvisorQuery(text = null) {
+    const inputEl = document.getElementById('advisorQueryInput');
+    const query = text || (inputEl ? inputEl.value : '');
     if (!query || !query.trim()) return;
 
-    const inputEl = document.getElementById('advisorQueryInput');
     if (inputEl) inputEl.value = '';
-
     this.appendUserMessage(query);
 
     setTimeout(() => {
       const advice = this.processQuery(query);
-      this.appendAdvisorResponse(advice, options);
-    }, 400);
+      this.appendAdvisorResponse(advice);
+    }, 500);
   }
 
   appendUserMessage(text) {
@@ -501,41 +336,155 @@ class StrategicAdvisorEngine {
 
     const msgEl = document.createElement('div');
     msgEl.className = 'advisor-user-msg';
+    msgEl.style.display = 'flex';
+    msgEl.style.justifyContent = 'flex-end';
+    msgEl.style.marginBottom = '1.2rem';
+    
     msgEl.innerHTML = `
-      <div class="user-msg-bubble">${LinsoraUtils.escapeHTML(text)}</div>
+      <div class="user-msg-bubble" style="background: var(--primary); color: #fff; padding: 12px 18px; border-radius: 18px 18px 4px 18px; max-width: 85%; font-size: 0.95rem; box-shadow: 0 4px 10px rgba(130,10,209,0.2); line-height: 1.4;">
+        ${text}
+      </div>
     `;
+    
     chatContainer.appendChild(msgEl);
     chatContainer.scrollTop = chatContainer.scrollHeight;
   }
 
-  appendAdvisorResponse(advice, options = {}) {
+  appendAdvisorResponse(advice) {
     const chatContainer = document.getElementById('advisorChatHistory');
     if (!chatContainer) return;
 
     const resEl = document.createElement('div');
-    resEl.className = `advisor-res-card severity-${advice.severity}`;
+    resEl.className = `advisor-bot-msg severity-${advice.severity}`;
+    resEl.style.display = 'flex';
+    resEl.style.justifyContent = 'flex-start';
+    resEl.style.marginBottom = '1.2rem';
+
+    // Determina a cor de destaque (borda ou fundo de header) com base na severidade
+    let highlightColor = 'var(--primary)';
+    let highlightBg = 'rgba(130, 10, 209, 0.05)';
+    if (advice.severity === 'danger') {
+       highlightColor = '#EF4444';
+       highlightBg = 'rgba(239, 68, 68, 0.05)';
+    } else if (advice.severity === 'warning') {
+       highlightColor = '#F59E0B';
+       highlightBg = 'rgba(245, 158, 11, 0.05)';
+    } else if (advice.severity === 'success') {
+       highlightColor = '#10B981';
+       highlightBg = 'rgba(16, 185, 129, 0.05)';
+    }
+
+    let actionBtnHtml = '';
+    if (advice.action) {
+      const btnId = 'btnAct_' + Date.now();
+      const btnText = advice.action.buttonText || 'Confirmar';
+      
+      actionBtnHtml = `
+        <button class="linsora-btn primary" id="${btnId}" style="margin-top: 14px; width: 100%; border-radius: 10px; font-weight: 600; padding: 12px;">
+          ${btnText}
+        </button>
+      `;
+      
+      setTimeout(() => {
+        const btn = document.getElementById(btnId);
+        if (btn) {
+          btn.addEventListener('click', () => {
+            try {
+               btn.disabled = true;
+               btn.innerText = 'Processando...';
+               this.executeAction(advice.action);
+               this.appendAdvisorResponse({
+                  severity: 'success',
+                  title: '✅ Sucesso!',
+                  diagnosis: 'Sua ação foi processada e gravada.',
+                  impact: 'As mudanças já foram refletidas no seu painel financeiro.',
+                  recommendation: 'Posso ajudar em mais alguma coisa?'
+               });
+            } catch (err) {
+               this.appendAdvisorResponse({
+                  severity: 'danger',
+                  title: '❌ Falha ao Salvar',
+                  diagnosis: 'Houve um erro no processamento: ' + err.message,
+                  impact: 'Nenhum dado foi alterado.',
+                  recommendation: 'Por favor, tente novamente.'
+               });
+            }
+          });
+        }
+      }, 50);
+    }
+
     resEl.innerHTML = `
-      <div class="advisor-card-header">
-        <div class="advisor-card-title">${advice.title}</div>
-      </div>
-      <div class="advisor-card-section">
-        <strong>📌 Diagnóstico</strong>
-        <p>${advice.diagnosis}</p>
-      </div>
-      <div class="advisor-card-section">
-        <strong>📊 Impacto no Orçamento</strong>
-        <p>${advice.impact}</p>
-      </div>
-      <div class="advisor-card-section rec">
-        <strong>🎯 Recomendação Prática</strong>
-        <p>${advice.recommendation}</p>
+      <div class="bot-msg-bubble" style="background: var(--card-bg); padding: 0; border-radius: 4px 18px 18px 18px; max-width: 90%; font-size: 0.95rem; box-shadow: 0 4px 12px rgba(0,0,0,0.06); border: 1px solid var(--border); overflow: hidden;">
+        
+        <div style="background: ${highlightBg}; padding: 12px 16px; border-bottom: 1px solid var(--border); font-weight: 600; font-size: 1rem; color: ${highlightColor}; display: flex; align-items: center; gap: 8px;">
+          ${advice.title}
+        </div>
+        
+        <div style="padding: 16px;">
+          <div style="color: var(--text-color); line-height: 1.5; margin-bottom: 4px;">
+            ${advice.recommendation}
+          </div>
+          
+          <details style="margin-top: 12px; cursor: pointer; user-select: none;">
+            <summary style="font-size: 0.85rem; font-weight: 600; color: var(--text-muted); padding: 4px 0; outline: none; transition: color 0.2s;">
+              Ver detalhes técnicos 📊
+            </summary>
+            <div style="margin-top: 8px; padding: 12px; background: var(--bg-color); border-radius: 8px; font-size: 0.85rem; color: var(--text-muted); border: 1px solid var(--border); line-height: 1.4;">
+              <strong style="color: var(--text-color);">Análise Diagnóstica:</strong><br/>${advice.diagnosis}<br/><br/>
+              <strong style="color: var(--text-color);">Visão Consolidada:</strong><br/>${advice.impact}
+            </div>
+          </details>
+          
+          ${actionBtnHtml}
+        </div>
+
       </div>
     `;
 
     chatContainer.appendChild(resEl);
     chatContainer.scrollTop = chatContainer.scrollHeight;
   }
+
+  executeAction(action) {
+    if (!action || !action.payload) return;
+    const p = action.payload;
+
+    if (action.type === 'EXECUTE_TRANSACTION' || action.type === 'PROPOSE_TRANSACTION') {
+       if (window.linsoraStore) {
+         window.linsoraStore.saveTransaction({
+            type: p.type,
+            amount: p.amount,
+            category: p.category,
+            description: p.description,
+            date: p.date,
+            status: 'CONCLUIDO',
+            account: 'Conta Principal'
+         });
+       }
+    } else if (action.type === 'EXECUTE_GOAL' || action.type === 'PROPOSE_GOAL') {
+       if (window.linsoraStore && p.isExistingGoal && p.goalId) {
+          window.linsoraStore.updateGoalProgress(p.goalId, p.amount);
+       } else if (window.linsoraStore) {
+          window.linsoraStore.addGoal({
+             title: p.title,
+             target: p.target,
+             deadline: p.deadline,
+             icon: p.icon,
+             category: p.type
+          });
+       }
+    }
+  }
 }
 
-// Instância Global
 window.LinsoraStrategicAdvisor = new StrategicAdvisorEngine();
+
+// Injetar bind do feed no init
+document.addEventListener('DOMContentLoaded', () => {
+   setTimeout(() => {
+     if (window.LinsoraStrategicAdvisor) {
+        window.LinsoraStrategicAdvisor.renderHomeFeed();
+     }
+   }, 2000);
+});
