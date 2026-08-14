@@ -5,6 +5,50 @@
  * ============================================================================
  */
 
+const IDB_STORE = 'linsora_auth';
+function getAuthDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open('LinsoraSecureDB', 1);
+    req.onupgradeneeded = (e) => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains(IDB_STORE)) db.createObjectStore(IDB_STORE);
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+async function idbSet(key, val) {
+  try {
+    const db = await getAuthDB();
+    return new Promise((resolve) => {
+      const tx = db.transaction(IDB_STORE, 'readwrite');
+      tx.objectStore(IDB_STORE).put(val, key);
+      tx.oncomplete = () => resolve();
+    });
+  } catch(e) {}
+}
+async function idbGet(key) {
+  try {
+    const db = await getAuthDB();
+    return new Promise((resolve) => {
+      const tx = db.transaction(IDB_STORE, 'readonly');
+      const req = tx.objectStore(IDB_STORE).get(key);
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => resolve(null);
+    });
+  } catch(e) { return null; }
+}
+async function idbRemove(key) {
+  try {
+    const db = await getAuthDB();
+    return new Promise((resolve) => {
+      const tx = db.transaction(IDB_STORE, 'readwrite');
+      tx.objectStore(IDB_STORE).delete(key);
+      tx.oncomplete = () => resolve();
+    });
+  } catch(e) {}
+}
+
 class SupabaseRepository {
   constructor() {
     this.configKey = 'LINSORA_SUPABASE_CONFIG';
@@ -96,10 +140,13 @@ class SupabaseRepository {
     try {
       if (userProfile && userProfile.id) {
         const val = JSON.stringify(userProfile);
+        // Triple-layer storage for bulletproof persistence
+        await idbSet('LINSORA_ACTIVE_LOCAL_SESSION', val);
+        localStorage.setItem('LINSORA_ACTIVE_LOCAL_SESSION', val);
         if (window.Capacitor?.Plugins?.Preferences) {
-          await window.Capacitor.Plugins.Preferences.set({ key: 'LINSORA_ACTIVE_LOCAL_SESSION', value: val });
-        } else {
-          localStorage.setItem('LINSORA_ACTIVE_LOCAL_SESSION', val);
+          await window.Capacitor.Plugins.Preferences.set({ key: 'LINSORA_ACTIVE_LOCAL_SESSION', value: val }).catch(()=>{});
+        } else if (window.Capacitor?.Preferences) {
+          await window.Capacitor.Preferences.set({ key: 'LINSORA_ACTIVE_LOCAL_SESSION', value: val }).catch(()=>{});
         }
       }
     } catch (e) {
@@ -109,11 +156,15 @@ class SupabaseRepository {
 
   async getActiveLocalSession() {
     try {
-      let raw = null;
-      if (window.Capacitor?.Plugins?.Preferences) {
-        const { value } = await window.Capacitor.Plugins.Preferences.get({ key: 'LINSORA_ACTIVE_LOCAL_SESSION' });
-        raw = value;
-      } else {
+      let raw = await idbGet('LINSORA_ACTIVE_LOCAL_SESSION');
+      if (!raw && window.Capacitor?.Plugins?.Preferences) {
+        const res = await window.Capacitor.Plugins.Preferences.get({ key: 'LINSORA_ACTIVE_LOCAL_SESSION' }).catch(()=>({}));
+        if (res && res.value) raw = res.value;
+      } else if (!raw && window.Capacitor?.Preferences) {
+        const res = await window.Capacitor.Preferences.get({ key: 'LINSORA_ACTIVE_LOCAL_SESSION' }).catch(()=>({}));
+        if (res && res.value) raw = res.value;
+      }
+      if (!raw) {
         raw = localStorage.getItem('LINSORA_ACTIVE_LOCAL_SESSION');
       }
       return raw ? JSON.parse(raw) : null;
@@ -124,10 +175,12 @@ class SupabaseRepository {
 
   async removeActiveLocalSession() {
     try {
+      await idbRemove('LINSORA_ACTIVE_LOCAL_SESSION');
+      localStorage.removeItem('LINSORA_ACTIVE_LOCAL_SESSION');
       if (window.Capacitor?.Plugins?.Preferences) {
-        await window.Capacitor.Plugins.Preferences.remove({ key: 'LINSORA_ACTIVE_LOCAL_SESSION' });
-      } else {
-        localStorage.removeItem('LINSORA_ACTIVE_LOCAL_SESSION');
+        await window.Capacitor.Plugins.Preferences.remove({ key: 'LINSORA_ACTIVE_LOCAL_SESSION' }).catch(()=>{});
+      } else if (window.Capacitor?.Preferences) {
+        await window.Capacitor.Preferences.remove({ key: 'LINSORA_ACTIVE_LOCAL_SESSION' }).catch(()=>{});
       }
     } catch (e) {
       console.warn('Falha ao limpar sessão local:', e);
