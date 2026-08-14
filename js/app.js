@@ -64,13 +64,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   LinsoraUtils.attachCurrencyMasks();
   renderAppUI(window.linsoraStore.state);
 
-  const splashTimer = setTimeout(() => {
-    hideSplashScreen();
-  }, 1200);
+  console.log('[AUDITORIA_SESSAO] Inicializando app. Aguardando restauração da sessão...');
 
   const sessionRes = await window.supabaseRepo.checkActiveSession();
+
+  console.log('[AUDITORIA_SESSAO] Restauração da sessão concluída. Resultado:', sessionRes);
+
   if (sessionRes.success) {
-    clearTimeout(splashTimer);
     await window.linsoraStore.loadUserData(sessionRes.user);
     const userState = window.linsoraStore.state.user;
 
@@ -81,6 +81,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     } else {
       grantAppAccess();
     }
+  } else {
+    console.log('[AUDITORIA_SESSAO] Usuário não logado. Exibindo tela de login/onboarding.');
+    hideSplashScreen();
   }
 });
 
@@ -1105,7 +1108,61 @@ function setupEventListeners() {
   });
 
   // FLUXO COMPLETO DE UPLOAD DE FOTO DE PERFIL
+  const processAndUploadAvatarDataUrl = async (dataUrl) => {
+    const spinner = document.getElementById('avatarUploadSpinner');
+    if (spinner) spinner.classList.remove('hidden');
+
+    try {
+      let finalUrl = dataUrl;
+
+      // Se o cliente Supabase estiver autenticado, tenta salvar no bucket de avatars
+      if (window.supabaseRepo && window.supabaseRepo.supabase && window.supabaseRepo.currentUserId && window.supabaseRepo.currentUserId !== 'guest') {
+        try {
+          const userId = window.supabaseRepo.currentUserId;
+          const fileName = `avatar_${userId}_${Date.now()}.jpg`;
+          const blob = LinsoraUtils.dataURItoBlob(dataUrl);
+
+          const { data, error } = await window.supabaseRepo.supabase.storage
+            .from('avatars')
+            .upload(fileName, blob, { upsert: true, contentType: 'image/jpeg' });
+
+          if (!error && data) {
+            const { data: publicUrlData } = window.supabaseRepo.supabase.storage
+              .from('avatars')
+              .getPublicUrl(fileName);
+            if (publicUrlData && publicUrlData.publicUrl) {
+              finalUrl = publicUrlData.publicUrl;
+            }
+          }
+        } catch (supErr) {
+          console.warn('Fallback para imagem de cache local:', supErr);
+        }
+      }
+
+      // Persistência no Estado (Garante salvamento no LocalStorage)
+      if (window.linsoraStore && window.linsoraStore.state && window.linsoraStore.state.user) {
+        window.linsoraStore.state.user.avatar = finalUrl;
+        window.linsoraStore.notify(); // Aciona syncUp e saveDbData
+      }
+
+      // Atualiza UI Instantaneamente
+      const avatarImg = document.getElementById('profileAvatarImg');
+      if (avatarImg) avatarImg.src = finalUrl;
+      const userAvatarHeader = document.getElementById('userAvatar');
+      if (userAvatarHeader) userAvatarHeader.src = finalUrl;
+
+      LinsoraUI.showToast('Foto de perfil atualizada com sucesso', 'success');
+
+    } catch (err) {
+      console.error('Erro ao processar foto:', err);
+      LinsoraUI.showToast('Erro ao processar foto. Tente novamente.', 'error');
+    } finally {
+      if (spinner) spinner.classList.add('hidden');
+    }
+  };
+
   const triggerAvatarSelect = () => {
+    console.log('Iniciando seleção de avatar com HTML5 Input nativo...');
     const input = document.getElementById('profileAvatarInput');
     if (input) input.click();
   };
@@ -1128,53 +1185,13 @@ function setupEventListeners() {
       try {
         // Compressão via Canvas (Garante que funcione em WebView/Android)
         const compressedDataUrl = await LinsoraUtils.processAndCompressImage(file, 400, 400, 0.7);
-        let finalUrl = compressedDataUrl;
-
-        // Se o cliente Supabase estiver autenticado, tenta salvar no bucket de avatars
-        if (window.supabaseRepo && window.supabaseRepo.supabase && window.supabaseRepo.currentUserId && window.supabaseRepo.currentUserId !== 'guest') {
-          try {
-            const userId = window.supabaseRepo.currentUserId;
-            const fileName = `avatar_${userId}_${Date.now()}.jpg`;
-            const blob = LinsoraUtils.dataURItoBlob(compressedDataUrl);
-
-            const { data, error } = await window.supabaseRepo.supabase.storage
-              .from('avatars')
-              .upload(fileName, blob, { upsert: true, contentType: 'image/jpeg' });
-
-            if (!error && data) {
-              const { data: publicUrlData } = window.supabaseRepo.supabase.storage
-                .from('avatars')
-                .getPublicUrl(fileName);
-              if (publicUrlData && publicUrlData.publicUrl) {
-                finalUrl = publicUrlData.publicUrl;
-              }
-            }
-          } catch (supErr) {
-            console.warn('Fallback para imagem de cache local:', supErr);
-          }
-        }
-
-        // Persistência no Estado (Garante salvamento no LocalStorage)
-        if (window.linsoraStore && window.linsoraStore.state && window.linsoraStore.state.user) {
-          window.linsoraStore.state.user.avatar = finalUrl;
-          window.linsoraStore.notify(); // Aciona syncUp e saveDbData
-        }
-
-        // Atualiza UI Instantaneamente
-        const avatarImg = document.getElementById('profileAvatarImg');
-        if (avatarImg) avatarImg.src = finalUrl;
-        const userAvatarHeader = document.getElementById('userAvatar');
-        if (userAvatarHeader) userAvatarHeader.src = finalUrl;
-
-        LinsoraUI.showToast('Foto de perfil atualizada com sucesso', 'success');
-
+        await processAndUploadAvatarDataUrl(compressedDataUrl);
       } catch (err) {
-        console.error('Erro ao processar foto:', err);
-        LinsoraUI.showToast('Erro ao processar foto. Tente novamente.', 'error');
+        console.error('Erro ao comprimir imagem local:', err);
+        LinsoraUI.showToast('Erro ao processar arquivo.', 'error');
       } finally {
         if (spinner) spinner.classList.add('hidden');
-        // Limpar input para permitir selecionar a mesma foto caso falhe
-        e.target.value = '';
+        profileAvatarInput.value = ''; // Reset do input
       }
     });
   }

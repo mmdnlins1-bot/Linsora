@@ -15,20 +15,57 @@ class SupabaseRepository {
     this.initSupabaseSDK();
   }
 
-  /**
-   * Inicializa o cliente oficial do Supabase JS SDK se houver credenciais
-   */
   initSupabaseSDK() {
     if (this.config.url && this.config.key && window.supabase) {
       try {
+        const capacitorStorage = {
+          getItem: async (key) => {
+            if (window.Capacitor?.Plugins?.Preferences) {
+              const { value } = await window.Capacitor.Plugins.Preferences.get({ key });
+              return value;
+            }
+            return localStorage.getItem(key);
+          },
+          setItem: async (key, value) => {
+            if (window.Capacitor?.Plugins?.Preferences) {
+              await window.Capacitor.Plugins.Preferences.set({ key, value });
+            } else {
+              localStorage.setItem(key, value);
+            }
+          },
+          removeItem: async (key) => {
+            if (window.Capacitor?.Plugins?.Preferences) {
+              await window.Capacitor.Plugins.Preferences.remove({ key });
+            } else {
+              localStorage.removeItem(key);
+            }
+          }
+        };
+
         this.supabase = window.supabase.createClient(this.config.url, this.config.key, {
           auth: {
+            storage: capacitorStorage,
             persistSession: true,
             autoRefreshToken: true,
             detectSessionInUrl: true
           }
         });
-        console.log('⚡ Supabase Client SDK inicializado com suporte estrito a RLS!');
+        console.log('⚡ Supabase Client SDK inicializado com suporte estrito a RLS e Capacitor Preferences!');
+        
+        // Listener para sincronizar estado reativamente se a sessão do Supabase cair
+        this.supabase.auth.onAuthStateChange(async (event, session) => {
+          if (event === 'SIGNED_OUT') {
+            this.currentUserId = 'guest';
+            const main = document.getElementById('appMain');
+            if (main) {
+              main.classList.remove('active');
+              main.classList.add('hidden');
+            }
+          } else if (session?.user) {
+            this.currentUserId = session.user.id;
+          }
+        });
+        
       } catch (e) {
         console.warn('Erro ao inicializar Supabase SDK:', e);
       }
@@ -55,22 +92,45 @@ class SupabaseRepository {
      AUTENTICAÇÃO E SESSÃO DO USUÁRIO
      ------------------------------------------------------------------------ */
 
-  saveActiveLocalSession(userProfile) {
+  async saveActiveLocalSession(userProfile) {
     try {
       if (userProfile && userProfile.id) {
-        localStorage.setItem('LINSORA_ACTIVE_LOCAL_SESSION', JSON.stringify(userProfile));
+        const val = JSON.stringify(userProfile);
+        if (window.Capacitor?.Plugins?.Preferences) {
+          await window.Capacitor.Plugins.Preferences.set({ key: 'LINSORA_ACTIVE_LOCAL_SESSION', value: val });
+        } else {
+          localStorage.setItem('LINSORA_ACTIVE_LOCAL_SESSION', val);
+        }
       }
     } catch (e) {
       console.warn('Falha ao salvar sessão local:', e);
     }
   }
 
-  getActiveLocalSession() {
+  async getActiveLocalSession() {
     try {
-      const raw = localStorage.getItem('LINSORA_ACTIVE_LOCAL_SESSION');
+      let raw = null;
+      if (window.Capacitor?.Plugins?.Preferences) {
+        const { value } = await window.Capacitor.Plugins.Preferences.get({ key: 'LINSORA_ACTIVE_LOCAL_SESSION' });
+        raw = value;
+      } else {
+        raw = localStorage.getItem('LINSORA_ACTIVE_LOCAL_SESSION');
+      }
       return raw ? JSON.parse(raw) : null;
     } catch (e) {
       return null;
+    }
+  }
+
+  async removeActiveLocalSession() {
+    try {
+      if (window.Capacitor?.Plugins?.Preferences) {
+        await window.Capacitor.Plugins.Preferences.remove({ key: 'LINSORA_ACTIVE_LOCAL_SESSION' });
+      } else {
+        localStorage.removeItem('LINSORA_ACTIVE_LOCAL_SESSION');
+      }
+    } catch (e) {
+      console.warn('Falha ao limpar sessão local:', e);
     }
   }
 
@@ -87,7 +147,7 @@ class SupabaseRepository {
             email: session.user.email,
             avatar: userMeta.avatar_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80'
           });
-          this.saveActiveLocalSession(db.user);
+          await this.saveActiveLocalSession(db.user);
           return { success: true, user: db.user, db };
         }
       } catch (e) {
@@ -95,7 +155,7 @@ class SupabaseRepository {
       }
     }
 
-    const localSession = this.getActiveLocalSession();
+    const localSession = await this.getActiveLocalSession();
     if (localSession && localSession.id) {
       this.currentUserId = localSession.id;
       const db = await this.getDbData(localSession.id, localSession);
@@ -260,7 +320,7 @@ class SupabaseRepository {
         if (error) throw error;
         this.currentUserId = data.user.id;
         const db = await this.getDbData(data.user.id, { id: data.user.id, email: data.user.email, name: cleanEmail.split('@')[0] });
-        this.saveActiveLocalSession(db.user);
+        await this.saveActiveLocalSession(db.user);
         if (window.LinsoraLogger) window.LinsoraLogger.auth('signInWithEmail Supabase com sucesso', { email: cleanEmail }, data.user.id);
         return { success: true, user: db.user };
       } catch (err) {
@@ -328,7 +388,7 @@ class SupabaseRepository {
       this._clearLoginAttempts(cleanEmail);
       this.currentUserId = existing.id;
       const db = await this.getDbData(existing.id, { id: existing.id, email: cleanEmail, name: existing.name || cleanEmail.split('@')[0] });
-      this.saveActiveLocalSession(db.user);
+      await this.saveActiveLocalSession(db.user);
       if (window.LinsoraLogger) window.LinsoraLogger.auth('signInWithEmail local com sucesso', { email: cleanEmail }, existing.id);
       return { success: true, user: db.user };
     }
@@ -342,7 +402,7 @@ class SupabaseRepository {
     this._clearLoginAttempts(cleanEmail);
     this.currentUserId = userId;
     const db = await this.getDbData(userId, { id: userId, email: cleanEmail, name: cleanEmail.split('@')[0] });
-    this.saveActiveLocalSession(db.user);
+    await this.saveActiveLocalSession(db.user);
     if (window.LinsoraLogger) window.LinsoraLogger.auth('signInWithEmail auto-registro local', { email: cleanEmail }, userId);
     return { success: true, user: db.user };
   }
@@ -362,7 +422,7 @@ class SupabaseRepository {
         if (error) throw error;
         this.currentUserId = data.user.id;
         const db = await this.getDbData(data.user.id, { id: data.user.id, email: cleanEmail, name: userName });
-        this.saveActiveLocalSession(db.user);
+        await this.saveActiveLocalSession(db.user);
         if (window.LinsoraLogger) window.LinsoraLogger.auth('signUpWithEmail Supabase com sucesso', { email: cleanEmail }, data.user.id);
         return { success: true, user: db.user };
       } catch (err) {
@@ -386,7 +446,7 @@ class SupabaseRepository {
 
     this.currentUserId = userId;
     const db = await this.getDbData(userId, { id: userId, email: cleanEmail, name: userName });
-    this.saveActiveLocalSession(db.user);
+    await this.saveActiveLocalSession(db.user);
     if (window.LinsoraLogger) window.LinsoraLogger.auth('signUpWithEmail local cadastrado com sucesso', { email: cleanEmail }, userId);
     return { success: true, user: db.user };
   }
@@ -394,7 +454,7 @@ class SupabaseRepository {
   async signOut() {
     const previousUserId = this.currentUserId;
     try {
-      localStorage.removeItem('LINSORA_ACTIVE_LOCAL_SESSION');
+      await this.removeActiveLocalSession();
       if (this.supabase) {
         await this.supabase.auth.signOut();
       }

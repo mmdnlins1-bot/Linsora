@@ -11,6 +11,7 @@ import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 
 import com.getcapacitor.BridgeActivity;
+import com.getcapacitor.BridgeWebChromeClient;
 
 public class MainActivity extends BridgeActivity {
 
@@ -23,16 +24,19 @@ public class MainActivity extends BridgeActivity {
         setupWebChromeClientForMicrophone();
     }
 
+
     /**
      * Substitui o WebChromeClient do Capacitor para interceptar as solicitações
      * de permissão vindas do JavaScript (getUserMedia / SpeechRecognition) e
-     * repassá-las ao sistema Android.
+     * repassá-las ao sistema Android, preservando as funções nativas do Capacitor.
      */
     private void setupWebChromeClientForMicrophone() {
         WebView webView = getBridge().getWebView();
         if (webView == null) return;
 
-        webView.setWebChromeClient(new WebChromeClient() {
+        // IMPORTANTE: Estender o BridgeWebChromeClient para não quebrar a 
+        // seleção de fotos e a persistência do DOM (localStorage/IndexedDB)!
+        webView.setWebChromeClient(new BridgeWebChromeClient(getBridge()) {
             @Override
             public void onPermissionRequest(final PermissionRequest request) {
                 boolean needsMic = false;
@@ -59,7 +63,7 @@ public class MainActivity extends BridgeActivity {
                     }
                 } else {
                     // Outros recursos: delega ao comportamento padrão do Capacitor
-                    request.grant(request.getResources());
+                    super.onPermissionRequest(request);
                 }
             }
         });

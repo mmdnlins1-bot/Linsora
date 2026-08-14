@@ -33,9 +33,8 @@ class LinsoraStore {
   }
 
   async init(userObj = null) {
-    const activeSession = window.supabaseRepo?.getActiveLocalSession();
-    const userId = userObj?.id || activeSession?.id || window.supabaseRepo?.currentUserId || 'guest';
-    this.state = await window.supabaseRepo.getDbData(userId, userObj || activeSession);
+    const userId = userObj?.id || window.supabaseRepo?.currentUserId || 'guest';
+    this.state = await window.supabaseRepo.getDbData(userId, userObj);
     this.currentTheme = localStorage.getItem('LINSORA_THEME') || 'dark';
     document.documentElement.setAttribute('data-theme', this.currentTheme);
     this.notify();
