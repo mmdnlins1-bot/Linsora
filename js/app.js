@@ -58,34 +58,57 @@ window.switchTab = function(tabId) {
 document.addEventListener('DOMContentLoaded', async () => {
   console.log('🚀 LINSORA Finances — Inicializando aplicativo comercial...');
 
+  // 1. Setup básico: store, listeners de UI e máscaras
+  //    NÃO chama renderAppUI ainda — a splash screen permanece ativa
+  //    (evita o flash visual da tela de login antes da verificação de sessão)
   await window.linsoraStore.init();
   window.linsoraStore.subscribe(renderAppUI);
   setupEventListeners();
   LinsoraUtils.attachCurrencyMasks();
-  renderAppUI(window.linsoraStore.state);
 
+  // 2. Warm-up do storage: carrega o token Supabase do Capacitor.Preferences
+  //    para o _supabaseMemCache ANTES de qualquer chamada ao Supabase SDK.
+  //    Crítico para que getSession() encontre o token já na primeira chamada.
+  console.log('[AUDITORIA_SESSAO] Pré-aquecendo storage do Supabase...');
+  if (window.supabaseRepo?.warmUpStorage) {
+    await window.supabaseRepo.warmUpStorage();
+  }
+
+  // 3. Re-inicializa o SDK com o cache já populado (necessário quando
+  //    a configuração já existia e o SDK foi criado no construtor sem warm-up)
+  if (window.supabaseRepo?.config?.url && window.supabaseRepo?.initSupabaseSDK) {
+    window.supabaseRepo.initSupabaseSDK();
+  }
+
+  // 4. Verificar sessão ativa — splash permanece visível durante esta operação
   console.log('[AUDITORIA_SESSAO] Inicializando app. Aguardando restauração da sessão...');
-
   const sessionRes = await window.supabaseRepo.checkActiveSession();
+  console.log('[AUDITORIA_SESSAO] Restauração da sessão concluída. Resultado:', sessionRes?.success);
 
-  console.log('[AUDITORIA_SESSAO] Restauração da sessão concluída. Resultado:', sessionRes);
-
+  // 5. Roteamento único e definitivo após a verificação
   if (sessionRes.success) {
+    // Carrega os dados do usuário e renderiza a UI com estado real
     await window.linsoraStore.loadUserData(sessionRes.user);
-    const userState = window.linsoraStore.state.user;
+    renderAppUI(window.linsoraStore.state);
 
+    const userState = window.linsoraStore.state?.user;
     if (userState && userState.isPinEnabled) {
+      // Sessão válida com PIN: esconde splash, pede PIN/biometria
       hideSplashScreen();
       openPinPad('UNLOCK');
       triggerBiometricAuth();
     } else {
+      // Sessão válida sem PIN: vai direto para o Dashboard
       grantAppAccess();
     }
   } else {
+    // Sem sessão: renderiza estado vazio e exibe tela de login
+    renderAppUI(window.linsoraStore.state);
     console.log('[AUDITORIA_SESSAO] Usuário não logado. Exibindo tela de login/onboarding.');
     hideSplashScreen();
   }
 });
+
 
 function hideSplashScreen() {
   const splash = document.getElementById('splashScreen');

@@ -5,6 +5,30 @@
  * ============================================================================
  */
 
+/**
+ * Cache síncrono em memória para o storage adapter do Supabase SDK v2.
+ *
+ * O Supabase JS SDK chama storage.getItem() de forma SÍNCRONA durante o
+ * createClient(). Se getItem() retornar uma Promise (como faz o Capacitor
+ * Preferences), o SDK recebe "[object Promise]" como valor do token — que é
+ * inválido — e descarta a sessão silenciosamente. Este cache resolve o problema:
+ *   1. É populado antes da instanciação do cliente (via warmUpStorage)
+ *   2. Retorna valores síncronos para o SDK
+ *   3. Persiste assincronamente em localStorage + Capacitor Preferences
+ */
+const _supabaseMemCache = {};
+
+// Pré-popula o cache com todas as chaves sb-* já presentes no localStorage
+// (garante que re-inicializações do SDK encontrem o token imediatamente)
+try {
+  for (let i = 0; i < localStorage.length; i++) {
+    const k = localStorage.key(i);
+    if (k && (k.startsWith('sb-') || k === 'supabase.auth.token')) {
+      _supabaseMemCache[k] = localStorage.getItem(k);
+    }
+  }
+} catch(e) { /* falha silenciosa — não impede o boot */ }
+
 const IDB_STORE = 'linsora_auth';
 function getAuthDB() {
   return new Promise((resolve, reject) => {
@@ -55,33 +79,82 @@ class SupabaseRepository {
     this.config = this.getSupabaseConfig();
     this.supabase = null;
     this.currentUserId = 'guest';
-    
+    // NÃO chama initSupabaseSDK aqui — app.js chama initSupabaseSDKAsync() antes
+    // de checkActiveSession() para garantir que o warm-up seja aguardado.
     this.initSupabaseSDK();
   }
 
+  /**
+   * Pré-carrega as chaves de sessão do Capacitor.Preferences para o _supabaseMemCache
+   * ANTES de instanciar o Supabase Client. Isso garante que storage.getItem() retorne
+   * o token de forma síncrona quando o SDK inicializar.
+   *
+   * Deve ser chamado com `await` antes de initSupabaseSDK().
+   */
+  async warmUpStorage() {
+    if (!window.Capacitor?.Plugins?.Preferences || !this.config.url) return;
+    try {
+      // Determina o prefixo da chave de sessão do Supabase (ex: sb-xyzabc-auth-token)
+      const urlHost = new URL(this.config.url).hostname;
+      const projectRef = urlHost.split('.')[0];
+      const sessionKey = `sb-${projectRef}-auth-token`;
+
+      const { value } = await window.Capacitor.Plugins.Preferences.get({ key: sessionKey })
+        .catch(() => ({ value: null }));
+
+      if (value) {
+        _supabaseMemCache[sessionKey] = value;
+        // Sincroniza de volta ao localStorage para redundância
+        localStorage.setItem(sessionKey, value);
+        console.log('[LINSORA Auth] warmUpStorage: token de sessão carregado do Capacitor Preferences para memCache.');
+      } else {
+        console.log('[LINSORA Auth] warmUpStorage: nenhum token encontrado no Capacitor Preferences.');
+      }
+    } catch(e) {
+      console.warn('[LINSORA Auth] warmUpStorage falhou (não crítico):', e);
+    }
+  }
+
+  /**
+   * Inicializa o Supabase SDK de forma síncrona.
+   * IMPORTANTE: Para que a sessão persista no Android, chame `await warmUpStorage()`
+   * ANTES de chamar este método (ou de instanciar SupabaseRepository).
+   */
   initSupabaseSDK() {
     if (this.config.url && this.config.key && window.supabase) {
       try {
+        /**
+         * Storage adapter com cache síncrono em memória.
+         *
+         * CRÍTICO: O Supabase JS SDK v2 chama getItem() de forma SÍNCRONA
+         * durante createClient(). O retorno deve ser o valor diretamente (string | null),
+         * não uma Promise. O _supabaseMemCache (pré-populado por warmUpStorage) garante
+         * o retorno síncrono correto.
+         *
+         * setItem/removeItem persistem assincronamente em localStorage + Capacitor
+         * Preferences para durabilidade entre sessões do app.
+         */
         const capacitorStorage = {
-          getItem: async (key) => {
-            if (window.Capacitor?.Plugins?.Preferences) {
-              const { value } = await window.Capacitor.Plugins.Preferences.get({ key });
-              return value;
-            }
+          getItem: (key) => {
+            // Retorno síncrono — crítico para o Supabase SDK v2
+            if (key in _supabaseMemCache) return _supabaseMemCache[key];
             return localStorage.getItem(key);
           },
-          setItem: async (key, value) => {
+          setItem: (key, value) => {
+            // Atualiza cache síncrono imediatamente
+            _supabaseMemCache[key] = value;
+            // Persiste em localStorage (síncrono e confiável)
+            localStorage.setItem(key, value);
+            // Persiste em Capacitor Preferences (assíncrono, melhor durabilidade no Android)
             if (window.Capacitor?.Plugins?.Preferences) {
-              await window.Capacitor.Plugins.Preferences.set({ key, value });
-            } else {
-              localStorage.setItem(key, value);
+              window.Capacitor.Plugins.Preferences.set({ key, value }).catch(() => {});
             }
           },
-          removeItem: async (key) => {
+          removeItem: (key) => {
+            delete _supabaseMemCache[key];
+            localStorage.removeItem(key);
             if (window.Capacitor?.Plugins?.Preferences) {
-              await window.Capacitor.Plugins.Preferences.remove({ key });
-            } else {
-              localStorage.removeItem(key);
+              window.Capacitor.Plugins.Preferences.remove({ key }).catch(() => {});
             }
           }
         };
@@ -91,27 +164,42 @@ class SupabaseRepository {
             storage: capacitorStorage,
             persistSession: true,
             autoRefreshToken: true,
-            detectSessionInUrl: true
+            detectSessionInUrl: false
           }
         });
-        console.log('⚡ Supabase Client SDK inicializado com suporte estrito a RLS e Capacitor Preferences!');
-        
-        // Listener para sincronizar estado reativamente se a sessão do Supabase cair
+        console.log('⚡ Supabase Client SDK inicializado com memCache síncrono e suporte a Capacitor Preferences!');
+
+        // Listener reativo para manter memCache e currentUserId sincronizados
+        // com o ciclo de vida do token (refresh, expiração, logout)
         this.supabase.auth.onAuthStateChange(async (event, session) => {
-          if (event === 'SIGNED_OUT') {
+          console.log('[LINSORA Auth] onAuthStateChange:', event, session?.user?.id || 'no-user');
+
+          if (event === 'SIGNED_OUT' || event === 'USER_DELETED') {
+            // Limpa memCache de todas as chaves de sessão Supabase
+            Object.keys(_supabaseMemCache).forEach(k => {
+              if (k.startsWith('sb-')) delete _supabaseMemCache[k];
+            });
             this.currentUserId = 'guest';
+            await this.removeActiveLocalSession();
+            // Redireciona para tela de login se o app estiver visível
             const main = document.getElementById('appMain');
-            if (main) {
+            if (main && main.classList.contains('active')) {
               main.classList.remove('active');
               main.classList.add('hidden');
+              const auth = document.getElementById('authScreen');
+              if (auth) { auth.classList.remove('hidden'); auth.classList.add('active'); }
             }
-          } else if (session?.user) {
+          } else if (event === 'TOKEN_REFRESHED' && session) {
+            // Garante que o novo token seja refletido no memCache
+            this.currentUserId = session.user.id;
+            console.log('[LINSORA Auth] Token renovado automaticamente para usuário:', session.user.id);
+          } else if (event === 'SIGNED_IN' && session?.user) {
             this.currentUserId = session.user.id;
           }
         });
-        
+
       } catch (e) {
-        console.warn('Erro ao inicializar Supabase SDK:', e);
+        console.warn('[LINSORA Auth] Erro ao inicializar Supabase SDK:', e);
       }
     }
   }
@@ -188,10 +276,20 @@ class SupabaseRepository {
   }
 
   async checkActiveSession() {
+    console.log('[LINSORA Auth] checkActiveSession: iniciando verificação de sessão...');
+
     if (this.supabase) {
       try {
         const { data: { session }, error } = await this.supabase.auth.getSession();
-        if (!error && session && session.user) {
+
+        if (error) {
+          // Erro na leitura da sessão (ex: token corrompido) — limpar e forçar login
+          console.warn('[LINSORA Auth] Erro ao ler sessão Supabase, limpando storage local:', error.message);
+          await this.removeActiveLocalSession();
+          return { success: false };
+        }
+
+        if (session && session.user) {
           this.currentUserId = session.user.id;
           const userMeta = session.user.user_metadata || {};
           const db = await this.getDbData(session.user.id, {
@@ -201,20 +299,27 @@ class SupabaseRepository {
             avatar: userMeta.avatar_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80'
           });
           await this.saveActiveLocalSession(db.user);
+          console.log('[LINSORA Auth] Sessão Supabase válida encontrada para:', session.user.email);
           return { success: true, user: db.user, db };
         }
+
+        // Supabase não retornou sessão — sem token ou expirado sem refresh possível
+        console.log('[LINSORA Auth] Nenhuma sessão Supabase ativa. Verificando sessão local de fallback...');
       } catch (e) {
-        console.warn('Sessão ativa Supabase não encontrada:', e);
+        console.warn('[LINSORA Auth] Exceção ao verificar sessão Supabase:', e);
       }
     }
 
+    // Fallback: sessão local salva (modo offline ou Supabase não configurado)
     const localSession = await this.getActiveLocalSession();
     if (localSession && localSession.id) {
       this.currentUserId = localSession.id;
       const db = await this.getDbData(localSession.id, localSession);
+      console.log('[LINSORA Auth] Sessão local encontrada para userId:', localSession.id);
       return { success: true, user: db.user, db };
     }
 
+    console.log('[LINSORA Auth] Nenhuma sessão ativa encontrada. Usuário deve fazer login.');
     return { success: false };
   }
 
@@ -507,7 +612,15 @@ class SupabaseRepository {
   async signOut() {
     const previousUserId = this.currentUserId;
     try {
+      // 1. Limpar memCache de todas as chaves de sessão Supabase
+      Object.keys(_supabaseMemCache).forEach(k => {
+        if (k.startsWith('sb-') || k === 'supabase.auth.token') delete _supabaseMemCache[k];
+      });
+
+      // 2. Remover sessão local persistida (IDB + localStorage + Capacitor Preferences)
       await this.removeActiveLocalSession();
+
+      // 3. Encerrar sessão no Supabase remoto (invalida refresh token)
       if (this.supabase) {
         await this.supabase.auth.signOut();
       }
