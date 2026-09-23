@@ -12,6 +12,10 @@ class VoiceRecognitionEngine {
     this.isSupported = !!SpeechRecognition;
     this.recognition = SpeechRecognition ? new SpeechRecognition() : null;
     this.isListening = false;
+    // ETAPA 6C: timer de segurança (limite máximo de captura contínua).
+    this.safetyTimer = null;
+    this.safetyTimeoutMs = 30000;
+    this.timedOut = false;
 
     if (this.recognition) {
       this.recognition.lang = 'pt-BR';
@@ -120,6 +124,16 @@ class VoiceRecognitionEngine {
   }
 
   /**
+   * Limpa o timer de segurança, se existir. Idempotente.
+   */
+  _clearSafetyTimer() {
+    if (this.safetyTimer) {
+      clearTimeout(this.safetyTimer);
+      this.safetyTimer = null;
+    }
+  }
+
+  /**
    * Inicia o reconhecimento de voz com escutadores de eventos.
    * @param {Object} callbacks { onStart, onResult, onError, onEnd }
    */
@@ -138,8 +152,13 @@ class VoiceRecognitionEngine {
     }
 
     if (this.isListening) {
-      this.stopListening();
+      // ETAPA 6C: captura já ativa — não inicia outra em paralelo.
+      // Retorno silencioso: a UI já exibe o estado "ouvindo".
+      return false;
     }
+
+    this._clearSafetyTimer();
+    this.timedOut = false;
 
     try {
       this.recognition.onstart = () => {
@@ -169,6 +188,7 @@ class VoiceRecognitionEngine {
 
       this.recognition.onerror = (event) => {
         this.isListening = false;
+        this._clearSafetyTimer();
 
         // Captura mensagem nativa adicional se disponível
         const nativeMsg = event.message || null;
@@ -181,10 +201,21 @@ class VoiceRecognitionEngine {
 
       this.recognition.onend = () => {
         this.isListening = false;
+        this._clearSafetyTimer();
         if (onEnd) onEnd();
       };
 
       this.recognition.start();
+
+      // ETAPA 6C: timeout próprio de segurança (30s). Não há retry automático.
+      this._clearSafetyTimer();
+      this.safetyTimer = setTimeout(() => {
+        this.safetyTimer = null;
+        this.timedOut = true;
+        this.stopListening();
+        if (onError) onError('Não consegui concluir a captura de voz. Tente novamente.');
+      }, this.safetyTimeoutMs);
+
       return true;
     } catch (err) {
       console.error('❌ Falha ao iniciar reconhecimento de voz:', err);
@@ -199,6 +230,8 @@ class VoiceRecognitionEngine {
    * Encerra a escuta ativa do microfone.
    */
   stopListening() {
+    // ETAPA 6C: encerrar a escuta sempre limpa o timer de segurança.
+    this._clearSafetyTimer();
     if (this.recognition && this.isListening) {
       try {
         this.recognition.stop();

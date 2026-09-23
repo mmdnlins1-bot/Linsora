@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#070B12">
+  <title>Linsora — Sem conexão</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      min-height: 100vh;
+      min-height: 100dvh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: radial-gradient(circle at center, #0F172A 0%, #070B12 100%);
+      color: #F1F5F9;
+      font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+      padding: 24px;
+      text-align: center;
+    }
+    .offline-card { max-width: 340px; display: flex; flex-direction: column; gap: 16px; align-items: center; }
+    .offline-icon {
+      width: 72px; height: 72px; border-radius: 20px; overflow: hidden;
+      border: 1px solid rgba(16, 185, 129, 0.4);
+      box-shadow: 0 8px 32px rgba(16, 185, 129, 0.15);
+    }
+    .offline-icon img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    h1 { font-size: 20px; font-weight: 700; }
+    p { font-size: 14px; color: #94A3B8; line-height: 1.5; }
+    button {
+      margin-top: 8px; padding: 14px 32px; border: none; border-radius: 12px;
+      background: #10B981; color: #fff; font-size: 15px; font-weight: 700; cursor: pointer;
+    }
+    button:active { transform: scale(0.97); }
+  </style>
+</head>
+<body>
+  <main class="offline-card">
+    <div class="offline-icon"><img src="./icon-192.png" alt="Linsora"></div>
+    <h1>Linsora está sem conexão</h1>
+    <p>Verifique sua conexão com a internet e tente novamente.</p>
+    <button type="button" onclick="window.location.reload()">Tentar novamente</button>
+  </main>
+</body>
+</html>

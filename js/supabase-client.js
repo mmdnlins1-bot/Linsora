@@ -179,6 +179,10 @@ class SupabaseRepository {
             Object.keys(_supabaseMemCache).forEach(k => {
               if (k.startsWith('sb-')) delete _supabaseMemCache[k];
             });
+            // S8C: cobre eventos externos de logout (ex: expiração remota):
+            // limpa o cache financeiro do usuário deslogado e o estado em memória.
+            this.removeUserFinancialCache(this.currentUserId);
+            if (window.linsoraStore) window.linsoraStore.clearState();
             this.currentUserId = 'guest';
             await this.removeActiveLocalSession();
             // Redireciona para tela de login se o app estiver visível
@@ -272,6 +276,22 @@ class SupabaseRepository {
       }
     } catch (e) {
       console.warn('Falha ao limpar sessão local:', e);
+    }
+  }
+
+  /**
+   * S8C: remove o snapshot financeiro local (LINSORA_DB_CACHE_<id>) do usuário
+   * que está saindo. Preciso: só a chave do próprio userId; caches de
+   * visitante (guest), preferências e controles de segurança são preservados.
+   */
+  removeUserFinancialCache(userId) {
+    if (!userId || userId === 'guest' || userId === 'usr_guest') return false;
+    try {
+      localStorage.removeItem(`LINSORA_DB_CACHE_${userId}`);
+      return true;
+    } catch (e) {
+      if (window.LinsoraLogger) window.LinsoraLogger.error('Falha ao limpar cache financeiro local', e, userId);
+      return false;
     }
   }
 
@@ -619,6 +639,9 @@ class SupabaseRepository {
 
       // 2. Remover sessão local persistida (IDB + localStorage + Capacitor Preferences)
       await this.removeActiveLocalSession();
+
+      // 2b. S8C: remover snapshot financeiro local do usuário que está saindo.
+      this.removeUserFinancialCache(previousUserId);
 
       // 3. Encerrar sessão no Supabase remoto (invalida refresh token)
       if (this.supabase) {

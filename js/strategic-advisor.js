@@ -340,12 +340,13 @@ class StrategicAdvisorEngine {
     msgEl.style.justifyContent = 'flex-end';
     msgEl.style.marginBottom = '1.2rem';
     
-    msgEl.innerHTML = `
-      <div class="user-msg-bubble" style="background: var(--primary); color: #fff; padding: 12px 18px; border-radius: 18px 18px 4px 18px; max-width: 85%; font-size: 0.95rem; box-shadow: 0 4px 10px rgba(130,10,209,0.2); line-height: 1.4;">
-        ${text}
-      </div>
-    `;
-    
+    // S8B: texto do usuário sempre como TEXTO (nunca HTML).
+    const bubble = document.createElement('div');
+    bubble.className = 'user-msg-bubble';
+    bubble.setAttribute('style', 'background: var(--primary); color: #fff; padding: 12px 18px; border-radius: 18px 18px 4px 18px; max-width: 85%; font-size: 0.95rem; box-shadow: 0 4px 10px rgba(130,10,209,0.2); line-height: 1.4;');
+    bubble.textContent = text;
+
+    msgEl.appendChild(bubble);
     chatContainer.appendChild(msgEl);
     chatContainer.scrollTop = chatContainer.scrollHeight;
   }
@@ -377,7 +378,8 @@ class StrategicAdvisorEngine {
     let actionBtnHtml = '';
     if (advice.action) {
       const btnId = 'btnAct_' + Date.now();
-      const btnText = advice.action.buttonText || 'Confirmar';
+      // S8B: texto do botão também é dado dinâmico — escapar.
+      const btnText = LinsoraUtils.escapeHTML(advice.action.buttonText || 'Confirmar');
       
       actionBtnHtml = `
         <button class="linsora-btn primary" id="${btnId}" style="margin-top: 14px; width: 100%; border-radius: 10px; font-weight: 600; padding: 12px;">
@@ -414,16 +416,23 @@ class StrategicAdvisorEngine {
       }, 50);
     }
 
+    // S8B: campos do conselheiro podem conter dados derivados do usuário
+    // (ex: título de meta vindo da fala) — escapar antes de interpolar.
+    const safeTitle = LinsoraUtils.escapeHTML(advice.title);
+    const safeDiagnosis = LinsoraUtils.escapeHTML(advice.diagnosis);
+    const safeImpact = LinsoraUtils.escapeHTML(advice.impact);
+    const safeRecommendation = LinsoraUtils.escapeHTML(advice.recommendation);
+
     resEl.innerHTML = `
       <div class="bot-msg-bubble" style="background: var(--card-bg); padding: 0; border-radius: 4px 18px 18px 18px; max-width: 90%; font-size: 0.95rem; box-shadow: 0 4px 12px rgba(0,0,0,0.06); border: 1px solid var(--border); overflow: hidden;">
         
         <div style="background: ${highlightBg}; padding: 12px 16px; border-bottom: 1px solid var(--border); font-weight: 600; font-size: 1rem; color: ${highlightColor}; display: flex; align-items: center; gap: 8px;">
-          ${advice.title}
+          ${safeTitle}
         </div>
         
         <div style="padding: 16px;">
           <div style="color: var(--text-color); line-height: 1.5; margin-bottom: 4px;">
-            ${advice.recommendation}
+            ${safeRecommendation}
           </div>
           
           <details style="margin-top: 12px; cursor: pointer; user-select: none;">
@@ -431,8 +440,8 @@ class StrategicAdvisorEngine {
               Ver detalhes técnicos 📊
             </summary>
             <div style="margin-top: 8px; padding: 12px; background: var(--bg-color); border-radius: 8px; font-size: 0.85rem; color: var(--text-muted); border: 1px solid var(--border); line-height: 1.4;">
-              <strong style="color: var(--text-color);">Análise Diagnóstica:</strong><br/>${advice.diagnosis}<br/><br/>
-              <strong style="color: var(--text-color);">Visão Consolidada:</strong><br/>${advice.impact}
+              <strong style="color: var(--text-color);">Análise Diagnóstica:</strong><br/>${safeDiagnosis}<br/><br/>
+              <strong style="color: var(--text-color);">Visão Consolidada:</strong><br/>${safeImpact}
             </div>
           </details>
           

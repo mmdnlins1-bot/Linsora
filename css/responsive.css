@@ -1,0 +1,206 @@
+/* ==========================================================================
+   LINSORA — RESPONSIVIDADE TABLET + DESKTOP (ETAPA 3)
+   Mobile-first: NENHUMA regra fora de media queries >= 769px.
+   Até 768px a interface permanece exatamente como está.
+   Não altera IDs, classes, JS, dados ou comportamento.
+   ========================================================================== */
+
+/* ==========================================================================
+   1. TABLET (769px – 1023px): libera o frame e organiza em coluna legível
+   ========================================================================== */
+@media screen and (min-width: 769px) {
+  /* Libera o frame SOMENTE quando o usuário não escolheu a moldura de
+     celular explicitamente (body.frame-mode é controlado pelo JS). */
+  body:not(.frame-mode) {
+    padding: 0;
+  }
+
+  body:not(.frame-mode) .app-frame {
+    width: 100%;
+    max-width: none;
+    max-height: none;
+    height: 100dvh;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  body:not(.frame-mode) .device-notch {
+    display: none !important;
+  }
+
+  /* Coluna de conteúdo do tablet: usa a largura sem esticar demais */
+  .tab-page {
+    width: 100%;
+    max-width: 720px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  /* Listas de metas em 2 colunas no tablet */
+  .goals-grid-list:not(.hidden) {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+  }
+
+  /* Estado vazio (filho único) centralizado em grade ampla */
+  .goals-grid-list:not(.hidden) > :only-child,
+  .cards-carousel-container:not(.hidden) > :only-child {
+    grid-column: 1 / -1;
+    width: 100%;
+    max-width: 560px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  /* Widgets do resumo ocupam a largura conforme o espaço */
+  .resumo-widgets-grid {
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  }
+
+  /* Modais com largura confortável no tablet */
+  .linsora-modal-content {
+    max-width: 520px;
+  }
+}
+
+/* ==========================================================================
+   2. DESKTOP (>= 1024px): layout real em múltiplas colunas
+   ========================================================================== */
+@media screen and (min-width: 1024px) {
+  /* Coluna central de leitura confortável */
+  .tab-page {
+    max-width: 1140px;
+  }
+
+  /* ---- 2.1 Dashboard em 2 colunas ---- */
+  #tabDashboard.active {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    align-items: start;
+  }
+
+  #tabDashboard.active > * {
+    min-width: 0;
+    margin: 0;
+  }
+
+  /* Largura total: saúde, conselheiro, resumo e ações */
+  #tabDashboard.active > .financial-health-banner,
+  #tabDashboard.active > #strategicFeedContainer,
+  #tabDashboard.active > .section-block:has(.resumo-widgets-container),
+  #tabDashboard.active > .section-block:has(.quick-actions-bar) {
+    grid-column: 1 / -1;
+  }
+
+  /* Gráfico e últimas movimentações lado a lado */
+  #tabDashboard.active > .section-block:has(.chart-card),
+  #tabDashboard.active > .section-block:has(.transactions-list-container) {
+    grid-column: span 1;
+  }
+
+  /* Resumo em até 4 colunas */
+  .resumo-widgets-grid {
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  }
+
+  /* Ações rápidas: grade fixa, sem rolagem horizontal */
+  .scrollable-actions:not(.hidden) {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+    overflow: visible;
+    scroll-snap-type: none;
+  }
+
+  .scrollable-actions .action-tile {
+    flex: 1 1 auto;
+    width: auto;
+    scroll-snap-align: none;
+  }
+
+  /* Gráfico: donut ao lado da legenda */
+  .category-chart-split-view:not(.hidden) {
+    flex-direction: row;
+    align-items: center;
+    gap: 24px;
+  }
+
+  .donut-wrapper {
+    flex: 0 0 260px;
+    max-width: 260px;
+    height: 220px;
+    margin: 0;
+  }
+
+  .canvas-container.donut-wrapper {
+    height: 220px;
+  }
+
+  .category-readable-list {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .canvas-container {
+    height: 240px;
+  }
+
+  /* ---- 2.2 Metas em 3 colunas ---- */
+  .goals-grid-list:not(.hidden) {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  /* ---- 2.3 Cartões: carrossel vira grade ---- */
+  .cards-carousel-container:not(.hidden) {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    overflow: visible;
+    scroll-snap-type: none;
+  }
+
+  .credit-card-physical {
+    min-width: 0;
+    width: 100%;
+    scroll-snap-align: none;
+  }
+
+  /* ---- 2.4 Formulários: campos relacionados lado a lado ---- */
+  .form-row-2:not(.hidden) {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+
+  /* ---- 2.5 Variações por categoria acompanham a largura ---- */
+  .category-variations-grid {
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  }
+
+  /* ---- 2.6 Modais desktop com limites confortáveis ---- */
+  .linsora-modal-content {
+    max-width: 560px;
+  }
+
+  .pix-modal-large {
+    max-width: 600px !important;
+  }
+
+  /* ---- 2.7 Navegação inferior reaproveitada, sem esticar ---- */
+  .bottom-nav {
+    justify-content: center;
+  }
+
+  .nav-item {
+    width: 100%;
+    max-width: 140px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  /* ---- 2.8 Telas de autenticação com respiro no desktop ---- */
+  .auth-container {
+    max-width: 420px;
+  }
+}

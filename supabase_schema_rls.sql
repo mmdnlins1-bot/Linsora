@@ -126,7 +126,7 @@ CREATE POLICY "Users can view own profile" ON public.profiles
 
 DROP POLICY IF EXISTS "Users can update own profile" ON public.profiles;
 CREATE POLICY "Users can update own profile" ON public.profiles
-  FOR UPDATE USING (auth.uid() = id);
+  FOR UPDATE USING (auth.uid() = id) WITH CHECK (auth.uid() = id);
 
 DROP POLICY IF EXISTS "Users can insert own profile" ON public.profiles;
 CREATE POLICY "Users can insert own profile" ON public.profiles
@@ -168,7 +168,9 @@ TRIGGER AUTOMATICO PARA CRIAR PROFILE AO REGISTRAR NOVO USUARIO SUPABASE
 ============================================================================
 */
 CREATE OR REPLACE FUNCTION public.handle_new_user()
-RETURNS TRIGGER AS $$
+RETURNS TRIGGER
+SET search_path = public, pg_temp
+AS $$
 BEGIN
   INSERT INTO public.profiles (id, full_name, email, avatar_url)
   VALUES (

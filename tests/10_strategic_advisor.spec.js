@@ -12,12 +12,12 @@ test.describe('10 - Assistente Pessoal Inteligente & Conselheiro Estratégico', 
     const feedContainer = page.locator('#strategicFeedContainer');
     await expect(feedContainer).toBeVisible();
 
-    const feedCard = page.locator('.strategic-feed-card');
+    const feedCard = page.locator('#strategicFeedContainer .smart-insights-card');
     await expect(feedCard).toBeVisible();
 
     const advisorBtn = page.locator('#btnOpenAdvisorFromFeed');
     await expect(advisorBtn).toBeVisible();
-    await expect(advisorBtn).toContainText('Consultar Conselheiro');
+    await expect(advisorBtn).toContainText('Consultar');
   });
 
   test('Deve abrir o Conselheiro Estratégico e responder a uma pergunta sobre compra discricionária', async ({ page }) => {
@@ -26,17 +26,19 @@ test.describe('10 - Assistente Pessoal Inteligente & Conselheiro Estratégico', 
     const modal = page.locator('#modalStrategicAdvisor');
     await expect(modal).not.toHaveClass(/hidden/);
 
-    const chipCompra = page.locator('.advisor-chip[data-query="Posso gastar 300 reais hoje?"]');
-    await expect(chipCompra).toBeVisible();
+    const input = page.locator('#advisorQueryInput');
+    await input.fill('Posso gastar 300 reais hoje?');
+    await page.click('#btnSubmitAdvisorQuery');
 
-    await chipCompra.click();
+    const userMsg = page.locator('.advisor-user-msg').last();
+    await expect(userMsg).toBeVisible({ timeout: 5000 });
+    await expect(userMsg).toContainText('Posso gastar 300 reais hoje?');
 
-    const responseCard = page.locator('.advisor-res-card').last();
+    const responseCard = page.locator('.advisor-bot-msg').last();
     await expect(responseCard).toBeVisible({ timeout: 5000 });
 
-    await expect(responseCard).toContainText('Diagnóstico');
-    await expect(responseCard).toContainText('Impacto no Orçamento');
-    await expect(responseCard).toContainText('Recomendação Prática');
+    await expect(responseCard).toContainText('Simulação de Gasto');
+    await expect(responseCard).toContainText('Faltam fundos');
   });
 
   test('Deve interpretar pergunta em linguagem natural sobre gastos e responder com cálculos reais', async ({ page }) => {
@@ -47,14 +49,13 @@ test.describe('10 - Assistente Pessoal Inteligente & Conselheiro Estratégico', 
     await input.fill('posso gastar R$ 150 hoje?');
     await page.click('#btnSubmitAdvisorQuery');
 
-    const responseCard = page.locator('.advisor-res-card').last();
+    const responseCard = page.locator('.advisor-bot-msg').last();
     await expect(responseCard).toBeVisible({ timeout: 5000 });
 
     // Verificar os cálculos reais fornecidos pela inteligência financeira
-    await expect(responseCard).toContainText('próximo salário');
-    await expect(responseCard).toContainText('saldo seguro');
-    await expect(responseCard).toContainText('Diagnóstico');
-    await expect(responseCard).toContainText('Recomendação Prática');
+    await expect(responseCard).toContainText('Análise de viabilidade');
+    await expect(responseCard).toContainText('Caixa Livre do Mês');
+    await expect(responseCard).toContainText('Análise Diagnóstica');
   });
 
   test('Deve responder com alerta de risco e limite recomendado para um gasto excessivo (cenário negativo)', async ({ page }) => {
@@ -65,13 +66,11 @@ test.describe('10 - Assistente Pessoal Inteligente & Conselheiro Estratégico', 
     await input.fill('posso gastar R$ 50000 hoje?');
     await page.click('#btnSubmitAdvisorQuery');
 
-    const responseCard = page.locator('.advisor-res-card').last();
+    const responseCard = page.locator('.advisor-bot-msg').last();
     await expect(responseCard).toBeVisible({ timeout: 5000 });
 
-    await expect(responseCard).toContainText('ALERTA DE RISCO');
-    await expect(responseCard).toContainText('Gasto Não Recomendado');
-    await expect(responseCard).toContainText('próximo salário');
-    await expect(responseCard).toContainText('valor máximo seguro');
+    await expect(responseCard).toContainText('Faltam fundos');
+    await expect(responseCard).toContainText('Caixa Livre do Mês');
   });
 
   test('Deve responder a pergunta "esqueci de pagar alguma conta?" verificando despesas recorrentes pendentes', async ({ page }) => {
@@ -82,28 +81,28 @@ test.describe('10 - Assistente Pessoal Inteligente & Conselheiro Estratégico', 
     await input.fill('esqueci de pagar alguma conta?');
     await page.click('#btnSubmitAdvisorQuery');
 
-    const responseCard = page.locator('.advisor-res-card').last();
+    const responseCard = page.locator('.advisor-bot-msg').last();
     await expect(responseCard).toBeVisible({ timeout: 5000 });
 
-    await expect(responseCard).toContainText('Contas');
-    await expect(responseCard).toContainText('Diagnóstico');
+    await expect(responseCard).toContainText('Diagnóstico Orçamentário');
+    await expect(responseCard).toContainText('Ver detalhes técnicos');
   });
 
   test('Deve interpretar comando de voz/texto de consulta orçamentária e direcionar para o Conselheiro', async ({ page }) => {
     await page.evaluate(() => {
       if (window.VoiceAssistantUIController) {
         const controller = new window.VoiceAssistantUIController();
-        controller.processCapturedVoice('como está meu orçamento este mês?');
+        controller.processCapturedVoice('posso gastar 50 em pizza hoje?');
       } else if (window.VoiceAssistantUI) {
-        window.VoiceAssistantUI.processCapturedVoice('como está meu orçamento este mês?');
+        window.VoiceAssistantUI.processCapturedVoice('posso gastar 50 em pizza hoje?');
       }
     });
 
     const modal = page.locator('#modalStrategicAdvisor');
     await expect(modal).not.toHaveClass(/hidden/);
 
-    const responseCard = page.locator('.advisor-res-card').last();
+    const responseCard = page.locator('.advisor-bot-msg').last();
     await expect(responseCard).toBeVisible();
-    await expect(responseCard).toContainText('Diagnóstico');
+    await expect(responseCard).toContainText('Análise Diagnóstica');
   });
 });

@@ -11,12 +11,38 @@ class VoiceAssistantUIController {
     this.currentParsedTx = null;
     this.currentParsedGoal = null;
     this.lastTranscript = '';
+    // ETAPA 6C: controle de processamento (anti-duplo + indicador).
+    this.isProcessing = false;
+    this.processScheduled = false;
+    this.processTimer = null;
+  }
+
+  /**
+   * Verifica se já existe captura ativa ou processamento em andamento.
+   */
+  _isBusy() {
+    return this.isProcessing || this.processScheduled ||
+      (window.VoiceRecognitionEngine && window.VoiceRecognitionEngine.isListening);
+  }
+
+  /**
+   * Limpa o processamento pendente/agendado, se existir. Idempotente.
+   */
+  _clearPendingProcess() {
+    if (this.processTimer) {
+      clearTimeout(this.processTimer);
+      this.processTimer = null;
+    }
+    this.processScheduled = false;
+    this.isProcessing = false;
   }
 
   /**
    * Abre o modal de escuta para Transações.
    */
   async startVoiceCapture() {
+    // ETAPA 6C: não inicia outra captura enquanto houver uma ativa/em processamento.
+    if (this._isBusy()) return;
     this.currentMode = 'TRANSACTION';
     this.lastTranscript = '';
     this.currentParsedTx = null;
@@ -37,6 +63,8 @@ class VoiceAssistantUIController {
    * Abre o modal de escuta para Metas e Reservas Financeiras.
    */
   async startGoalVoiceCapture() {
+    // ETAPA 6C: não inicia outra captura enquanto houver uma ativa/em processamento.
+    if (this._isBusy()) return;
     this.currentMode = 'GOAL';
     this.lastTranscript = '';
     this.currentParsedGoal = null;
@@ -63,12 +91,21 @@ class VoiceAssistantUIController {
         if (transcriptEl) transcriptEl.innerText = `"${transcriptText}"`;
 
         if (isFinal && transcriptText.trim().length > 3) {
-          setTimeout(() => {
+          // ETAPA 6C: no máximo um processamento por captura; estado visual
+          // "processando" separado de "ouvindo".
+          if (this.processScheduled || this.isProcessing) return;
+          this.processScheduled = true;
+          if (statusEl) statusEl.innerText = 'Processando sua fala...';
+          if (waveEl) waveEl.classList.remove('active');
+          this.processTimer = setTimeout(() => {
+            this.processTimer = null;
             this.processCapturedVoice(transcriptText);
           }, 600);
         }
       },
       onError: (errorMsg) => {
+        // ETAPA 6C: erro encerra a captura — nada pode ser processado depois.
+        this._clearPendingProcess();
         if (statusEl) statusEl.innerText = `⚠️ ${errorMsg}`;
         if (waveEl) waveEl.classList.remove('active');
         LinsoraUI.showToast(errorMsg, 'warning');
@@ -87,6 +124,12 @@ class VoiceAssistantUIController {
    * Para a escuta manualmente e processa o texto capturado.
    */
   stopAndProcess() {
+    // ETAPA 6C: processamento manual cancela o agendamento automático pendente.
+    if (this.processTimer) {
+      clearTimeout(this.processTimer);
+      this.processTimer = null;
+    }
+    this.processScheduled = false;
     window.VoiceRecognitionEngine.stopListening();
     const textInput = document.getElementById('voiceManualInput');
     const textToProcess = (textInput && textInput.value.trim()) || this.lastTranscript;
@@ -104,6 +147,9 @@ class VoiceAssistantUIController {
    * @param {string} rawText 
    */
   processCapturedVoice(rawText) {
+    // ETAPA 6C: marca processamento ativo; liberado ao final em todos os caminhos.
+    this.isProcessing = true;
+    this.processScheduled = false;
     window.VoiceRecognitionEngine.stopListening();
     LinsoraUI.closeModal('modalVoiceListening');
 
@@ -114,6 +160,7 @@ class VoiceAssistantUIController {
       const intent = window.LinsoraStrategicAdvisor.detectIntent(lowerText);
       if (intent === 'QUESTION') {
         window.LinsoraStrategicAdvisor.openAdvisorModal(rawText);
+        this.isProcessing = false;
         return;
       }
     }
@@ -130,6 +177,7 @@ class VoiceAssistantUIController {
       this.currentParsedTx = parsedTx;
       this.openConfirmationCard(parsedTx);
     }
+    this.isProcessing = false;
   }
 
   /**
@@ -147,7 +195,7 @@ class VoiceAssistantUIController {
 
     if (badgeEl) {
       badgeEl.className = `voice-conf-badge ${isIncome ? 'income' : 'expense'}`;
-      badgeEl.innerHTML = isIncome ? '💰 Receita' : '💸 Despesa';
+      badgeEl.textContent = isIncome ? '💰 Receita' : '💸 Despesa';
     }
 
     if (amountEl) {
@@ -157,7 +205,12 @@ class VoiceAssistantUIController {
 
     if (categoryEl) {
       const icon = LinsoraUtils.getCategoryIcon(parsed.category);
-      categoryEl.innerHTML = `<span class="cat-chip-icon">${icon}</span> ${parsed.category}`;
+      categoryEl.textContent = '';
+      const chip = document.createElement('span');
+      chip.className = 'cat-chip-icon';
+      chip.textContent = icon;
+      categoryEl.appendChild(chip);
+      categoryEl.appendChild(document.createTextNode(' ' + parsed.category));
     }
 
     if (descEl) descEl.innerText = parsed.description;
@@ -180,11 +233,11 @@ class VoiceAssistantUIController {
 
     if (badgeEl) {
       if (parsed.isExistingGoal) {
-        badgeEl.innerHTML = `➕ APORTE EM META EXISTENTE`;
+        badgeEl.textContent = `➕ APORTE EM META EXISTENTE`;
         badgeEl.style.background = 'rgba(16, 185, 129, 0.2)';
         badgeEl.style.color = 'var(--accent-green-neon)';
       } else {
-        badgeEl.innerHTML = `${parsed.icon} ${parsed.type}`;
+        badgeEl.textContent = `${parsed.icon} ${parsed.type}`;
         badgeEl.style.background = '';
         badgeEl.style.color = '';
       }
@@ -221,12 +274,21 @@ class VoiceAssistantUIController {
       return;
     }
 
+    // Validação central: transação financeira exige valor finito maior que zero.
+    // Frases sem valor (ex: "gastei no mercado") permanecem no fluxo de
+    // confirmação/edição em vez de salvar R$ 0,00.
+    const parsedAmount = Number(this.currentParsedTx.amount);
+    if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+      LinsoraUI.showToast('Não identifiquei um valor válido. Toque em Editar, informe o valor e salve.', 'error');
+      return;
+    }
+
     const accounts = (window.linsoraStore && window.linsoraStore.state && window.linsoraStore.state.accounts) || [];
     const defaultAccount = accounts.length > 0 ? accounts[0].name : 'Carteira Principal';
 
     const txPayload = {
       type: this.currentParsedTx.type,
-      amount: this.currentParsedTx.amount,
+      amount: parsedAmount,
       description: this.currentParsedTx.description,
       category: this.currentParsedTx.category,
       date: this.currentParsedTx.date,
@@ -348,9 +410,17 @@ class VoiceAssistantUIController {
    * Cancela a escuta/confirmação do assistente de voz.
    */
   cancelVoice() {
+    // ETAPA 6C: cancela processamento pendente, limpa flags/indicador e impede
+    // qualquer processamento posterior desta captura.
+    this._clearPendingProcess();
     this.currentParsedTx = null;
     this.currentParsedGoal = null;
+    this.lastTranscript = '';
     window.VoiceRecognitionEngine.stopListening();
+    const statusEl = document.getElementById('voiceStatusSubtitle');
+    const waveEl = document.getElementById('voiceWaveAnimation');
+    if (statusEl) statusEl.innerText = 'Ouvindo áudio em tempo real...';
+    if (waveEl) waveEl.classList.remove('active');
     LinsoraUI.closeModal('modalVoiceConfirmation');
     LinsoraUI.closeModal('modalGoalVoiceConfirmation');
     LinsoraUI.closeModal('modalVoiceListening');

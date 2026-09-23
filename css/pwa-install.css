@@ -1,0 +1,126 @@
+/* ==========================================================================
+   LINSORA PWA — Convite de instalação (banner discreto)
+   Usa apenas tokens do Design System existente. Não altera layout do app.
+   ========================================================================== */
+
+.linsora-install-banner {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  z-index: 2000;
+  width: calc(100% - 24px);
+  max-width: 420px;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color-strong);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  font-family: var(--font-main);
+  color: var(--text-primary);
+}
+
+.linsora-install-banner[hidden] {
+  display: none !important;
+}
+
+.linsora-install-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  flex-shrink: 0;
+  object-fit: cover;
+}
+
+.linsora-install-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.linsora-install-title {
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.linsora-install-desc {
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--text-secondary);
+}
+
+.linsora-install-steps {
+  margin: 6px 0 0;
+  padding-left: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--text-secondary);
+}
+
+.linsora-install-steps[hidden] {
+  display: none !important;
+}
+
+.linsora-install-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.linsora-install-actions .linsora-btn {
+  min-height: 44px;
+  min-width: 96px;
+  white-space: nowrap;
+}
+
+.linsora-install-close {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.linsora-install-close:hover {
+  background: var(--bg-card-hover);
+  color: var(--text-primary);
+}
+
+.linsora-install-close:focus-visible,
+.linsora-install-actions .linsora-btn:focus-visible {
+  outline: 2px solid var(--accent-green-neon);
+  outline-offset: 2px;
+}
+
+@media (max-width: 380px) {
+  .linsora-install-banner {
+    gap: 10px;
+    padding: 12px;
+  }
+
+  .linsora-install-actions .linsora-btn {
+    min-width: 84px;
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+}

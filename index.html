@@ -2,13 +2,15 @@
 <html lang="pt-BR" data-theme="dark">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="description" content="Linsora: controle suas finanças, acompanhe gastos, metas e transações em um só lugar.">
   <title>LINSORA — Gestão Financeira Pessoal Inteligente</title>
   
-  <!-- Fontes do Google: Plus Jakarta Sans -->
+  <!-- Fontes do Google: Plus Jakarta Sans (não-bloqueante; display=swap evita FOUT prolongado) -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+  <noscript><link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet"></noscript>
   
   <!-- Supabase JS SDK & Chart.js (Carregamento Local para Suporte Offline em APK Mobile + Fallback CDN) -->
   <script src="js/lib/supabase.min.js"></script>
@@ -21,9 +23,22 @@
   <!-- Configurações PWA & Aplicativo Android Mobile -->
   <meta name="theme-color" content="#070B12">
   <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png">
+  <link rel="apple-touch-icon" href="./assets/apple-touch-icon-180.png">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Linsora">
 
   <!-- Estilos Globais & Design System Unificado -->
   <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="css/pwa-install.css">
+  <link rel="stylesheet" href="css/responsive.css">
+  <style>
+    /* A11Y (ETAPA 5A): contraste do botão ativo #btnMobileFrame (#FFF sobre
+       primary-700 = 5.48:1). Escopo restrito para não afetar outros botões. */
+    #btnMobileFrame.mode-btn.active { background: var(--primary-700); }
+  </style>
 </head>
 <body>
 
@@ -1432,22 +1447,21 @@
 
   <div id="pdfPrintTemplate" class="pdf-print-template" style="display: none;"></div>
 
-  <!-- Supabase JS Client Oficial -->
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  
-  <script src="js/logger.js"></script>
-  <script src="js/lib/capacitor-preferences.js"></script>
-  <script src="js/supabase-client.js"></script>
-  <script src="js/utils.js"></script>
-  <script src="js/store.js"></script>
-  <script src="js/ai-transaction-parser.js"></script>
-  <script src="js/strategic-advisor.js"></script>
-  <script src="js/voice-recognition.js"></script>
-  <script src="js/voice-assistant-ui.js"></script>
-  <script src="js/charts.js"></script>
-  <script src="js/notifications.js"></script>
-  <script src="js/components.js"></script>
-  <script src="js/app.js"></script>
+  <!-- Scripts do aplicativo (defer: mesma ordem, sem bloquear o primeiro paint) -->
+  <script defer src="js/logger.js"></script>
+  <script defer src="js/lib/capacitor-preferences.js"></script>
+  <script defer src="js/supabase-client.js"></script>
+  <script defer src="js/utils.js"></script>
+  <script defer src="js/store.js"></script>
+  <script defer src="js/ai-transaction-parser.js"></script>
+  <script defer src="js/strategic-advisor.js"></script>
+  <script defer src="js/voice-recognition.js"></script>
+  <script defer src="js/voice-assistant-ui.js"></script>
+  <script defer src="js/charts.js"></script>
+  <script defer src="js/notifications.js"></script>
+  <script defer src="js/components.js"></script>
+  <script defer src="js/app.js"></script>
+  <script defer src="js/pwa-install.js"></script>
   <script>
     if ('serviceWorker' in navigator && !window.Capacitor) {
       window.addEventListener('load', function() {

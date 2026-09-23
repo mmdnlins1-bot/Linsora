@@ -49,6 +49,9 @@ test.describe('07. Auditoria de Multi-Usuários, Isolamento de Dados & Troca de 
     await expect(page.locator('#monthIncomeAmount')).toContainText('R$ 10.000,00');
     await expect(page.locator('#recentTransactionsList')).toContainText('Salário Exclusivo Usuário A');
 
+    // Guardar o id de A para a verificação S3 (cache removido no logout)
+    const userIdA = await page.evaluate(() => window.linsoraStore.state.user.id);
+
     // ------------------------------------------------------------------------
     // 3. LOGOUT DO USUÁRIO A
     // ------------------------------------------------------------------------
@@ -58,6 +61,9 @@ test.describe('07. Auditoria de Multi-Usuários, Isolamento de Dados & Troca de 
 
     await expect(page.locator('#appMain')).toHaveClass(/hidden/);
     await expect(page.locator('#authScreen')).toBeVisible();
+
+    // S3: o cache financeiro local de A deve ter sido removido no logout
+    expect(await page.evaluate((id) => localStorage.getItem('LINSORA_DB_CACHE_' + id) === null, userIdA)).toBe(true);
 
     // ------------------------------------------------------------------------
     // 4. CADASTRO & LOGIN DO USUÁRIO B (VERIFICAÇÃO DE ISOLAMENTO 100% ZERADO)
@@ -90,8 +96,14 @@ test.describe('07. Auditoria de Multi-Usuários, Isolamento de Dados & Troca de 
     await expect(page.locator('#monthExpenseAmount')).toContainText('R$ 450,00');
     await expect(page.locator('#recentTransactionsList')).toContainText('Mercado Exclusivo Usuário B');
 
+    // Guardar o id de B para a verificação S3 (cache removido no logout)
+    const userIdB = await page.evaluate(() => window.linsoraStore.state.user.id);
+
     // ------------------------------------------------------------------------
-    // 5. TROCA DE CONTAS: LOGOUT DE B & RELOGIN DE A
+    // 5. TROCA DE CONTAS: LOGOUT DE B & RELOGIN DE A (POLÍTICA S3)
+    // Em modo local sem backend, o logout remove o cache financeiro (ETAPA 8C),
+    // então o relogin NÃO restaura a transação antiga de A. Com Supabase real,
+    // os dados seriam reconstruídos do servidor.
     // ------------------------------------------------------------------------
     await page.click('.bottom-nav .nav-item[data-tab="tabProfile"]');
     await expect(page.locator('#tabProfile')).toBeVisible();
@@ -99,6 +111,9 @@ test.describe('07. Auditoria de Multi-Usuários, Isolamento de Dados & Troca de 
 
     await expect(page.locator('#appMain')).toHaveClass(/hidden/);
     await expect(page.locator('#authScreen')).toBeVisible();
+
+    // S3: o cache financeiro local de B também deve ter sido removido
+    expect(await page.evaluate((id) => localStorage.getItem('LINSORA_DB_CACHE_' + id) === null, userIdB)).toBe(true);
 
     // Login com Usuário A
     await page.fill('#authEmail', 'usuarioA@linsora.com.br');
@@ -108,19 +123,31 @@ test.describe('07. Auditoria de Multi-Usuários, Isolamento de Dados & Troca de 
     await expect(page.locator('#appMain')).toBeVisible();
     await expect(page.locator('#userNameHeader')).toHaveText('Usuário A');
 
-    // Confirmar que Usuário A mantém seus dados intactos e NENHUM dado de B vazou
-    await expect(page.locator('#recentTransactionsList')).toContainText('Salário Exclusivo Usuário A');
+    // Isolamento: nenhum dado de B aparece para A
     await expect(page.locator('#recentTransactionsList')).not.toContainText('Mercado Exclusivo Usuário B');
-    await expect(page.locator('#monthIncomeAmount')).toContainText('R$ 10.000,00');
-    await expect(page.locator('#monthExpenseAmount')).toContainText('R$ 0,00');
+    // S3 (modo local): a transação antiga de A NÃO volta sem backend
+    await expect(page.locator('#recentTransactionsList')).not.toContainText('Salário Exclusivo Usuário A');
+    await expect(page.locator('#monthIncomeAmount')).toContainText('R$ 0,00');
+
+    // Nova transação como A na sessão atual
+    await page.click('#btnQuickIncome');
+    await expect(page.locator('#modalTransactionForm')).toBeVisible();
+    await page.fill('#txAmount', '200000'); // R$ 2.000,00
+    await page.fill('#txDescription', 'Salário A Nova Sessão');
+    await page.click('#btnSaveTransaction');
+
+    await expect(page.locator('#modalTransactionForm')).toHaveClass(/hidden/);
+    await expect(page.locator('#recentTransactionsList')).toContainText('Salário A Nova Sessão');
+    await expect(page.locator('#monthIncomeAmount')).toContainText('R$ 2.000,00');
 
     // ------------------------------------------------------------------------
-    // 6. PERSISTÊNCIA DA SESSÃO DO USUÁRIO A APÓS RECARREGAR PÁGINA (RELOAD)
+    // 6. PERSISTÊNCIA DA SESSÃO DO USUÁRIO A APÓS RECARREGAR PÁGINA (RELOAD SEM LOGOUT)
     // ------------------------------------------------------------------------
     await page.reload();
     await expect(page.locator('#appMain')).toBeVisible();
     await expect(page.locator('#userNameHeader')).toHaveText('Usuário A');
-    await expect(page.locator('#monthIncomeAmount')).toContainText('R$ 10.000,00');
+    await expect(page.locator('#recentTransactionsList')).toContainText('Salário A Nova Sessão');
+    await expect(page.locator('#monthIncomeAmount')).toContainText('R$ 2.000,00');
   });
 
   test('Deve rejeitar cadastro duplicado com o mesmo e-mail', async ({ page }) => {

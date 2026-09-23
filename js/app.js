@@ -355,6 +355,12 @@ function setupEventListeners() {
     if (window.VoiceAssistantUI) window.VoiceAssistantUI.cancelVoice();
   });
 
+  // ETAPA 6B: o ✕ do modal de escuta reutiliza o cancelamento existente,
+  // interrompendo o reconhecimento em vez de apenas ocultar o modal.
+  document.getElementById('btnCloseVoiceListening')?.addEventListener('click', () => {
+    if (window.VoiceAssistantUI) window.VoiceAssistantUI.cancelVoice();
+  });
+
   document.getElementById('btnVoiceConfSave')?.addEventListener('click', async () => {
     if (window.VoiceAssistantUI) await window.VoiceAssistantUI.confirmAndSave();
   });
@@ -709,6 +715,10 @@ function setupEventListeners() {
     });
   }
 
+  // S8B: rate-limit do PIN pad (por usuário, somente contadores — nunca o PIN).
+  const PIN_MAX_ATTEMPTS = 5;
+  const PIN_MAX_LOCK_MS = 15 * 60 * 1000;
+
   function processPinEntry() {
     if (!window.linsoraStore.state.user) {
       enteredPin = '';
@@ -734,14 +744,68 @@ function setupEventListeners() {
       return;
     }
 
-    if (enteredPin === savedPin || enteredPin === '1234') {
+    // S8B: somente o PIN configurado desbloqueia (sem bypass). Proteção contra
+    // tentativas repetidas: 5 falhas consecutivas bloqueiam progressivamente
+    // (30s dobrando até 15min). Contador por usuário, sem expor o PIN.
+    const pinLock = getPinLockState();
+    if (pinLock.lockedUntil && Date.now() < pinLock.lockedUntil) {
+      const secs = Math.ceil((pinLock.lockedUntil - Date.now()) / 1000);
+      enteredPin = '';
+      updatePinDots();
+      LinsoraUI.showToast(`PIN temporariamente bloqueado após várias tentativas. Tente novamente em ${secs}s.`, 'error');
+      return;
+    }
+
+    if (enteredPin === savedPin) {
+      clearPinLockState();
       LinsoraUI.closeModal('modalPinPad');
       grantAppAccess();
     } else {
+      const count = (pinLock.count || 0) + 1;
+      if (count >= PIN_MAX_ATTEMPTS) {
+        const lockedUntil = Date.now() + pinLockMs(count);
+        setPinLockState(count, lockedUntil);
+        const secs = Math.ceil(pinLockMs(count) / 1000);
+        LinsoraUI.showToast(`Muitas tentativas incorretas. PIN bloqueado por ${secs}s.`, 'error');
+      } else {
+        setPinLockState(count, 0);
+        LinsoraUI.showToast(`PIN incorreto. Tentativa ${count} de ${PIN_MAX_ATTEMPTS}.`, 'error');
+      }
       enteredPin = '';
       updatePinDots();
-      LinsoraUI.showToast('PIN incorreto. Tente novamente.', 'error');
     }
+  }
+
+  function pinAttemptKey() {
+    const uid = (window.linsoraStore.state.user && window.linsoraStore.state.user.id) || 'guest';
+    return 'LINSORA_PIN_ATTEMPTS_' + uid;
+  }
+
+  function getPinLockState() {
+    try {
+      const raw = localStorage.getItem(pinAttemptKey());
+      if (!raw) return { count: 0, lockedUntil: 0 };
+      const o = JSON.parse(raw);
+      return { count: o.count || 0, lockedUntil: o.lockedUntil || 0 };
+    } catch (e) {
+      return { count: 0, lockedUntil: 0 };
+    }
+  }
+
+  function setPinLockState(count, lockedUntil) {
+    try {
+      if (!count && !lockedUntil) localStorage.removeItem(pinAttemptKey());
+      else localStorage.setItem(pinAttemptKey(), JSON.stringify({ count, lockedUntil }));
+    } catch (e) { /* storage indisponível: segue sem persistir */ }
+  }
+
+  function clearPinLockState() {
+    setPinLockState(0, 0);
+  }
+
+  function pinLockMs(count) {
+    const step = Math.max(0, count - PIN_MAX_ATTEMPTS);
+    return Math.min(PIN_MAX_LOCK_MS, 30000 * Math.pow(2, step));
   }
 
   const btnTogglePIN = document.getElementById('btnTogglePIN');
@@ -1247,7 +1311,13 @@ function setupEventListeners() {
   document.querySelectorAll('.linsora-modal-overlay').forEach(overlay => {
     overlay.onclick = function(e) {
       if (e.target === overlay) {
-        overlay.classList.add('hidden');
+        // ETAPA 6B: fechar a escuta pelo backdrop também interrompe o
+        // reconhecimento (mesmo defeito do ✕). Demais modais inalterados.
+        if (overlay.id === 'modalVoiceListening' && window.VoiceAssistantUI) {
+          window.VoiceAssistantUI.cancelVoice();
+        } else {
+          overlay.classList.add('hidden');
+        }
       }
     };
   });
