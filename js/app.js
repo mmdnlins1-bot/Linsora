@@ -291,9 +291,16 @@ function renderAppUI(state) {
   LinsoraUI.renderNotificationsFeed('notificationsFeed', activeNotifs);
 }
 
+function toLocalDateKey(date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+function addLocalDays(date, days) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate() + days);
+}
+
 function getPeriodMonthKey(date, monthsAgo = 0) {
-  const base = date instanceof Date ? date : new Date();
-  const ref = new Date(base.getFullYear(), base.getMonth() - monthsAgo, 1);
+  const ref = new Date(date.getFullYear(), date.getMonth() - monthsAgo, 1);
   return `${ref.getFullYear()}-${String(ref.getMonth() + 1).padStart(2, '0')}`;
 }
 
@@ -301,21 +308,124 @@ function getTxMonthKey(tx) {
   return (tx && tx.date) ? String(tx.date).slice(0, 7) : '';
 }
 
-function renderFilteredTransactions(state) {
-  const all = [...(state.transactions || [])];
-  const hideValues = window.linsoraStore.isHideValues;
+function isValidTxDate(tx) {
+  return !!tx && /^\d{4}-\d{2}-\d{2}/.test(String(tx.date || ''));
+}
 
-  // Período selecionado controla lista, resumo e análise
+/**
+ * Limites do período selecionado em chaves locais YYYY-MM-DD (sem UTC,
+ * sem deslocamento de dia). Retorna null para Todo Período (sem limites).
+ */
+function getPeriodBounds() {
   const period = window.linsoraStore.filterPeriod || 'ALL';
-  const currentKey = getPeriodMonthKey(new Date(), 0);
-  const periodTxs = period === 'THIS_MONTH'
-    ? all.filter(t => getTxMonthKey(t) === currentKey)
-    : all;
+  const today = new Date();
+  const todayKey = toLocalDateKey(today);
+  switch (period) {
+    case 'TODAY':
+      return { start: todayKey, end: todayKey };
+    case 'THIS_WEEK': {
+      const monday = addLocalDays(today, -((today.getDay() + 6) % 7));
+      return { start: toLocalDateKey(monday), end: todayKey };
+    }
+    case 'LAST_7_DAYS':
+      return { start: toLocalDateKey(addLocalDays(today, -6)), end: todayKey };
+    case 'THIS_MONTH':
+      return { start: todayKey.slice(0, 7) + '-01', end: todayKey };
+    case 'LAST_30_DAYS':
+      return { start: toLocalDateKey(addLocalDays(today, -29)), end: todayKey };
+    case 'LAST_90_DAYS':
+      return { start: toLocalDateKey(addLocalDays(today, -89)), end: todayKey };
+    case 'THIS_YEAR':
+      return { start: `${today.getFullYear()}-01-01`, end: todayKey };
+    case 'CUSTOM': {
+      const custom = window.linsoraStore.customPeriod;
+      if (custom && custom.start && custom.end && custom.end >= custom.start) {
+        return { start: custom.start, end: custom.end };
+      }
+      return null;
+    }
+    case 'ALL':
+    default:
+      return null;
+  }
+}
 
-  // Lista: período + tipo + busca textual
-  let list = [...periodTxs];
+function txInBounds(tx, bounds) {
+  if (!bounds) return true;
+  if (!isValidTxDate(tx)) return false;
+  const key = String(tx.date).slice(0, 10);
+  return key >= bounds.start && key <= bounds.end;
+}
 
-  const query = window.linsoraStore.searchQuery.toLowerCase();
+function txMatchesType(tx, filterType) {
+  return !filterType || filterType === 'all' || tx.type === filterType;
+}
+
+function txMatchesCategory(tx, filterCategory) {
+  return !filterCategory || (tx.category || 'Outros') === filterCategory;
+}
+
+/**
+ * Sincroniza os controles de filtro com o estado (após limpar ou trocar filtros).
+ */
+function syncExtratoFilterUI() {
+  const store = window.linsoraStore;
+  const periodSelect = document.getElementById('periodSelect');
+  if (periodSelect) periodSelect.value = store.filterPeriod || 'ALL';
+
+  document.querySelectorAll('.chip-filter[data-filter-type="type"]').forEach(c => {
+    c.classList.toggle('active', c.getAttribute('data-value') === (store.filterType || 'all'));
+  });
+
+  const customRow = document.getElementById('customPeriodRow');
+  if (customRow) customRow.classList.toggle('hidden', (store.filterPeriod || 'ALL') !== 'CUSTOM');
+
+  const catRow = document.getElementById('categoryActiveRow');
+  const catName = document.getElementById('activeCategoryName');
+  if (catRow) catRow.classList.toggle('hidden', !store.filterCategory);
+  if (catName) catName.innerText = store.filterCategory || '';
+
+  const searchInput = document.getElementById('txSearchInput');
+  const clearSearch = document.getElementById('btnClearSearch');
+  if (searchInput && document.activeElement !== searchInput) searchInput.value = store.searchQuery || '';
+  if (clearSearch) clearSearch.classList.toggle('hidden', !(store.searchQuery || '').trim());
+
+  const clearAll = document.getElementById('btnClearFilters');
+  if (clearAll) {
+    const hasActive = (store.filterType && store.filterType !== 'all')
+      || (store.filterPeriod && store.filterPeriod !== 'ALL')
+      || !!store.filterCategory
+      || !!(store.searchQuery || '').trim();
+    clearAll.classList.toggle('hidden', !hasActive);
+  }
+}
+
+function renderFilteredTransactions(state) {
+  const store = window.linsoraStore;
+  const all = [...(state.transactions || [])];
+  const hideValues = store.isHideValues;
+
+  // Período selecionado (datas reais, sem UTC)
+  const bounds = getPeriodBounds();
+  const periodTxs = all.filter(t => txInBounds(t, bounds));
+
+  // Categoria inválida no novo contexto: remove e informa (sem travar a tela)
+  let activeCat = store.filterCategory;
+  if (activeCat) {
+    const stillValid = periodTxs.some(t => txMatchesType(t, store.filterType) && txMatchesCategory(t, activeCat));
+    if (!stillValid) {
+      store.filterCategory = null;
+      activeCat = null;
+      LinsoraUI.showToast(`Sem movimentações de categoria para os filtros atuais.`, 'info');
+    }
+  }
+
+  // Conjunto combinado (período + tipo + categoria) move resumo e análise
+  const combined = periodTxs.filter(t => txMatchesType(t, store.filterType) && txMatchesCategory(t, activeCat));
+
+  // Lista: combinado + busca textual
+  let list = [...combined];
+  const query = (store.searchQuery || '').toLowerCase();
   if (query) {
     list = list.filter(t =>
       t.description.toLowerCase().includes(query) ||
@@ -324,18 +434,14 @@ function renderFilteredTransactions(state) {
     );
   }
 
-  if (window.linsoraStore.filterType !== 'all') {
-    list = list.filter(t => t.type === window.linsoraStore.filterType);
-  }
-
   LinsoraUI.renderTransactionsList('fullTransactionsList', list);
 
   const countEl = document.getElementById('extratoListCount');
   if (countEl) countEl.innerText = list.length === 1 ? '1 movimentação' : `${list.length} movimentações`;
 
-  // Resumo do período (somente dados reais do período selecionado)
-  const periodIncome = periodTxs.filter(t => t.type === 'RECEITA').reduce((acc, t) => acc + (Number(t.amount) || 0), 0);
-  const periodExpense = periodTxs.filter(t => t.type === 'DESPESA').reduce((acc, t) => acc + (Number(t.amount) || 0), 0);
+  // Resumo do período + filtros (somente dados reais do conjunto combinado)
+  const periodIncome = combined.filter(t => t.type === 'RECEITA').reduce((acc, t) => acc + (Number(t.amount) || 0), 0);
+  const periodExpense = combined.filter(t => t.type === 'DESPESA').reduce((acc, t) => acc + (Number(t.amount) || 0), 0);
   const periodBalance = periodIncome - periodExpense;
 
   const incomeEl = document.getElementById('periodIncome');
@@ -350,6 +456,10 @@ function renderFilteredTransactions(state) {
     balanceEl.className = `summary-val ${periodBalance >= 0 ? 'positive' : 'negative'}`;
   }
 
+  // Título da análise reflete o filtro de categoria
+  const analysisTitle = document.getElementById('extratoAnalysisTitle');
+  if (analysisTitle) analysisTitle.innerText = activeCat ? `Análise de ${activeCat}` : 'Análise Financeira';
+
   // Estado sem dados: mensagens claras, sem gráficos ou indicadores
   const hasPeriodData = periodTxs.length > 0;
   const emptyBlock = document.getElementById('extratoEmptyBlock');
@@ -361,15 +471,18 @@ function renderFilteredTransactions(state) {
   const analysisSection = document.getElementById('extratoAnalysisSection');
   if (analysisSection) analysisSection.classList.toggle('hidden', !hasPeriodData);
 
-  // Análise do período + comparação com o mês anterior (somente no modo mensal)
+  // Análise do conjunto combinado + comparação com o mês anterior (modo mensal)
   if (hasPeriodData) {
-    const showComparison = period === 'THIS_MONTH';
+    const showComparison = (store.filterPeriod || 'ALL') === 'THIS_MONTH';
     const prevKey = getPeriodMonthKey(new Date(), 1);
-    const prevTxs = showComparison ? all.filter(t => getTxMonthKey(t) === prevKey) : [];
-    LinsoraUI.renderExtratoAnalysis('extratoAnalysisContainer', periodTxs, prevTxs, showComparison);
+    const prevBase = showComparison ? all.filter(t => getTxMonthKey(t) === prevKey) : [];
+    const prevTxs = prevBase.filter(t => txMatchesType(t, store.filterType) && txMatchesCategory(t, activeCat));
+    LinsoraUI.renderExtratoAnalysis('extratoAnalysisContainer', combined, prevTxs, showComparison, activeCat);
   } else {
-    LinsoraUI.renderExtratoAnalysis('extratoAnalysisContainer', [], [], false);
+    LinsoraUI.renderExtratoAnalysis('extratoAnalysisContainer', [], [], false, null);
   }
+
+  syncExtratoFilterUI();
 }
 
 function setupEventListeners() {
@@ -1145,6 +1258,94 @@ function setupEventListeners() {
       renderFilteredTransactions(window.linsoraStore.state);
     };
   }
+
+  document.getElementById('btnClearSearch')?.addEventListener('click', () => {
+    window.linsoraStore.searchQuery = '';
+    const searchInputEl = document.getElementById('txSearchInput');
+    if (searchInputEl) searchInputEl.value = '';
+    renderFilteredTransactions(window.linsoraStore.state);
+  });
+
+  // Categorias clicáveis na análise (delegação única: sem múltiplos listeners)
+  const analysisContainer = document.getElementById('extratoAnalysisContainer');
+  const toggleCategoryFilter = (row) => {
+    if (!row || !row.getAttribute) return;
+    let cat = null;
+    try {
+      cat = decodeURIComponent(row.getAttribute('data-category') || '');
+    } catch (err) {
+      cat = null;
+    }
+    if (!cat) return;
+    window.linsoraStore.filterCategory = window.linsoraStore.filterCategory === cat ? null : cat;
+    renderFilteredTransactions(window.linsoraStore.state);
+  };
+  analysisContainer?.addEventListener('click', (e) => {
+    const row = e.target && e.target.closest ? e.target.closest('[data-category]') : null;
+    if (row) toggleCategoryFilter(row);
+  });
+  analysisContainer?.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    const row = e.target && e.target.closest ? e.target.closest('[data-category]') : null;
+    if (row) {
+      e.preventDefault();
+      toggleCategoryFilter(row);
+    }
+  });
+
+  document.getElementById('btnActiveCategory')?.addEventListener('click', () => {
+    window.linsoraStore.filterCategory = null;
+    renderFilteredTransactions(window.linsoraStore.state);
+  });
+
+  document.getElementById('btnClearFilters')?.addEventListener('click', () => {
+    window.linsoraStore.filterType = 'all';
+    window.linsoraStore.filterPeriod = 'ALL';
+    window.linsoraStore.filterCategory = null;
+    window.linsoraStore.customPeriod = null;
+    window.linsoraStore.searchQuery = '';
+    const searchInputEl = document.getElementById('txSearchInput');
+    if (searchInputEl) searchInputEl.value = '';
+    renderFilteredTransactions(window.linsoraStore.state);
+  });
+
+  const periodSelect = document.getElementById('periodSelect');
+  if (periodSelect) {
+    periodSelect.onchange = function() {
+      const value = this.value;
+      window.linsoraStore.filterPeriod = value;
+      if (value === 'CUSTOM') {
+        // Pré-preenche com o mês atual até o usuário aplicar outro intervalo
+        const today = new Date();
+        const start = `${getPeriodMonthKey(today, 0)}-01`;
+        window.linsoraStore.customPeriod = { start, end: toLocalDateKey(today) };
+        const startInput = document.getElementById('customStart');
+        const endInput = document.getElementById('customEnd');
+        if (startInput) startInput.value = start;
+        if (endInput) endInput.value = toLocalDateKey(today);
+      }
+      renderFilteredTransactions(window.linsoraStore.state);
+    };
+  }
+
+  document.getElementById('btnApplyCustomPeriod')?.addEventListener('click', () => {
+    const startInput = document.getElementById('customStart');
+    const endInput = document.getElementById('customEnd');
+    const start = startInput ? startInput.value : '';
+    const end = endInput ? endInput.value : '';
+    if (!start || !end) {
+      LinsoraUI.showToast('Selecione a data inicial e a data final.', 'error');
+      return;
+    }
+    if (end < start) {
+      LinsoraUI.showToast('A data final não pode ser anterior à data inicial.', 'error');
+      return;
+    }
+    window.linsoraStore.filterPeriod = 'CUSTOM';
+    window.linsoraStore.customPeriod = { start, end };
+    renderFilteredTransactions(window.linsoraStore.state);
+    LinsoraUI.showToast('Período personalizado aplicado.', 'success');
+  });
 
   document.querySelectorAll('.chip-filter').forEach(chip => {
     chip.onclick = function() {

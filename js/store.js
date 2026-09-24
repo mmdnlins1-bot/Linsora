@@ -14,6 +14,8 @@ class LinsoraStore {
     this.activeTab = 'tabDashboard';
     this.filterType = 'all';
     this.filterPeriod = 'ALL';
+    this.filterCategory = null;
+    this.customPeriod = null;
     this.searchQuery = '';
     this.cashflowMetric = 'all';
     this.cashflowPeriod = 'monthly';

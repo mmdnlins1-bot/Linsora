@@ -146,7 +146,7 @@ class LinsoraUIComponentEngine {
    * e sem diagnóstico inventado. Com período vazio, limpa o container (o bloco de
    * estado sem dados é controlado pelo Extrato).
    */
-  renderExtratoAnalysis(containerId, periodTxs = [], prevTxs = [], showComparison = false) {
+  renderExtratoAnalysis(containerId, periodTxs = [], prevTxs = [], showComparison = false, activeCategory = null) {
     const container = document.getElementById(containerId);
     if (!container) return;
     const hideValues = window.linsoraStore ? window.linsoraStore.isHideValues : false;
@@ -284,13 +284,13 @@ class LinsoraUIComponentEngine {
         </div>
       </div>
 
-      ${expense > 0 ? `
+      ${!activeCategory && expense > 0 ? `
       <div class="linsora-card">
         <strong class="extrato-card-title">Distribuição dos gastos</strong>
         ${catEntries.map(([cat, val]) => {
           const pct = Math.round((val / expense) * 100);
           return `
-            <div class="category-variation-item">
+            <div class="category-variation-item clickable" data-category="${encodeURIComponent(cat)}" role="button" tabindex="0" title="Filtrar por ${LinsoraUtils.escapeHTML(cat)}">
               <div class="cat-var-top">
                 <span class="cat-var-name">${LinsoraUtils.getCategoryIcon(cat)} ${LinsoraUtils.escapeHTML(cat)}</span>
                 <span class="cat-var-pct">${pct}%</span>

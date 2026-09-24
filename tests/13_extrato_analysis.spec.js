@@ -1,7 +1,7 @@
 const { test, expect } = require('@playwright/test');
 const { login } = require('./helpers/auth');
 
-test.describe('13. Extrato com Análise Financeira', () => {
+test.describe('13. Extrato: categorias clicáveis + períodos', () => {
 
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
@@ -38,7 +38,16 @@ test.describe('13. Extrato com Análise Financeira', () => {
     await expect(page.locator('#modalTransactionForm')).toHaveClass(/hidden/, { timeout: 5000 });
   }
 
-  test('Cenário 1: sem movimentações exibe estado vazio e oculta análise', async ({ page }) => {
+  async function dateDaysAgo(page, days) {
+    return page.evaluate((n) => {
+      const d = new Date();
+      const r = new Date(d.getFullYear(), d.getMonth(), d.getDate() - n);
+      const p = (v) => String(v).padStart(2, '0');
+      return `${r.getFullYear()}-${p(r.getMonth() + 1)}-${p(r.getDate())}`;
+    }, days);
+  }
+
+  test('CENÁRIO 6: sem movimentações exibe estado vazio e oculta análise', async ({ page }) => {
     await expect(page.locator('#extratoEmptyBlock')).toBeVisible();
     await expect(page.locator('#extratoEmptyBlock')).toContainText('Não há movimentações neste período.');
     await expect(page.locator('#extratoEmptyBlock')).toContainText('Adicione uma movimentação para começar a acompanhar sua vida financeira.');
@@ -47,52 +56,118 @@ test.describe('13. Extrato com Análise Financeira', () => {
     await expect(page.locator('#extratoAnalysisContainer')).toBeEmpty();
   });
 
-  test('Cenário 2: entradas e saídas geram resumo, análise e comparação', async ({ page }) => {
+  test('CENÁRIO 1: clicar em categoria filtra lista e resumo; remover restaura', async ({ page }) => {
+    await createTransaction(page, { type: 'RECEITA', amount: '100000', description: 'Salário Cat' });
+    await createTransaction(page, { type: 'DESPESA', amount: '30000', description: 'Mercado Cat', category: 'Alimentação' });
+    await createTransaction(page, { type: 'DESPESA', amount: '15000', description: 'Uber Cat', category: 'Transporte' });
+
+    await page.click('.category-variation-item:has-text("Alimentação")');
+
+    await expect(page.locator('#categoryActiveRow')).toBeVisible();
+    await expect(page.locator('#activeCategoryName')).toHaveText('Alimentação');
+    await expect(page.locator('#extratoAnalysisTitle')).toHaveText('Análise de Alimentação');
+    await expect(page.locator('#fullTransactionsList')).toContainText('Mercado Cat');
+    await expect(page.locator('#fullTransactionsList')).not.toContainText('Uber Cat');
+    await expect(page.locator('#fullTransactionsList')).not.toContainText('Salário Cat');
+    await expect(page.locator('#periodExpense')).toContainText('R$ 300,00');
+    await expect(page.locator('#periodIncome')).toContainText('R$ 0,00');
+
+    await page.click('#btnActiveCategory');
+
+    await expect(page.locator('#categoryActiveRow')).toHaveClass(/hidden/);
+    await expect(page.locator('#extratoAnalysisTitle')).toHaveText('Análise Financeira');
+    await expect(page.locator('#fullTransactionsList')).toContainText('Uber Cat');
+    await expect(page.locator('#fullTransactionsList')).toContainText('Salário Cat');
+    await expect(page.locator('#periodExpense')).toContainText('R$ 450,00');
+  });
+
+  test('CENÁRIO 2: categoria respeita o período (Este mês e Últimos 30 dias)', async ({ page }) => {
     const prevDate = await page.evaluate(() => {
       const now = new Date();
       const prev = new Date(now.getFullYear(), now.getMonth() - 1, 15);
-      return prev.toISOString().split('T')[0];
+      const p = (v) => String(v).padStart(2, '0');
+      return `${prev.getFullYear()}-${p(prev.getMonth() + 1)}-${p(prev.getDate())}`;
     });
+    await createTransaction(page, { type: 'DESPESA', amount: '10000', description: 'Mercado Mês Atual', category: 'Alimentação' });
+    await createTransaction(page, { type: 'DESPESA', amount: '20000', description: 'Mercado Mês Anterior', category: 'Alimentação', date: prevDate });
 
-    await createTransaction(page, { type: 'RECEITA', amount: '100000', description: 'Salário Análise' });
-    await createTransaction(page, { type: 'DESPESA', amount: '40000', description: 'Mercado Análise', category: 'Alimentação' });
-    await createTransaction(page, { type: 'DESPESA', amount: '20000', description: 'Gasolina Mês Anterior', category: 'Transporte', date: prevDate });
+    await page.selectOption('#periodSelect', 'THIS_MONTH');
+    await expect(page.locator('#fullTransactionsList')).toContainText('Mercado Mês Atual');
+    await expect(page.locator('#fullTransactionsList')).not.toContainText('Mercado Mês Anterior');
+    await expect(page.locator('#periodExpense')).toContainText('R$ 100,00');
 
-    // Resumo do período (Todo Período por padrão)
-    await expect(page.locator('#periodIncome')).toContainText('R$ 1.000,00');
-    await expect(page.locator('#periodExpense')).toContainText('R$ 600,00');
-    await expect(page.locator('#periodBalance')).toContainText('R$ 400,00');
-    await expect(page.locator('#extratoEmptyBlock')).toHaveClass(/hidden/);
-    await expect(page.locator('#extratoAnalysisSection')).not.toHaveClass(/hidden/);
+    await page.click('.category-variation-item:has-text("Alimentação")');
+    await expect(page.locator('#periodExpense')).toContainText('R$ 100,00');
+    await expect(page.locator('#fullTransactionsList')).not.toContainText('Mercado Mês Anterior');
 
-    // Filtro mensal: esconde o lançamento do mês anterior e mostra comparação
-    await page.click('.chip-filter[data-value="THIS_MONTH"]');
-    await expect(page.locator('.chip-filter[data-value="THIS_MONTH"]')).toHaveClass(/active/);
-    await expect(page.locator('#fullTransactionsList')).toContainText('Mercado Análise');
-    await expect(page.locator('#fullTransactionsList')).not.toContainText('Gasolina Mês Anterior');
-    await expect(page.locator('#periodExpense')).toContainText('R$ 400,00');
-
-    const analysis = page.locator('#extratoAnalysisContainer');
-    await expect(analysis).toContainText('Equilibrado');
-    await expect(analysis).toContainText('Entradas x Saídas');
-    await expect(analysis).toContainText('Comparado ao mês anterior');
-    await expect(analysis).toContainText('R$ 200,00');
-
-    // Voltar para Todo Período: comparação some, lançamento anterior reaparece
-    await page.click('.chip-filter[data-value="ALL"]');
-    await expect(page.locator('#fullTransactionsList')).toContainText('Gasolina Mês Anterior');
-    await expect(analysis).not.toContainText('Comparado ao mês anterior');
+    await page.click('#btnActiveCategory');
+    const oldDate = await dateDaysAgo(page, 40);
+    await createTransaction(page, { type: 'DESPESA', amount: '5000', description: 'Lanche 40 dias', category: 'Lazer', date: oldDate });
+    await page.selectOption('#periodSelect', 'LAST_30_DAYS');
+    await expect(page.locator('#fullTransactionsList')).not.toContainText('Lanche 40 dias');
+    await page.selectOption('#periodSelect', 'LAST_90_DAYS');
+    await expect(page.locator('#fullTransactionsList')).toContainText('Lanche 40 dias');
   });
 
-  test('Cenário 3: distribuição mostra somente categorias com movimento', async ({ page }) => {
-    await createTransaction(page, { type: 'DESPESA', amount: '30000', description: 'Mercado Distribuição', category: 'Alimentação' });
-    await createTransaction(page, { type: 'DESPESA', amount: '15000', description: 'Uber Distribuição', category: 'Transporte' });
+  test('CENÁRIO 3: período + tipo + categoria + busca combinados', async ({ page }) => {
+    await createTransaction(page, { type: 'RECEITA', amount: '200000', description: 'Salário Combinado' });
+    await createTransaction(page, { type: 'DESPESA', amount: '12000', description: 'Mercado Central', category: 'Alimentação' });
+    await createTransaction(page, { type: 'DESPESA', amount: '8000', description: 'Padaria Pão', category: 'Alimentação' });
+    await createTransaction(page, { type: 'DESPESA', amount: '6000', description: 'Uber Combinado', category: 'Transporte' });
 
-    const analysis = page.locator('#extratoAnalysisContainer');
-    await expect(analysis).toContainText('Distribuição dos gastos');
-    await expect(analysis).toContainText('Alimentação');
-    await expect(analysis).toContainText('Transporte');
-    await expect(analysis).toContainText('Concentração de gastos');
-    await expect(await analysis.locator('.category-variation-item').count()).toBe(2);
+    await page.selectOption('#periodSelect', 'THIS_MONTH');
+    await page.click('.chip-filter[data-value="DESPESA"]');
+    await page.click('.category-variation-item:has-text("Alimentação")');
+    await page.fill('#txSearchInput', 'mercado');
+
+    await expect(page.locator('#fullTransactionsList')).toContainText('Mercado Central');
+    await expect(page.locator('#fullTransactionsList')).not.toContainText('Padaria Pão');
+    await expect(page.locator('#fullTransactionsList')).not.toContainText('Uber Combinado');
+    // Resumo respeita período+tipo+categoria (busca textual filtra só a lista)
+    await expect(page.locator('#periodExpense')).toContainText('R$ 200,00');
+    await expect(page.locator('#periodIncome')).toContainText('R$ 0,00');
+
+    await page.click('#btnClearFilters');
+    await expect(page.locator('#categoryActiveRow')).toHaveClass(/hidden/);
+    await expect(page.locator('#fullTransactionsList')).toContainText('Uber Combinado');
+    await expect(page.locator('#fullTransactionsList')).toContainText('Salário Combinado');
+  });
+
+  test('CENÁRIO 4: todos os períodos carregam sem erro', async ({ page }) => {
+    await createTransaction(page, { type: 'RECEITA', amount: '50000', description: 'Receita Períodos' });
+    const periods = ['TODAY', 'THIS_WEEK', 'LAST_7_DAYS', 'THIS_MONTH', 'LAST_30_DAYS', 'LAST_90_DAYS', 'THIS_YEAR', 'ALL'];
+    for (const period of periods) {
+      await page.selectOption('#periodSelect', period);
+      await expect(page.locator('#extratoEmptyBlock')).toHaveClass(/hidden/);
+      await expect(page.locator('#periodIncome')).toContainText('R$ 500,00');
+      const showsComparison = await page.locator('#extratoAnalysisContainer').getByText('Comparado ao mês anterior').count();
+      expect(showsComparison > 0).toBe(period === 'THIS_MONTH');
+    }
+  });
+
+  test('CENÁRIO 5: período personalizado válido, vazio e inválido', async ({ page }) => {
+    const today = await dateDaysAgo(page, 0);
+    const tenAgo = await dateDaysAgo(page, 10);
+    await createTransaction(page, { type: 'DESPESA', amount: '9000', description: 'Compra Período Custom', category: 'Outros', date: tenAgo });
+
+    await page.selectOption('#periodSelect', 'CUSTOM');
+    await expect(page.locator('#customPeriodRow')).toBeVisible();
+    await page.fill('#customStart', tenAgo);
+    await page.fill('#customEnd', today);
+    await page.click('#btnApplyCustomPeriod');
+    await expect(page.locator('#fullTransactionsList')).toContainText('Compra Período Custom');
+    await expect(page.locator('#periodExpense')).toContainText('R$ 90,00');
+
+    await page.fill('#customStart', '2020-01-01');
+    await page.fill('#customEnd', '2020-01-31');
+    await page.click('#btnApplyCustomPeriod');
+    await expect(page.locator('#extratoEmptyBlock')).toBeVisible();
+    await expect(page.locator('#extratoEmptyBlock')).toContainText('Não há movimentações neste período.');
+
+    await page.fill('#customStart', today);
+    await page.fill('#customEnd', tenAgo);
+    await page.click('#btnApplyCustomPeriod');
+    await expect(page.locator('#toastContainer')).toContainText('anterior à data inicial');
+    await expect(page.locator('#extratoEmptyBlock')).toBeVisible();
   });
 });

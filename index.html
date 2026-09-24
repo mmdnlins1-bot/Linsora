@@ -420,15 +420,47 @@
               <div class="search-input-wrapper">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
                 <input type="text" id="txSearchInput" class="linsora-input search-input" placeholder="Buscar por descrição, valor ou tag...">
+                <button type="button" class="search-clear-btn hidden" id="btnClearSearch" title="Limpar busca">✕</button>
               </div>
 
               <div class="filter-chips-scroll">
                 <button type="button" class="chip-filter active" data-filter-type="type" data-value="all">Todas</button>
                 <button type="button" class="chip-filter" data-filter-type="type" data-value="RECEITA">Receitas</button>
                 <button type="button" class="chip-filter" data-filter-type="type" data-value="DESPESA">Despesas</button>
-                <button type="button" class="chip-filter" data-filter-type="period" data-value="THIS_MONTH">Este Mês</button>
-                <button type="button" class="chip-filter active" data-filter-type="period" data-value="ALL">Todo Período</button>
               </div>
+
+              <div class="period-select-row">
+                <label class="period-select-label" for="periodSelect">Período</label>
+                <select id="periodSelect" class="linsora-input select-input">
+                  <option value="TODAY">Hoje</option>
+                  <option value="THIS_WEEK">Esta semana</option>
+                  <option value="LAST_7_DAYS">Últimos 7 dias</option>
+                  <option value="THIS_MONTH">Este mês</option>
+                  <option value="LAST_30_DAYS">Últimos 30 dias</option>
+                  <option value="LAST_90_DAYS">Últimos 90 dias</option>
+                  <option value="THIS_YEAR">Este ano</option>
+                  <option value="ALL" selected>Todo período</option>
+                  <option value="CUSTOM">Personalizado</option>
+                </select>
+              </div>
+
+              <div class="custom-period-row hidden" id="customPeriodRow">
+                <div class="custom-period-field">
+                  <label for="customStart">Data inicial</label>
+                  <input type="date" id="customStart" class="linsora-input">
+                </div>
+                <div class="custom-period-field">
+                  <label for="customEnd">Data final</label>
+                  <input type="date" id="customEnd" class="linsora-input">
+                </div>
+                <button type="button" class="linsora-btn primary sm" id="btnApplyCustomPeriod">Aplicar período</button>
+              </div>
+
+              <div class="hidden" id="categoryActiveRow">
+                <button type="button" class="chip-filter active" id="btnActiveCategory" title="Remover filtro de categoria">Categoria: <strong id="activeCategoryName"></strong> <span aria-hidden="true">✕</span></button>
+              </div>
+
+              <button type="button" class="link-btn-bold hidden" id="btnClearFilters">Limpar filtros</button>
             </div>
 
             <div class="linsora-card filtered-summary-card period-summary" id="periodSummaryBar">
@@ -464,7 +496,7 @@
 
             <div class="section-block" id="extratoAnalysisSection">
               <div class="section-header-row">
-                <h3>Análise Financeira</h3>
+                <h3 id="extratoAnalysisTitle">Análise Financeira</h3>
               </div>
               <div class="extrato-analysis-stack" id="extratoAnalysisContainer"></div>
             </div>
