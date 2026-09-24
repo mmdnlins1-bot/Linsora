@@ -135,8 +135,9 @@ test.describe('13. Extrato: categorias clicáveis + períodos', () => {
     const analysis3 = page.locator('#extratoAnalysisContainer');
     await expect(analysis3.locator('.extrato-cat-total')).toContainText('R$ 200,00');
     await expect(analysis3.locator('.extrato-cat-count')).toContainText('2 movimentações');
-    await expect(analysis3).toContainText('Resultado do período');
-    await expect(analysis3).toContainText('+R$ 1.740,00');
+    const tail3 = page.locator('#extratoAnalysisTail');
+    await expect(tail3).toContainText('Resultado do período');
+    await expect(tail3).toContainText('+R$ 1.740,00');
 
     await page.click('#btnClearFilters');
     await expect(page.locator('#categoryActiveRow')).toHaveClass(/hidden/);
@@ -247,12 +248,13 @@ test.describe('13. Extrato: categorias clicáveis + períodos', () => {
 
     await expect(page.locator('#periodSummaryBar')).toHaveClass(/hidden/);
     const analysis = page.locator('#extratoAnalysisContainer');
+    const tail = page.locator('#extratoAnalysisTail');
     await expect(analysis.locator('.extrato-cat-total')).toContainText('R$ 520,00');
     await expect(analysis.locator('.extrato-cat-count')).toContainText('1 movimentação');
     await expect(analysis).toContainText('Alimentação representa');
     await expect(analysis).toContainText('8%');
-    await expect(analysis).toContainText('Resultado do período');
-    await expect(analysis).toContainText('-R$ 1.690,00');
+    await expect(tail).toContainText('Resultado do período');
+    await expect(tail).toContainText('-R$ 1.690,00');
 
     await page.click('#btnActiveCategory');
     await page.click('.linsora-card.category-variation-item:has-text("Transporte")');
@@ -312,7 +314,7 @@ test.describe('13. Extrato: categorias clicáveis + períodos', () => {
     expect(mobileOverflow).toBe(true);
   });
 
-  test('Categoria selecionada: análise antes das movimentações', async ({ page }) => {
+  test('Categoria selecionada: análise, movimentações, distribuição e resultado', async ({ page }) => {
     await createTransaction(page, { type: 'DESPESA', amount: '10000', description: 'Mercado Ordem', category: 'Alimentação' });
     await expect(page.locator('#extratoMovementsTitle')).toHaveText('Movimentações');
 
@@ -320,11 +322,21 @@ test.describe('13. Extrato: categorias clicáveis + períodos', () => {
     await expect(page.locator('#extratoAnalysisTitle')).toHaveText('Análise de Alimentação');
     await expect(page.locator('#extratoMovementsTitle')).toHaveText('Movimentações de Alimentação');
     const order = await page.evaluate(() => {
-      const analysis = document.getElementById('extratoAnalysisSection');
-      const movs = document.getElementById('extratoMovementsSection');
-      return analysis.compareDocumentPosition(movs);
+      const pos = (id) => {
+        const els = Array.from(document.querySelectorAll('#tabTransactions .section-block'));
+        return els.findIndex((el) => el.contains(document.getElementById(id)));
+      };
+      return {
+        analysis: pos('extratoAnalysisContainer'),
+        movs: pos('fullTransactionsList'),
+        tail: pos('extratoAnalysisTail'),
+      };
     });
-    expect(order & 4).toBeTruthy();
+    expect(order.analysis).toBeGreaterThanOrEqual(0);
+    expect(order.movs).toBeGreaterThan(order.analysis);
+    expect(order.tail).toBeGreaterThan(order.movs);
+    await expect(page.locator('#extratoAnalysisTail')).toContainText('Distribuição dos gastos');
+    await expect(page.locator('#extratoAnalysisTail')).toContainText('Resultado do período');
 
     await page.click('#btnActiveCategory');
     await expect(page.locator('#extratoMovementsTitle')).toHaveText('Movimentações');
@@ -443,6 +455,7 @@ test.describe('13. Extrato: categorias clicáveis + períodos', () => {
     await page.click('.linsora-card.category-variation-item:has-text("Alimentação")');
     await expect(analysis).toContainText('Comparação com o mês anterior');
     await expect(analysis).toContainText('Você gastou 20% menos com Alimentação neste mês.');
+    await expect(analysis).toContainText('R$ 130,00 a menos');
     await expect(analysis).toContainText('Mês anterior');
     await expect(analysis).toContainText('R$ 650,00');
     await expect(analysis).toContainText('Este mês');
@@ -453,6 +466,7 @@ test.describe('13. Extrato: categorias clicáveis + períodos', () => {
     await page.click('#btnActiveCategory');
     await page.click('.linsora-card.category-variation-item:has-text("Transporte")');
     await expect(analysis).toContainText('Você gastou 20% a mais com Transporte neste mês.');
+    await expect(analysis).toContainText('R$ 60,00 a mais');
     await expect(analysis).toContainText('Mês anterior');
     await expect(analysis).toContainText('R$ 300,00');
     await expect(analysis).toContainText('Este mês');
@@ -467,6 +481,8 @@ test.describe('13. Extrato: categorias clicáveis + períodos', () => {
     await expect(analysis).toContainText('Não houve gastos com Educação no período anterior.');
     await expect(analysis).toContainText('Este mês');
     await expect(analysis).toContainText('R$ 50,00');
+    const analysisText = await analysis.innerText();
+    expect(analysisText).not.toMatch(/Infinity|NaN/);
   });
 
   test('Participação usa as saídas totais do período como denominador', async ({ page }) => {

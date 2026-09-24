@@ -160,13 +160,16 @@ class LinsoraUIComponentEngine {
       activeCategory = null,
       catCompare = null,
       filterType = 'all',
+      tailId = 'extratoAnalysisTail',
     } = options || {};
 
+    const tail = document.getElementById(tailId);
     const combined = Array.isArray(combinedTxs) ? combinedTxs : [];
     const period = Array.isArray(periodTxs) ? periodTxs : [];
     const distBase = Array.isArray(distTxs) ? distTxs : combined;
     if (combined.length === 0) {
       container.innerHTML = '';
+      if (tail) tail.innerHTML = '';
       return;
     }
 
@@ -190,23 +193,28 @@ class LinsoraUIComponentEngine {
       if (showComparison && catCompare) {
         const curr = Number(catCompare.curr) || 0;
         const prev = Number(catCompare.prev) || 0;
+        const diff = Math.abs(curr - prev);
         let cmpBody = '';
         if (prev > 0) {
           const pct = Math.round(((curr - prev) / prev) * 100);
           let badge = '<span class="category-variation-badge neutral">→ 0%</span>';
           let phrase = `Você gastou o mesmo valor com ${esc(activeCategory)} neste mês.`;
+          let diffLine = '';
           if (pct < 0) {
             badge = `<span class="category-variation-badge success">↓ ${Math.abs(pct)}%</span>`;
             phrase = `Você gastou ${Math.abs(pct)}% menos com ${esc(activeCategory)} neste mês.`;
+            diffLine = `<p class="extrato-cmp-phrase">Você gastou ${fmt(diff)} a menos com ${esc(activeCategory)} neste mês.</p>`;
           } else if (pct > 0) {
             badge = `<span class="category-variation-badge danger">↑ ${pct}%</span>`;
             phrase = `Você gastou ${pct}% a mais com ${esc(activeCategory)} neste mês.`;
+            diffLine = `<p class="extrato-cmp-phrase">Você gastou ${fmt(diff)} a mais com ${esc(activeCategory)} neste mês.</p>`;
           }
           cmpBody = `
             <div class="extrato-cmp-hero">${badge}</div>
             <p class="extrato-cmp-phrase">${phrase}</p>
             <div class="extrato-cmp-row"><span>Mês anterior</span><span class="extrato-cmp-vals"><strong>${fmt(prev)}</strong></span></div>
             <div class="extrato-cmp-row"><span>Este mês</span><span class="extrato-cmp-vals"><strong>${fmt(curr)}</strong></span></div>
+            ${diffLine}
           `;
         } else if (curr > 0) {
           cmpBody = `
@@ -217,7 +225,7 @@ class LinsoraUIComponentEngine {
           cmpBody = `<p class="extrato-cmp-phrase">Não houve gastos com ${esc(activeCategory)} nos períodos comparados.</p>`;
         }
         compareHTML = `
-          <div class="linsora-card">
+          <div class="extrato-cat-compare">
             <strong class="extrato-card-title">Comparação com o mês anterior</strong>
             ${cmpBody}
           </div>
@@ -247,41 +255,46 @@ class LinsoraUIComponentEngine {
       const saidasStr = `${expenseP > 0 ? '-' : ''}${fmt(expenseP)}`;
 
       container.innerHTML = `
-        <div class="linsora-card extrato-cat-hero">
-          <div class="extrato-cat-total">${fmt(catTotal)}</div>
-          <div class="extrato-cat-count">${catCount} ${catCount === 1 ? 'movimentação' : 'movimentações'}</div>
-        </div>
-
-        ${compareHTML}
-        ${shareHTML}
-
-        ${distExpense > 0 ? `
-        <strong class="extrato-card-title">Distribuição dos gastos</strong>
-        ${distEntries.map(([cat, val]) => {
-          const pct = Math.round((val / distExpense) * 100);
-          const selected = cat === activeCategory ? ' selected' : '';
-          return `
-            <div class="linsora-card category-variation-item clickable${selected}" data-category="${encodeURIComponent(cat)}" role="button" tabindex="0" title="Filtrar por ${esc(cat)}">
-              <div class="cat-var-top">
-                <span class="cat-var-name">${LinsoraUtils.getCategoryIcon(cat)} ${esc(cat)}</span>
-                <span class="cat-var-pct">${pct}%</span>
-              </div>
-              <div class="widget-bar"><div class="widget-bar-fill" style="width: ${pct}%;"></div></div>
-              <div class="cat-var-val">${fmt(val)}</div>
-            </div>
-          `;
-        }).join('')}
-        ` : ''}
-
-        <div class="linsora-card">
-          <strong class="extrato-card-title">Resultado do período</strong>
-          <div class="extrato-result-grid">
-            <div class="extrato-result-item"><span>Entradas</span><strong>${fmt(incomeP)}</strong></div>
-            <div class="extrato-result-item"><span>Saídas</span><strong class="negative">${saidasStr}</strong></div>
-            <div class="extrato-result-item"><span>Saldo</span><strong class="${saldoCls}">${saldoStr}</strong></div>
+        <div class="linsora-card extrato-cat-card">
+          <div class="extrato-cat-hero">
+            <div class="extrato-cat-total">${fmt(catTotal)}</div>
+            <div class="extrato-cat-count">${catCount} ${catCount === 1 ? 'movimentação' : 'movimentações'}</div>
           </div>
+          ${compareHTML}
+          ${shareHTML}
         </div>
       `;
+
+      if (tail) {
+        tail.innerHTML = `
+          ${distExpense > 0 ? `
+          <strong class="extrato-card-title">Distribuição dos gastos</strong>
+          ${distEntries.map(([cat, val]) => {
+            const pct = Math.round((val / distExpense) * 100);
+            const selected = cat === activeCategory ? ' selected' : '';
+            return `
+              <div class="linsora-card category-variation-item clickable${selected}" data-category="${encodeURIComponent(cat)}" role="button" tabindex="0" title="Filtrar por ${esc(cat)}">
+                <div class="cat-var-top">
+                  <span class="cat-var-name">${LinsoraUtils.getCategoryIcon(cat)} ${esc(cat)}</span>
+                  <span class="cat-var-pct">${pct}%</span>
+                </div>
+                <div class="widget-bar"><div class="widget-bar-fill" style="width: ${pct}%;"></div></div>
+                <div class="cat-var-val">${fmt(val)}</div>
+              </div>
+            `;
+          }).join('')}
+          ` : ''}
+
+          <div class="linsora-card">
+            <strong class="extrato-card-title">Resultado do período</strong>
+            <div class="extrato-result-grid">
+              <div class="extrato-result-item"><span>Entradas</span><strong>${fmt(incomeP)}</strong></div>
+              <div class="extrato-result-item"><span>Saídas</span><strong class="negative">${saidasStr}</strong></div>
+              <div class="extrato-result-item"><span>Saldo</span><strong class="${saldoCls}">${saldoStr}</strong></div>
+            </div>
+          </div>
+        `;
+      }
       return;
     }
 
@@ -448,6 +461,7 @@ class LinsoraUIComponentEngine {
         </div>
       `).join('')}
     `;
+    if (tail) tail.innerHTML = '';
   }
 
   renderGoalsList(containerId, goals = []) {

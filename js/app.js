@@ -536,6 +536,9 @@ function renderFilteredTransactions(state) {
   const hasAnalysisContent = !singleType || combinedExpense > 0;
   if (analysisSection) analysisSection.classList.toggle('hidden', !hasPeriodData || !hasAnalysisContent);
 
+  const tailSection = document.getElementById('extratoAnalysisTailSection');
+  if (tailSection) tailSection.classList.toggle('hidden', !hasPeriodData || !activeCat);
+
   // Análise: conjunto combinado + comparação com o mês anterior (modo mensal).
   // Com categoria, a comparação usa a janela equivalente do mês anterior.
   if (hasPeriodData) {

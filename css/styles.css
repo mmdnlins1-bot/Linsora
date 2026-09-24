@@ -1629,7 +1629,10 @@ body.frame-mode .device-notch { display: block; }
 .extrato-cmp-row:last-child { border-bottom: none; }
 .extrato-cmp-vals { display: flex; gap: 6px; align-items: baseline; color: var(--text-secondary); font-size: 11.5px; font-weight: 400; }
 .extrato-cmp-vals strong { color: var(--text-primary); }
-.extrato-cat-hero { text-align: center; padding: 18px 14px; }
+.extrato-cat-hero { text-align: center; }
+.extrato-cat-card { padding: 18px 16px; }
+.extrato-cat-compare { margin-top: 12px; border-top: 1px dashed var(--border-color); padding-top: 12px; }
+.extrato-cat-compare + .extrato-share-line, .extrato-share-line { margin-top: 12px; }
 .extrato-cat-total { font-size: 30px; font-weight: 800; color: var(--text-primary); letter-spacing: -0.5px; }
 .extrato-cat-count { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
 .extrato-cmp-hero { display: flex; justify-content: center; margin: 8px 0 2px; }
