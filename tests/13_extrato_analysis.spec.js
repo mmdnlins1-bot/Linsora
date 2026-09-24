@@ -312,6 +312,112 @@ test.describe('13. Extrato: categorias clicáveis + períodos', () => {
     expect(mobileOverflow).toBe(true);
   });
 
+  test('Categoria selecionada: análise antes das movimentações', async ({ page }) => {
+    await createTransaction(page, { type: 'DESPESA', amount: '10000', description: 'Mercado Ordem', category: 'Alimentação' });
+    await expect(page.locator('#extratoMovementsTitle')).toHaveText('Movimentações');
+
+    await page.click('.linsora-card.category-variation-item:has-text("Alimentação")');
+    await expect(page.locator('#extratoAnalysisTitle')).toHaveText('Análise de Alimentação');
+    await expect(page.locator('#extratoMovementsTitle')).toHaveText('Movimentações de Alimentação');
+    const order = await page.evaluate(() => {
+      const analysis = document.getElementById('extratoAnalysisSection');
+      const movs = document.getElementById('extratoMovementsSection');
+      return analysis.compareDocumentPosition(movs);
+    });
+    expect(order & 4).toBeTruthy();
+
+    await page.click('#btnActiveCategory');
+    await expect(page.locator('#extratoMovementsTitle')).toHaveText('Movimentações');
+    const orderBack = await page.evaluate(() => {
+      const analysis = document.getElementById('extratoAnalysisSection');
+      const movs = document.getElementById('extratoMovementsSection');
+      return movs.compareDocumentPosition(analysis);
+    });
+    expect(orderBack & 4).toBeTruthy();
+  });
+
+  test('Resultado do período: saídas negativas, saldo correto e neutro no zero', async ({ page }) => {
+    await createTransaction(page, { type: 'RECEITA', amount: '500000', description: 'Salário Sinal' });
+    await createTransaction(page, { type: 'DESPESA', amount: '200000', description: 'Aluguel Sinal', category: 'Moradia' });
+
+    await expect(page.locator('#periodIncome')).toContainText('R$ 5.000,00');
+    await expect(page.locator('#periodExpense')).toContainText('-R$ 2.000,00');
+    await expect(page.locator('#periodExpense')).toHaveClass(/negative/);
+    await expect(page.locator('#periodBalance')).toContainText('R$ 3.000,00');
+    await expect(page.locator('#periodBalance')).toHaveClass(/positive/);
+    const analysis = page.locator('#extratoAnalysisContainer');
+    await expect(analysis).toContainText('Equilibrado');
+    await expect(analysis).toContainText('Entradas x Saídas');
+
+    await createTransaction(page, { type: 'DESPESA', amount: '300000', description: 'Viagem Zero', category: 'Lazer' });
+    await expect(page.locator('#periodBalance')).toContainText('R$ 0,00');
+    await expect(page.locator('#periodBalance')).not.toHaveClass(/positive/);
+    await expect(page.locator('#periodBalance')).not.toHaveClass(/negative/);
+  });
+
+  test('Filtro Despesas: somente saídas, resumo próprio, sem diagnóstico geral', async ({ page }) => {
+    await createTransaction(page, { type: 'RECEITA', amount: '100000', description: 'Salário Tipo' });
+    await createTransaction(page, { type: 'DESPESA', amount: '40000', description: 'Mercado Tipo', category: 'Alimentação' });
+    await createTransaction(page, { type: 'DESPESA', amount: '10000', description: 'Uber Tipo', category: 'Transporte' });
+
+    await page.click('.chip-filter[data-value="DESPESA"]');
+    await expect(page.locator('#fullTransactionsList')).toContainText('Mercado Tipo');
+    await expect(page.locator('#fullTransactionsList')).not.toContainText('Salário Tipo');
+    await expect(page.locator('#typeSummaryValue')).toContainText('-R$ 500,00');
+    await expect(page.locator('#typeSummaryCount')).toContainText('2 movimentações');
+    await expect(page.locator('#periodSummaryBar')).not.toContainText('Entradas');
+    await expect(page.locator('#periodIncome')).toHaveCount(0);
+    const analysis = page.locator('#extratoAnalysisContainer');
+    await expect(analysis).not.toContainText('Déficit no período');
+    await expect(analysis).not.toContainText('Entradas x Saídas');
+    await expect(analysis).not.toContainText('Suas entradas cobrem');
+    await expect(analysis).toContainText('Distribuição dos gastos');
+
+    await page.click('.chip-filter[data-value="all"]');
+    await expect(page.locator('#periodIncome')).toContainText('R$ 1.000,00');
+    await expect(page.locator('#periodExpense')).toContainText('-R$ 500,00');
+    await expect(analysis).toContainText('Equilibrado');
+  });
+
+  test('Filtro Receitas: somente entradas, resumo próprio, sem análise incompleta', async ({ page }) => {
+    await createTransaction(page, { type: 'RECEITA', amount: '100000', description: 'Salário Rec' });
+    await createTransaction(page, { type: 'DESPESA', amount: '40000', description: 'Mercado Rec', category: 'Alimentação' });
+
+    await page.click('.chip-filter[data-value="RECEITA"]');
+    await expect(page.locator('#fullTransactionsList')).toContainText('Salário Rec');
+    await expect(page.locator('#fullTransactionsList')).not.toContainText('Mercado Rec');
+    await expect(page.locator('#typeSummaryValue')).toContainText('R$ 1.000,00');
+    await expect(page.locator('#typeSummaryCount')).toContainText('1 movimentação');
+    await expect(page.locator('#periodSummaryBar')).not.toContainText('Saídas');
+    await expect(page.locator('#periodExpense')).toHaveCount(0);
+    await expect(page.locator('#extratoAnalysisSection')).toHaveClass(/hidden/);
+
+    await page.click('.chip-filter[data-value="all"]');
+    await expect(page.locator('#periodIncome')).toContainText('R$ 1.000,00');
+  });
+
+  test('Despesas + Alimentação e Receitas + categoria incompatível', async ({ page }) => {
+    await createTransaction(page, { type: 'RECEITA', amount: '100000', description: 'Salário Comb2' });
+    await createTransaction(page, { type: 'DESPESA', amount: '30000', description: 'Mercado Comb2', category: 'Alimentação' });
+    await createTransaction(page, { type: 'DESPESA', amount: '15000', description: 'Uber Comb2', category: 'Transporte' });
+
+    await page.click('.chip-filter[data-value="DESPESA"]');
+    await page.click('.linsora-card.category-variation-item:has-text("Alimentação")');
+    await expect(page.locator('#fullTransactionsList')).toContainText('Mercado Comb2');
+    await expect(page.locator('#fullTransactionsList')).not.toContainText('Uber Comb2');
+    await expect(page.locator('#fullTransactionsList')).not.toContainText('Salário Comb2');
+    await expect(page.locator('#extratoAnalysisTitle')).toHaveText('Análise de Alimentação');
+
+    await page.click('#btnActiveCategory');
+    await page.click('.chip-filter[data-value="RECEITA"]');
+    await page.click('.chip-filter[data-value="all"]');
+    await page.click('.linsora-card.category-variation-item:has-text("Alimentação")');
+    await page.click('.chip-filter[data-value="RECEITA"]');
+    await expect(page.locator('#categoryActiveRow')).toHaveClass(/hidden/);
+    await expect(page.locator('#toastContainer')).toContainText('Sem movimentações');
+    await expect(page.locator('#fullTransactionsList')).toContainText('Salário Comb2');
+  });
+
   test('Comparação da categoria com o mês anterior (menos, mais, igual, sem base)', async ({ page }) => {
     const prevDate = await page.evaluate(() => {
       const now = new Date();

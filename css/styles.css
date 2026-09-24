@@ -1613,6 +1613,8 @@ body.frame-mode .device-notch { display: block; }
 .period-summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 .summary-card-col.align-center { align-items: center; text-align: center; }
 .summary-val.negative { color: var(--accent-red); }
+.summary-sub { font-size: 11px; color: var(--text-secondary); margin-top: 2px; }
+.type-summary-col { align-items: center; text-align: center; flex: 1; }
 .period-summary .summary-val { font-size: 13.5px; }
 .extrato-analysis-stack { display: flex; flex-direction: column; gap: 12px; width: 100%; }
 .extrato-card-title { display: block; font-size: 13px; font-weight: 800; color: var(--text-primary); margin-bottom: 6px; }

@@ -469,37 +469,72 @@ function renderFilteredTransactions(state) {
     }
   }
 
-  // Resumo do período + filtros (somente dados reais do conjunto combinado)
+  // Resumo: modo depende do filtro de tipo (nunca diagnostica resultado parcial)
+  const filterType = store.filterType || 'all';
+  const hasPeriodData = periodTxs.length > 0;
   const periodIncome = combined.filter(t => t.type === 'RECEITA').reduce((acc, t) => acc + (Number(t.amount) || 0), 0);
   const periodExpense = combined.filter(t => t.type === 'DESPESA').reduce((acc, t) => acc + (Number(t.amount) || 0), 0);
   const periodBalance = periodIncome - periodExpense;
 
-  const incomeEl = document.getElementById('periodIncome');
-  if (incomeEl) incomeEl.innerText = LinsoraUtils.formatBRL(periodIncome, hideValues);
-
-  const expenseEl = document.getElementById('periodExpense');
-  if (expenseEl) expenseEl.innerText = LinsoraUtils.formatBRL(periodExpense, hideValues);
-
-  const balanceEl = document.getElementById('periodBalance');
-  if (balanceEl) {
-    balanceEl.innerText = LinsoraUtils.formatBRL(periodBalance, hideValues);
-    balanceEl.className = `summary-val ${periodBalance >= 0 ? 'positive' : 'negative'}`;
+  const summaryBar = document.getElementById('periodSummaryBar');
+  if (summaryBar) {
+    if (!hasPeriodData || activeCat) {
+      summaryBar.classList.add('hidden');
+    } else if (filterType === 'all') {
+      summaryBar.classList.remove('hidden');
+      summaryBar.innerHTML = `
+        <div class="summary-card-col">
+          <span class="summary-label">Entradas</span>
+          <strong class="summary-val positive" id="periodIncome">${LinsoraUtils.formatBRL(periodIncome, hideValues)}</strong>
+        </div>
+        <div class="summary-card-col align-center">
+          <span class="summary-label">Saídas</span>
+          <strong class="summary-val negative" id="periodExpense">${periodExpense > 0 ? '-' : ''}${LinsoraUtils.formatBRL(periodExpense, hideValues)}</strong>
+        </div>
+        <div class="summary-card-col align-right">
+          <span class="summary-label">Saldo do período</span>
+          <strong class="summary-val ${periodBalance > 0 ? 'positive' : (periodBalance < 0 ? 'negative' : '')}" id="periodBalance">${LinsoraUtils.formatBRL(periodBalance, hideValues)}</strong>
+        </div>
+      `;
+    } else {
+      // Filtro de tipo único: resumo específico, sem saldo inventado
+      const isIncome = filterType === 'RECEITA';
+      const value = isIncome ? periodIncome : periodExpense;
+      const count = combined.length;
+      summaryBar.classList.remove('hidden');
+      summaryBar.innerHTML = `
+        <div class="summary-card-col type-summary-col">
+          <span class="summary-label">${isIncome ? 'Receitas' : 'Despesas'}</span>
+          <strong class="summary-val ${isIncome ? 'positive' : 'negative'}" id="typeSummaryValue">${!isIncome && value > 0 ? '-' : ''}${LinsoraUtils.formatBRL(value, hideValues)}</strong>
+          <span class="summary-sub" id="typeSummaryCount">${count} ${count === 1 ? 'movimentação' : 'movimentações'}</span>
+        </div>
+      `;
+    }
   }
 
-  // Título da análise reflete o filtro de categoria
+  // Título da análise e das movimentações reflete o filtro de categoria
   const analysisTitle = document.getElementById('extratoAnalysisTitle');
   if (analysisTitle) analysisTitle.innerText = activeCat ? `Análise de ${activeCat}` : 'Análise Financeira';
+  const movementsTitle = document.getElementById('extratoMovementsTitle');
+  if (movementsTitle) movementsTitle.innerText = activeCat ? `Movimentações de ${activeCat}` : 'Movimentações';
 
-  // Estado sem dados: mensagens claras, sem gráficos ou indicadores
-  const hasPeriodData = periodTxs.length > 0;
+  // Ordem: com categoria, a análise vem antes das movimentações
+  const movSection = document.getElementById('extratoMovementsSection');
+  const analysisSection = document.getElementById('extratoAnalysisSection');
+  if (movSection && analysisSection && movSection.parentNode) {
+    if (activeCat) movSection.parentNode.insertBefore(analysisSection, movSection);
+    else movSection.parentNode.appendChild(analysisSection);
+  }
+
+  // Estado sem dados: mensagens claras, sem gráficos ou indicadores.
+  // Análise geral Entradas x Saídas só existe com contexto válido (Todas).
   const emptyBlock = document.getElementById('extratoEmptyBlock');
   if (emptyBlock) emptyBlock.classList.toggle('hidden', hasPeriodData);
 
-  const summaryBar = document.getElementById('periodSummaryBar');
-  if (summaryBar) summaryBar.classList.toggle('hidden', !hasPeriodData || !!activeCat);
-
-  const analysisSection = document.getElementById('extratoAnalysisSection');
-  if (analysisSection) analysisSection.classList.toggle('hidden', !hasPeriodData);
+  const singleType = !activeCat && (filterType === 'DESPESA' || filterType === 'RECEITA');
+  const combinedExpense = combined.filter(t => t.type === 'DESPESA').reduce((acc, t) => acc + (Number(t.amount) || 0), 0);
+  const hasAnalysisContent = !singleType || combinedExpense > 0;
+  if (analysisSection) analysisSection.classList.toggle('hidden', !hasPeriodData || !hasAnalysisContent);
 
   // Análise: conjunto combinado + comparação com o mês anterior (modo mensal).
   // Com categoria, a comparação usa a janela equivalente do mês anterior.
@@ -522,6 +557,7 @@ function renderFilteredTransactions(state) {
     LinsoraUI.renderExtratoAnalysis('extratoAnalysisContainer', {
       combined, period: periodTxs, dist: distBase, prev: prevTxs,
       showComparison, activeCategory: activeCat, catCompare,
+      filterType: store.filterType || 'all',
     });
   } else {
     LinsoraUI.renderExtratoAnalysis('extratoAnalysisContainer', {});

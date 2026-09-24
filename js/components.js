@@ -159,6 +159,7 @@ class LinsoraUIComponentEngine {
       showComparison = false,
       activeCategory = null,
       catCompare = null,
+      filterType = 'all',
     } = options || {};
 
     const combined = Array.isArray(combinedTxs) ? combinedTxs : [];
@@ -242,6 +243,8 @@ class LinsoraUIComponentEngine {
       const distExpense = distEntries.reduce((acc, [, v]) => acc + v, 0);
 
       const saldoStr = balanceP > 0 ? `+${fmt(balanceP)}` : fmt(balanceP);
+      const saldoCls = balanceP > 0 ? 'positive' : (balanceP < 0 ? 'negative' : '');
+      const saidasStr = `${expenseP > 0 ? '-' : ''}${fmt(expenseP)}`;
 
       container.innerHTML = `
         <div class="linsora-card extrato-cat-hero">
@@ -274,15 +277,19 @@ class LinsoraUIComponentEngine {
           <strong class="extrato-card-title">Resultado do período</strong>
           <div class="extrato-result-grid">
             <div class="extrato-result-item"><span>Entradas</span><strong>${fmt(incomeP)}</strong></div>
-            <div class="extrato-result-item"><span>Saídas</span><strong>${fmt(expenseP)}</strong></div>
-            <div class="extrato-result-item"><span>Saldo</span><strong class="${balanceP >= 0 ? 'positive' : 'negative'}">${saldoStr}</strong></div>
+            <div class="extrato-result-item"><span>Saídas</span><strong class="negative">${saidasStr}</strong></div>
+            <div class="extrato-result-item"><span>Saldo</span><strong class="${saldoCls}">${saldoStr}</strong></div>
           </div>
         </div>
       `;
       return;
     }
 
-    // ===== VISÃO GERAL (sem categoria): inalterada =====
+    // ===== VISÃO GERAL (sem categoria) =====
+    // Análise Entradas x Saídas só existe com contexto válido (filtro Todas).
+    // Com filtro de tipo único, o conjunto é parcial: sem classificação,
+    // sem barras e sem comparação de totais (sem falso déficit/resultado).
+    const singleType = filterType === 'DESPESA' || filterType === 'RECEITA';
     const income = sumByType(combined, 'RECEITA');
     const expense = sumByType(combined, 'DESPESA');
     const balance = income - expense;
@@ -320,9 +327,9 @@ class LinsoraUIComponentEngine {
     });
     const catEntries = Object.entries(catTotals).sort((a, b) => b[1] - a[1]);
 
-    // 4. Comparação com o mês anterior (somente totais, somente no modo mensal)
+    // 4. Comparação com o mês anterior (somente totais, modo mensal, Todas)
     let comparisonHTML = '';
-    if (showComparison) {
+    if (showComparison && !singleType) {
       const prevList = Array.isArray(prevTxs) ? prevTxs : [];
       const cmpRow = (label, curr, prev) => {
         let badge = '<span class="category-variation-badge neutral">sem base ant.</span>';
@@ -356,23 +363,27 @@ class LinsoraUIComponentEngine {
       `;
     }
 
-    // 5. Insights derivados dos dados reais do conjunto
+    // 5. Insights derivados dos dados reais do conjunto.
+    // Com filtro de tipo único, sem leitura de resultado/equilíbrio/déficit
+    // (o conjunto é parcial); mantém só a concentração de gastos, factual.
     const insights = [];
-    if (balance < 0) {
-      insights.push({
-        type: 'danger', icon: '⚠️', title: statusLabel,
-        message: `Suas despesas ficaram acima das entradas neste período (${LinsoraUtils.formatBRL(expense, hideValues)} em saídas vs ${LinsoraUtils.formatBRL(income, hideValues)} em entradas).`
-      });
-    } else if (balance > 0) {
-      insights.push({
-        type: 'success', icon: '✅', title: statusLabel,
-        message: `Suas entradas ficaram acima das despesas neste período (${LinsoraUtils.formatBRL(income, hideValues)} em entradas vs ${LinsoraUtils.formatBRL(expense, hideValues)} em saídas).`
-      });
-    } else {
-      insights.push({
-        type: 'info', icon: '⚖️', title: statusLabel,
-        message: 'Entradas e despesas se equilibraram neste período.'
-      });
+    if (!singleType) {
+      if (balance < 0) {
+        insights.push({
+          type: 'danger', icon: '⚠️', title: statusLabel,
+          message: `Suas despesas ficaram acima das entradas neste período (${LinsoraUtils.formatBRL(expense, hideValues)} em saídas vs ${LinsoraUtils.formatBRL(income, hideValues)} em entradas).`
+        });
+      } else if (balance > 0) {
+        insights.push({
+          type: 'success', icon: '✅', title: statusLabel,
+          message: `Suas entradas ficaram acima das despesas neste período (${LinsoraUtils.formatBRL(income, hideValues)} em entradas vs ${LinsoraUtils.formatBRL(expense, hideValues)} em saídas).`
+        });
+      } else {
+        insights.push({
+          type: 'info', icon: '⚖️', title: statusLabel,
+          message: 'Entradas e despesas se equilibraram neste período.'
+        });
+      }
     }
     if (expense > 0 && catEntries.length > 0) {
       const [topCat, topVal] = catEntries[0];
@@ -384,6 +395,7 @@ class LinsoraUIComponentEngine {
     }
 
     container.innerHTML = `
+      ${!singleType ? `
       <div class="linsora-card insight-card ${statusClass}">
         <div class="insight-icon">${statusIcon}</div>
         <div class="insight-content">
@@ -405,6 +417,7 @@ class LinsoraUIComponentEngine {
           <span class="extrato-ie-val negative">${LinsoraUtils.formatBRL(expense, hideValues)}</span>
         </div>
       </div>
+      ` : ''}
 
       ${expense > 0 ? `
       <strong class="extrato-card-title">Distribuição dos gastos</strong>
