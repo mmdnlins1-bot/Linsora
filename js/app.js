@@ -466,7 +466,7 @@ function renderFilteredTransactions(state) {
   if (emptyBlock) emptyBlock.classList.toggle('hidden', hasPeriodData);
 
   const summaryBar = document.getElementById('periodSummaryBar');
-  if (summaryBar) summaryBar.classList.toggle('hidden', !hasPeriodData);
+  if (summaryBar) summaryBar.classList.toggle('hidden', !hasPeriodData || !!activeCat);
 
   const analysisSection = document.getElementById('extratoAnalysisSection');
   if (analysisSection) analysisSection.classList.toggle('hidden', !hasPeriodData);
@@ -477,9 +477,9 @@ function renderFilteredTransactions(state) {
     const prevKey = getPeriodMonthKey(new Date(), 1);
     const prevBase = showComparison ? all.filter(t => getTxMonthKey(t) === prevKey) : [];
     const prevTxs = prevBase.filter(t => txMatchesType(t, store.filterType) && txMatchesCategory(t, activeCat));
-    LinsoraUI.renderExtratoAnalysis('extratoAnalysisContainer', combined, prevTxs, showComparison, activeCat);
+    LinsoraUI.renderExtratoAnalysis('extratoAnalysisContainer', combined, periodTxs, prevTxs, showComparison, activeCat);
   } else {
-    LinsoraUI.renderExtratoAnalysis('extratoAnalysisContainer', [], [], false, null);
+    LinsoraUI.renderExtratoAnalysis('extratoAnalysisContainer', [], [], [], false, null);
   }
 
   syncExtratoFilterUI();

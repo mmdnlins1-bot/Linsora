@@ -146,13 +146,14 @@ class LinsoraUIComponentEngine {
    * e sem diagnóstico inventado. Com período vazio, limpa o container (o bloco de
    * estado sem dados é controlado pelo Extrato).
    */
-  renderExtratoAnalysis(containerId, periodTxs = [], prevTxs = [], showComparison = false, activeCategory = null) {
+  renderExtratoAnalysis(containerId, combinedTxs = [], periodTxs = [], prevTxs = [], showComparison = false, activeCategory = null) {
     const container = document.getElementById(containerId);
     if (!container) return;
     const hideValues = window.linsoraStore ? window.linsoraStore.isHideValues : false;
 
-    const txs = Array.isArray(periodTxs) ? periodTxs : [];
-    if (txs.length === 0) {
+    const combined = Array.isArray(combinedTxs) ? combinedTxs : [];
+    const period = Array.isArray(periodTxs) ? periodTxs : [];
+    if (combined.length === 0) {
       container.innerHTML = '';
       return;
     }
@@ -161,38 +162,51 @@ class LinsoraUIComponentEngine {
       .filter(t => t.type === type)
       .reduce((acc, t) => acc + (Number(t.amount) || 0), 0);
 
-    const income = sumByType(txs, 'RECEITA');
-    const expense = sumByType(txs, 'DESPESA');
+    // Conjunto combinado (período + tipo + categoria): base da comparação,
+    // da distribuição e dos fatos da categoria
+    const income = sumByType(combined, 'RECEITA');
+    const expense = sumByType(combined, 'DESPESA');
     const balance = income - expense;
-    const commitment = income > 0 ? expense / income : (expense > 0 ? 1 : 0);
+
+    // Contexto financeiro do período completo (sem categoria): base da
+    // classificação e das barras quando há categoria selecionada
+    const incomeP = sumByType(period, 'RECEITA');
+    const expenseP = sumByType(period, 'DESPESA');
+    const balanceP = incomeP - expenseP;
+    const commitmentP = incomeP > 0 ? expenseP / incomeP : (expenseP > 0 ? 1 : 0);
+
+    const sIncome = activeCategory ? incomeP : income;
+    const sExpense = activeCategory ? expenseP : expense;
+    const sBalance = activeCategory ? balanceP : balance;
+    const commitment = sIncome > 0 ? sExpense / sIncome : (sExpense > 0 ? 1 : 0);
 
     // 1. Classificação descritiva do período (objetiva, sem nota arbitrária)
     let statusLabel = 'Equilibrado';
     let statusClass = 'success';
     let statusIcon = '⚖️';
     let statusText = '';
-    if (balance < 0) {
+    if (sBalance < 0) {
       statusLabel = 'Déficit no período';
       statusClass = 'danger';
       statusIcon = '📉';
-      statusText = `Suas saídas superaram as entradas em ${LinsoraUtils.formatBRL(Math.abs(balance), hideValues)} neste período.`;
+      statusText = `Suas saídas superaram as entradas em ${LinsoraUtils.formatBRL(Math.abs(sBalance), hideValues)} neste período.`;
     } else if (commitment > 0.7) {
       statusLabel = 'Atenção';
       statusClass = 'warning';
       statusIcon = '⚠️';
       statusText = `Suas saídas comprometem ${Math.round(commitment * 100)}% das entradas do período.`;
     } else {
-      statusText = `Suas entradas cobrem as saídas com margem de ${LinsoraUtils.formatBRL(balance, hideValues)} no período.`;
+      statusText = `Suas entradas cobrem as saídas com margem de ${LinsoraUtils.formatBRL(sBalance, hideValues)} no período.`;
     }
 
     // 2. Relação entradas x saídas (barras proporcionais)
-    const maxVal = Math.max(income, expense, 1);
-    const incomePct = Math.round((income / maxVal) * 100);
-    const expensePct = Math.round((expense / maxVal) * 100);
+    const maxVal = Math.max(sIncome, sExpense, 1);
+    const incomePct = Math.round((sIncome / maxVal) * 100);
+    const expensePct = Math.round((sExpense / maxVal) * 100);
 
     // 3. Distribuição real das despesas por categoria (só categorias com movimento)
     const catTotals = {};
-    txs.filter(t => t.type === 'DESPESA').forEach(t => {
+    combined.filter(t => t.type === 'DESPESA').forEach(t => {
       const cat = t.category || 'Outros';
       catTotals[cat] = (catTotals[cat] || 0) + (Number(t.amount) || 0);
     });
@@ -234,9 +248,42 @@ class LinsoraUIComponentEngine {
       `;
     }
 
-    // 5. Insights derivados dos dados reais
+    // 5. Insights derivados dos dados reais.
+    // Com categoria: fatos da categoria + resultado do período completo
+    // (nunca "déficit da categoria"). Sem categoria: leitura do conjunto.
     const insights = [];
-    if (balance < 0) {
+    if (activeCategory) {
+      const catCount = combined.length;
+      const catTotal = combined.reduce((acc, t) => acc + (Number(t.amount) || 0), 0);
+      const catExpense = sumByType(combined, 'DESPESA');
+      insights.push({
+        type: 'info', icon: '🏷️', title: `${activeCategory} no período`,
+        message: `${catCount} ${catCount === 1 ? 'movimentação' : 'movimentações'} em ${LinsoraUtils.escapeHTML(activeCategory)} somando ${LinsoraUtils.formatBRL(catTotal, hideValues)} neste período.`
+      });
+      if (expenseP > 0 && catExpense > 0) {
+        const share = Math.round((catExpense / expenseP) * 100);
+        insights.push({
+          type: 'info', icon: '📊', title: 'Participação nas despesas',
+          message: `${LinsoraUtils.escapeHTML(activeCategory)} representa ${LinsoraUtils.formatBRL(catExpense, hideValues)} (${share}%) das despesas deste período.`
+        });
+      }
+      if (balanceP < 0) {
+        insights.push({
+          type: 'info', icon: '📉', title: 'Resultado do período',
+          message: `O resultado financeiro do período é negativo em ${LinsoraUtils.formatBRL(Math.abs(balanceP), hideValues)}.`
+        });
+      } else if (balanceP > 0) {
+        insights.push({
+          type: 'info', icon: '📈', title: 'Resultado do período',
+          message: `O resultado financeiro do período é positivo em ${LinsoraUtils.formatBRL(balanceP, hideValues)}.`
+        });
+      } else {
+        insights.push({
+          type: 'info', icon: '⚖️', title: 'Resultado do período',
+          message: 'O resultado financeiro do período está equilibrado.'
+        });
+      }
+    } else if (balance < 0) {
       insights.push({
         type: 'danger', icon: '⚠️', title: statusLabel,
         message: `Suas despesas ficaram acima das entradas neste período (${LinsoraUtils.formatBRL(expense, hideValues)} em saídas vs ${LinsoraUtils.formatBRL(income, hideValues)} em entradas).`
@@ -275,12 +322,12 @@ class LinsoraUIComponentEngine {
         <div class="extrato-ie-row">
           <span class="extrato-ie-label">Entradas</span>
           <div class="widget-bar"><div class="widget-bar-fill emerald" style="width: ${incomePct}%;"></div></div>
-          <span class="extrato-ie-val positive">${LinsoraUtils.formatBRL(income, hideValues)}</span>
+          <span class="extrato-ie-val positive">${LinsoraUtils.formatBRL(sIncome, hideValues)}</span>
         </div>
         <div class="extrato-ie-row">
           <span class="extrato-ie-label">Saídas</span>
           <div class="widget-bar"><div class="widget-bar-fill" style="width: ${expensePct}%;"></div></div>
-          <span class="extrato-ie-val negative">${LinsoraUtils.formatBRL(expense, hideValues)}</span>
+          <span class="extrato-ie-val negative">${LinsoraUtils.formatBRL(sExpense, hideValues)}</span>
         </div>
       </div>
 
