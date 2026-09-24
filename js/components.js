@@ -582,9 +582,10 @@ class LinsoraUIComponentEngine {
         const storeState = window.linsoraStore?.state || {};
         const transactions = storeState.transactions || [];
         const now = new Date();
+        const nowKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
         const monthTx = transactions.filter(t => {
-          const d = new Date(t.date || t.created_at);
-          return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear() && t.type === 'DESPESA';
+          const tKey = (t.date || t.created_at) ? String(t.date || t.created_at).slice(0, 7) : '';
+          return tKey === nowKey && t.type === 'DESPESA';
         });
         const monthExpense = monthTx.reduce((sum, t) => sum + (Number(t.amount) || 0), 0) || 1500;
         const monthsCovered = (g.currentVal / Math.max(1, monthExpense)).toFixed(1);

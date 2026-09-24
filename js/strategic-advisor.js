@@ -78,6 +78,7 @@ class StrategicAdvisorEngine {
     const today = new Date();
     const currentMonth = today.getMonth();
     const currentYear = today.getFullYear();
+    const currentKey = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}`;
     const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
     const daysRemaining = Math.max(1, daysInMonth - today.getDate() + 1);
 
@@ -87,8 +88,8 @@ class StrategicAdvisorEngine {
     let monthFixedExpense = 0; // Aproximação de fixas
 
     txs.forEach(t => {
-      const tDate = new Date(t.date);
-      if (tDate.getMonth() === currentMonth && tDate.getFullYear() === currentYear) {
+      const tMonthKey = t.date ? String(t.date).slice(0, 7) : '';
+      if (tMonthKey === currentKey) {
         if (t.type === 'RECEITA') monthIncome += parseFloat(t.amount);
         if (t.type === 'DESPESA') {
           const amt = parseFloat(t.amount);

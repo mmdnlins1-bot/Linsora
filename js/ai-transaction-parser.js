@@ -70,7 +70,7 @@ class TransactionAIParser {
       category: category || 'Outros',
       matchedCategory: categoryResult.matched,
       description: description || 'Lançamento por Voz',
-      date: date || new Date().toISOString().split('T')[0],
+      date: date || LinsoraUtils.toLocalDateKey(),
       rawText: cleanText,
       confidence: Math.min(confidence, 1.0)
     };
@@ -120,7 +120,7 @@ class TransactionAIParser {
           amount: amount,
           category: 'Transferência',
           description: isReceived ? `Pix recebido de ${person}` : `Pix para ${person}`,
-          date: date || new Date().toISOString().split('T')[0],
+          date: date || LinsoraUtils.toLocalDateKey(),
           rawText: cleanText
       };
   }
@@ -245,19 +245,19 @@ class TransactionAIParser {
     if (lowerText.includes('ontem')) {
       const d = new Date(today);
       d.setDate(d.getDate() - 1);
-      return d.toISOString().split('T')[0];
+      return LinsoraUtils.toLocalDateKey(d);
     }
 
     if (lowerText.includes('anteontem')) {
       const d = new Date(today);
       d.setDate(d.getDate() - 2);
-      return d.toISOString().split('T')[0];
+      return LinsoraUtils.toLocalDateKey(d);
     }
 
     if (lowerText.includes('amanhã') || lowerText.includes('amanha')) {
       const d = new Date(today);
       d.setDate(d.getDate() + 1);
-      return d.toISOString().split('T')[0];
+      return LinsoraUtils.toLocalDateKey(d);
     }
 
     // Match "dia DD" ou "dia DD/MM" ou "DD/MM/YYYY"
@@ -269,7 +269,7 @@ class TransactionAIParser {
       
       const targetDate = new Date(year, month, day);
       if (!isNaN(targetDate.getTime())) {
-        return targetDate.toISOString().split('T')[0];
+        return LinsoraUtils.toLocalDateKey(targetDate);
       }
     }
 
@@ -280,11 +280,11 @@ class TransactionAIParser {
       const year = slashMatch[3] ? (slashMatch[3].length === 2 ? 2000 + parseInt(slashMatch[3], 10) : parseInt(slashMatch[3], 10)) : today.getFullYear();
       const targetDate = new Date(year, month, day);
       if (!isNaN(targetDate.getTime())) {
-        return targetDate.toISOString().split('T')[0];
+        return LinsoraUtils.toLocalDateKey(targetDate);
       }
     }
 
-    return today.toISOString().split('T')[0];
+    return LinsoraUtils.toLocalDateKey(today);
   }
 
   /**
@@ -666,7 +666,7 @@ class TransactionAIParser {
       amount: 0,
       category: 'Outros',
       description: 'Lançamento por Voz',
-      date: new Date().toISOString().split('T')[0],
+      date: LinsoraUtils.toLocalDateKey(),
       rawText: rawText,
       confidence: 0
     };

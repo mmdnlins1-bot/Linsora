@@ -137,7 +137,7 @@ class LinsoraChartEngineService {
       for (let i = 6; i >= 0; i--) {
         const d = new Date(today);
         d.setDate(d.getDate() - i);
-        const iso = d.toISOString().split('T')[0];
+        const iso = LinsoraUtils.toLocalDateKey(d);
         const label = `${d.getDate()}/${d.getMonth() + 1}`;
         daysMap[iso] = { label, income: 0, expense: 0 };
       }

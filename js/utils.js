@@ -130,6 +130,19 @@ const LinsoraUtils = {
     const date = new Date(cleanDate + 'T00:00:00');
     return date.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long' });
   },
+
+  /**
+   * Data local atual no formato YYYY-MM-DD (sem UTC, sem deslocamento de dia).
+   * Aceita um Date opcional para testes determinísticos.
+   * Ex.: 01/09/2026 00:30 no Brasil produz '2026-09-01', nunca '2026-08-31'.
+   */
+  toLocalDateKey(date = new Date()) {
+    const d = date instanceof Date ? date : new Date(date);
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  },
   /**
    * Traduz termos técnicos internos de Repetição/Recorrência para o Português
    * Evita a exibição de strings como "SINGLE", "single", "MONTHLY", "recurring", etc.

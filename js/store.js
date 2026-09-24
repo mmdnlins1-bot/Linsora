@@ -163,7 +163,7 @@ class LinsoraStore {
         ...original,
         id: 'tx_' + Date.now(),
         description: `${original.description} (Cópia)`,
-        date: new Date().toISOString().split('T')[0]
+        date: LinsoraUtils.toLocalDateKey()
       };
       this.state.transactions.unshift(copy);
       this.applyTransactionImpact(copy, false);
@@ -228,7 +228,7 @@ class LinsoraStore {
       description: `Pix enviado (${pixKey})`,
       amount: numAmount,
       category: 'Outros',
-      date: new Date().toISOString().split('T')[0],
+      date: LinsoraUtils.toLocalDateKey(),
       account: accountName || (this.state.accounts[0] ? this.state.accounts[0].name : 'Conta Principal'),
       status: 'CONCLUIDO',
       repetition: 'SINGLE',
@@ -308,7 +308,7 @@ class LinsoraStore {
         description: `Pagamento da Fatura ${card.name}`,
         amount: payAmount,
         category: 'Outros',
-        date: new Date().toISOString().split('T')[0],
+        date: LinsoraUtils.toLocalDateKey(),
         account: accountName,
         status: 'CONCLUIDO',
         repetition: 'SINGLE',

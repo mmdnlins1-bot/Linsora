@@ -800,7 +800,7 @@ function setupEventListeners() {
     document.getElementById('txId').value = '';
     document.getElementById('txAmount').value = '';
     document.getElementById('txDescription').value = '';
-    document.getElementById('txDate').value = new Date().toISOString().split('T')[0];
+    document.getElementById('txDate').value = LinsoraUtils.toLocalDateKey();
     
     setTxFormType(type);
     LinsoraUI.openModal('modalTransactionForm');
