@@ -576,10 +576,6 @@ function setupEventListeners() {
     if (window.VoiceAssistantUI) window.VoiceAssistantUI.startVoiceCapture();
   });
 
-  document.getElementById('btnQuickVoice')?.addEventListener('click', () => {
-    if (window.VoiceAssistantUI) window.VoiceAssistantUI.startVoiceCapture();
-  });
-
   document.getElementById('btnMicHeader')?.addEventListener('click', () => {
     if (window.VoiceAssistantUI) window.VoiceAssistantUI.startVoiceCapture();
   });
@@ -839,9 +835,6 @@ function setupEventListeners() {
 
   document.getElementById('btnFabNewTransaction')?.addEventListener('click', () => openNewTxModal('DESPESA'));
   document.getElementById('btnNewTransactionHeader')?.addEventListener('click', () => openNewTxModal('DESPESA'));
-  document.getElementById('btnQuickIncome')?.addEventListener('click', () => openNewTxModal('RECEITA'));
-  document.getElementById('btnQuickExpense')?.addEventListener('click', () => openNewTxModal('DESPESA'));
-  document.getElementById('btnQuickCardPay')?.addEventListener('click', () => window.switchTab('tabCards'));
   document.getElementById('btnGoToTransactions')?.addEventListener('click', () => window.switchTab('tabTransactions'));
 
   const btnTypeExpense = document.getElementById('btnTypeExpense');

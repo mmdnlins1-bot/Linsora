@@ -38,9 +38,10 @@ test.describe('07. Auditoria de Multi-Usuários, Isolamento de Dados & Troca de 
     await expect(page.locator('#appMain')).toBeVisible();
     await expect(page.locator('#userNameHeader')).toHaveText('Usuário A');
 
-    // Usuário A cadastra uma receita de R$ 10.000,00
-    await page.click('#btnQuickIncome');
+    // Usuário A cadastra uma receita de R$ 10.000,00 (via FAB +)
+    await page.click('#btnFabNewTransaction');
     await expect(page.locator('#modalTransactionForm')).toBeVisible();
+    await page.click('#btnTypeIncome');
     await page.fill('#txAmount', '1000000'); // R$ 10.000,00
     await page.fill('#txDescription', 'Salário Exclusivo Usuário A');
     await page.click('#btnSaveTransaction');
@@ -85,8 +86,8 @@ test.describe('07. Auditoria de Multi-Usuários, Isolamento de Dados & Troca de 
     await expect(page.locator('#recentTransactionsList')).not.toContainText('Salário Exclusivo Usuário A');
     await expect(page.locator('#monthIncomeAmount')).toContainText('R$ 0,00');
 
-    // Usuário B cadastra sua própria despesa de R$ 450,00
-    await page.click('#btnQuickExpense');
+    // Usuário B cadastra sua própria despesa de R$ 450,00 (via FAB +)
+    await page.click('#btnFabNewTransaction');
     await expect(page.locator('#modalTransactionForm')).toBeVisible();
     await page.fill('#txAmount', '45000'); // R$ 450,00
     await page.fill('#txDescription', 'Mercado Exclusivo Usuário B');
@@ -129,9 +130,10 @@ test.describe('07. Auditoria de Multi-Usuários, Isolamento de Dados & Troca de 
     await expect(page.locator('#recentTransactionsList')).not.toContainText('Salário Exclusivo Usuário A');
     await expect(page.locator('#monthIncomeAmount')).toContainText('R$ 0,00');
 
-    // Nova transação como A na sessão atual
-    await page.click('#btnQuickIncome');
+    // Nova transação como A na sessão atual (via FAB +)
+    await page.click('#btnFabNewTransaction');
     await expect(page.locator('#modalTransactionForm')).toBeVisible();
+    await page.click('#btnTypeIncome');
     await page.fill('#txAmount', '200000'); // R$ 2.000,00
     await page.fill('#txDescription', 'Salário A Nova Sessão');
     await page.click('#btnSaveTransaction');

@@ -133,7 +133,6 @@
 [data-theme="light"] .section-block,
 [data-theme="light"] .summary-card,
 [data-theme="light"] .widget-card,
-[data-theme="light"] .action-tile,
 [data-theme="light"] .profile-settings-block {
   background-color: var(--bg-card);
   border-color: var(--border-color);
@@ -192,10 +191,6 @@
 
 [data-theme="light"] .account-summary-card .card-large-num {
   color: #0F172A !important;
-}
-
-[data-theme="light"] .action-tile span {
-  color: var(--text-primary);
 }
 
 /* Correção de Inconsistência de Cores nos Cards em Tema Claro */
@@ -1470,26 +1465,6 @@ body.frame-mode .device-notch { display: block; }
 .widget-bar { width: 100%; height: 5px; background: var(--bg-input); border-radius: var(--radius-full); overflow: hidden; margin-top: 3px; }
 .widget-bar-fill { height: 100%; background: var(--accent-amber); border-radius: var(--radius-full); transition: width 0.4s ease; }
 .widget-bar-fill.emerald { background: var(--accent-green-neon); }
-
-/* --------------------------------------------------------------------------
-   4. AÇÕES RÁPIDAS
-   -------------------------------------------------------------------------- */
-.scrollable-actions { display: flex; gap: 10px; overflow-x: auto; padding: 2px 2px 6px 2px; scroll-snap-type: x mandatory; }
-.scrollable-actions .action-tile { flex: 0 0 auto; width: 86px; background: var(--bg-card); border: 1px solid var(--border-color-strong); border-radius: var(--radius-md); padding: 10px 8px; display: flex; flex-direction: column; align-items: center; gap: 8px; cursor: pointer; scroll-snap-align: start; transition: var(--transition-fast); }
-.scrollable-actions .action-tile:hover { transform: translateY(-2px); border-color: var(--accent-green-neon); }
-.scrollable-actions .action-tile:active { transform: scale(0.95); }
-
-.tile-icon { width: 44px; height: 44px; border-radius: var(--radius-md); display: flex; align-items: center; justify-content: center; color: #FFFFFF; box-shadow: var(--shadow-md); }
-.tile-icon svg { width: 22px; height: 22px; }
-
-.income-bg { background: linear-gradient(135deg, #059669 0%, #10B981 100%); }
-.expense-bg { background: linear-gradient(135deg, #DC2626 0%, #EF4444 100%); }
-.pix-bg { background: linear-gradient(135deg, #0284C7 0%, #06B6D4 100%); }
-.card-bg { background: linear-gradient(135deg, #7C3AED 0%, #8B5CF6 100%); }
-.goal-bg { background: linear-gradient(135deg, #DB2777 0%, #F43F5E 100%); }
-.bank-bg { background: linear-gradient(135deg, #047857 0%, #10B981 100%); }
-
-.action-tile span { font-size: 11.5px; font-weight: 700; color: var(--text-primary); text-align: center; white-space: nowrap; }
 
 /* --------------------------------------------------------------------------
    5. BOTÕES PADRONIZADOS
@@ -3090,34 +3065,6 @@ body.frame-mode .device-notch { display: block; }
   line-height: 1.3;
 }
 
-/* AÇÕES RÁPIDAS COMPACTAS */
-.scrollable-actions {
-  gap: 8px;
-  padding: 2px;
-}
-
-.scrollable-actions .action-tile {
-  width: 72px !important;
-  padding: 6px 4px !important;
-  gap: 4px !important;
-  border-radius: var(--radius-sm);
-}
-
-.scrollable-actions .tile-icon {
-  width: 34px !important;
-  height: 34px !important;
-  border-radius: var(--radius-sm);
-}
-
-.scrollable-actions .tile-icon svg {
-  width: 17px !important;
-  height: 17px !important;
-}
-
-.scrollable-actions .action-tile span {
-  font-size: 10px !important;
-}
-
 /* RESUMO FINANCEIRO GRADE 2X2 */
 .resumo-widgets-grid {
   display: grid;
@@ -3356,11 +3303,6 @@ body.frame-mode .device-notch { display: block; }
   background: rgba(100, 116, 139, 0.15);
   color: var(--text-muted);
 }
-.tile-icon.health-bg {
-  background: rgba(16, 185, 129, 0.15);
-  color: var(--accent-green-neon);
-}
-
 /* ==========================================================================
    FIX: VOICE-CONF VALOR ALVO — Evita overflow horizontal em qualquer tela
    ========================================================================== */

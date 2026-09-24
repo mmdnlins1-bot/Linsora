@@ -38,4 +38,33 @@ test.describe('02. Dashboard & Métricas Principais', () => {
     const healthWidget = page.locator('#healthScoreWidget');
     await expect(healthWidget).toBeVisible();
   });
+
+  test('Ações Rápidas removidas: Início carrega sem os 6 tiles, com FABs e navegação', async ({ page }) => {
+    await page.click('.bottom-nav .nav-item[data-tab="tabDashboard"]');
+    await expect(page.locator('#tabDashboard')).toBeVisible();
+    await expect(page.locator('#monthBalanceAmount')).toBeVisible();
+
+    await expect(page.locator('#btnQuickIncome')).toHaveCount(0);
+    await expect(page.locator('#btnQuickExpense')).toHaveCount(0);
+    await expect(page.locator('#btnQuickPix')).toHaveCount(0);
+    await expect(page.locator('#btnQuickCardPay')).toHaveCount(0);
+    await expect(page.locator('#btnQuickAddGoal')).toHaveCount(0);
+    await expect(page.locator('#btnQuickVoice')).toHaveCount(0);
+
+    await expect(page.locator('#btnFabNewTransaction')).toBeVisible();
+    await expect(page.locator('#btnFabVoice')).toBeVisible();
+
+    await page.click('#btnFabNewTransaction');
+    await expect(page.locator('#modalTransactionForm')).toBeVisible();
+    await page.evaluate(() => document.querySelectorAll('.linsora-modal-overlay:not(.hidden)').forEach(m => m.classList.add('hidden')));
+
+    await page.click('.bottom-nav .nav-item[data-tab="tabTransactions"]');
+    await expect(page.locator('#tabTransactions')).toBeVisible();
+    await page.click('.bottom-nav .nav-item[data-tab="tabCards"]');
+    await expect(page.locator('#tabCards')).toBeVisible();
+    await page.click('.bottom-nav .nav-item[data-tab="tabGoals"]');
+    await expect(page.locator('#tabGoals')).toBeVisible();
+    await page.click('.bottom-nav .nav-item[data-tab="tabProfile"]');
+    await expect(page.locator('#tabProfile')).toBeVisible();
+  });
 });
