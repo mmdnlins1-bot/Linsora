@@ -1,19 +1,10 @@
 const { test, expect } = require('@playwright/test');
 const { login } = require('./helpers/auth');
 
-test.describe('04. Módulo de Saúde Financeira & Cartões de Crédito', () => {
+test.describe('04. Módulo de Cartões de Crédito', () => {
 
   test.beforeEach(async ({ page }) => {
     await login(page);
-    await page.click('.bottom-nav .nav-item[data-tab="tabHealth"]');
-    await expect(page.locator('#tabHealth')).toBeVisible();
-  });
-
-  test('Deve exibir o Indicador de Saúde Financeira, Score e Diagnóstico Automático', async ({ page }) => {
-    await expect(page.locator('#healthScoreNum')).toBeVisible();
-    await expect(page.locator('#healthStatusBadge')).toBeVisible();
-    await expect(page.locator('#healthInsightsContainer')).toBeVisible();
-    await expect(page.locator('#healthCategoryVariationsGrid')).toBeVisible();
   });
 
   test('Deve cadastrar um novo Cartão de Crédito e exibir no carrossel', async ({ page }) => {

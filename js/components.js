@@ -141,333 +141,180 @@ class LinsoraUIComponentEngine {
   }
 
   /**
-   * Renderiza o módulo de Saúde Financeira, Diagnóstico Automático e Consultoria Inteligente
+   * Renderiza a Análise Financeira do Extrato a partir das movimentações do período.
+   * Usa somente dados reais do usuário: sem nota de 0 a 10, sem categorias fictícias
+   * e sem diagnóstico inventado. Com período vazio, limpa o container (o bloco de
+   * estado sem dados é controlado pelo Extrato).
    */
-  renderHealthTab(state) {
-    const transactions = state?.transactions || [];
-    const hideValues = window.linsoraStore?.isHideValues || false;
-
-    const now = new Date();
-    const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-    
-    const prevMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-    const prevMonthKey = `${prevMonthDate.getFullYear()}-${String(prevMonthDate.getMonth() + 1).padStart(2, '0')}`;
-
-    const currentTxs = transactions.filter(t => t.date && t.date.startsWith(currentMonthKey));
-    const prevTxs = transactions.filter(t => t.date && t.date.startsWith(prevMonthKey));
-
-    const currentIncome = currentTxs.filter(t => t.type === 'RECEITA').reduce((acc, t) => acc + (Number(t.amount) || 0), 0);
-    const currentExpense = currentTxs.filter(t => t.type === 'DESPESA').reduce((acc, t) => acc + (Number(t.amount) || 0), 0);
-
-    const prevIncome = prevTxs.filter(t => t.type === 'RECEITA').reduce((acc, t) => acc + (Number(t.amount) || 0), 0);
-    const prevExpense = prevTxs.filter(t => t.type === 'DESPESA').reduce((acc, t) => acc + (Number(t.amount) || 0), 0);
-
-    let score = 70;
-    let statusText = 'Estável';
-    let statusClass = 'warning';
-    let summaryText = '';
-
-    const commitmentRate = currentIncome > 0 ? (currentExpense / currentIncome) * 100 : (currentExpense > 0 ? 100 : 0);
-    const savingsRate = currentIncome > 0 ? Math.max(0, ((currentIncome - currentExpense) / currentIncome) * 100) : 0;
-
-    if (transactions.length === 0) {
-      score = 50;
-      statusText = 'Aguardando Dados';
-      statusClass = 'info';
-      summaryText = 'Ainda não há dados suficientes para calcular o diagnóstico da sua saúde financeira. Comece registrando suas receitas e despesas!';
-    } else {
-      if (commitmentRate <= 50) {
-        score = Math.min(100, Math.round(85 + (savingsRate * 0.15)));
-        statusText = 'Excelente';
-        statusClass = 'success';
-        summaryText = `Parabéns! Sua saúde financeira está excelente. Você está comprometendo apenas ${Math.round(commitmentRate)}% da sua renda e poupando ${Math.round(savingsRate)}% das suas receitas.`;
-      } else if (commitmentRate <= 75) {
-        score = Math.round(70 + (savingsRate * 0.1));
-        statusText = 'Equilibrada';
-        statusClass = 'success';
-        summaryText = `Sua saúde financeira está estável. Seus gastos comprometem ${Math.round(commitmentRate)}% das suas receitas do mês.`;
-      } else if (commitmentRate <= 95) {
-        score = Math.round(45 + ((100 - commitmentRate) * 0.5));
-        statusText = 'Atenção';
-        statusClass = 'warning';
-        summaryText = `Atenção: Suas despesas comprometem ${Math.round(commitmentRate)}% das suas receitas do mês. Recomendamos atenção aos gastos discricionários.`;
-      } else {
-        score = Math.max(15, Math.round(30 - ((commitmentRate - 100) * 0.3)));
-        statusText = 'Crítico';
-        statusClass = 'danger';
-        summaryText = `Alerta Crítico: Suas despesas atingiram ${Math.round(commitmentRate)}% das suas receitas. Recomendamos revisão imediata para reequilíbrio financeiro.`;
-      }
-
-      const compEl = document.getElementById('healthCommitmentRate');
-      if (compEl) compEl.innerText = `${Math.round(commitmentRate)}%`;
-      
-      const compStatEl = document.getElementById('healthCommitmentStatus');
-      if (compStatEl) compStatEl.innerText = commitmentRate <= 70 ? '🟢 Dentro do limite seguro (até 70%)' : '🟡 Alto comprometimento da renda';
-
-      const compBadgeEl = document.getElementById('healthCommitmentBadge');
-      if (compBadgeEl) {
-        compBadgeEl.innerText = commitmentRate <= 50 ? 'Ideal' : commitmentRate <= 75 ? 'Seguro' : 'Alerta';
-        compBadgeEl.className = `health-badge-chip ${commitmentRate <= 50 ? 'emerald' : commitmentRate <= 75 ? 'warning' : 'danger'}`;
-      }
-
-      const compFillEl = document.getElementById('healthCommitmentBarFill');
-      if (compFillEl) {
-        compFillEl.style.width = `${Math.min(100, Math.round(commitmentRate))}%`;
-        compFillEl.style.background = commitmentRate <= 50 ? 'var(--accent-green-neon)' : commitmentRate <= 75 ? '#F59E0B' : '#EF4444';
-      }
-
-      const savEl = document.getElementById('healthSavingsRate');
-      if (savEl) savEl.innerText = `${Math.round(savingsRate)}%`;
-
-      const savStatEl = document.getElementById('healthSavingsStatus');
-      if (savStatEl) savStatEl.innerText = savingsRate >= 20 ? '🚀 Meta de poupança atingida!' : '💡 Recomendado: guardar ao menos 20%';
-
-      const savBadgeEl = document.getElementById('healthSavingsBadge');
-      if (savBadgeEl) {
-        savBadgeEl.innerText = savingsRate >= 20 ? 'Excelente' : savingsRate >= 10 ? 'Regular' : 'Abaixo';
-        savBadgeEl.className = `health-badge-chip ${savingsRate >= 20 ? 'emerald' : savingsRate >= 10 ? 'warning' : 'danger'}`;
-      }
-
-      const savFillEl = document.getElementById('healthSavingsBarFill');
-      if (savFillEl) {
-        savFillEl.style.width = `${Math.min(100, Math.round(savingsRate))}%`;
-      }
-    }
-
-    const numEl = document.getElementById('healthScoreNum');
-    if (numEl) numEl.innerText = `${score}/100`;
-
-    const badgeEl = document.getElementById('healthStatusBadge');
-    if (badgeEl) {
-      badgeEl.innerText = statusText;
-      badgeEl.className = `badge-status-chip ${statusClass}`;
-    }
-
-    const fillEl = document.getElementById('healthScoreBarFill');
-    if (fillEl) {
-      fillEl.style.width = `${score}%`;
-      fillEl.style.background = score >= 75 ? 'var(--accent-green-neon)' : (score >= 50 ? '#F59E0B' : '#EF4444');
-    }
-
-    const summaryEl = document.getElementById('healthScoreSummary');
-    if (summaryEl) summaryEl.innerText = summaryText;
-
-    this.renderHealthInsights('healthInsightsContainer', currentTxs, prevTxs, currentIncome, currentExpense, prevIncome, prevExpense, hideValues);
-    this.renderCategoryVariationsGrid('healthCategoryVariationsGrid', currentTxs, prevTxs, hideValues);
-  }
-
-  renderHealthInsights(containerId, currentTxs, prevTxs, currentIncome, currentExpense, prevIncome, prevExpense, hideValues = false) {
+  renderExtratoAnalysis(containerId, periodTxs = [], prevTxs = [], showComparison = false) {
     const container = document.getElementById(containerId);
     if (!container) return;
+    const hideValues = window.linsoraStore ? window.linsoraStore.isHideValues : false;
 
-    if (currentTxs.length < 2 && prevTxs.length === 0) {
-      container.innerHTML = `
-        <div class="linsora-card insight-card info">
-          <div class="insight-icon">💡</div>
-          <div class="insight-content">
-            <strong>Pouco Histórico Registrado</strong>
-            <p>Ainda não há dados suficientes para uma comparação detalhada. Continue registrando suas transações para liberar seus diagnósticos e insights personalizados!</p>
-          </div>
-        </div>
-      `;
+    const txs = Array.isArray(periodTxs) ? periodTxs : [];
+    if (txs.length === 0) {
+      container.innerHTML = '';
       return;
     }
 
-    const insights = [];
+    const sumByType = (list, type) => list
+      .filter(t => t.type === type)
+      .reduce((acc, t) => acc + (Number(t.amount) || 0), 0);
 
-    // Redesenho do Maior Ofensor Orçamentário como Card de Alerta Hero
-    const catCurrent = {};
-    currentTxs.filter(t => t.type === 'DESPESA').forEach(t => {
-      catCurrent[t.category] = (catCurrent[t.category] || 0) + Number(t.amount);
+    const income = sumByType(txs, 'RECEITA');
+    const expense = sumByType(txs, 'DESPESA');
+    const balance = income - expense;
+    const commitment = income > 0 ? expense / income : (expense > 0 ? 1 : 0);
+
+    // 1. Classificação descritiva do período (objetiva, sem nota arbitrária)
+    let statusLabel = 'Equilibrado';
+    let statusClass = 'success';
+    let statusIcon = '⚖️';
+    let statusText = '';
+    if (balance < 0) {
+      statusLabel = 'Déficit no período';
+      statusClass = 'danger';
+      statusIcon = '📉';
+      statusText = `Suas saídas superaram as entradas em ${LinsoraUtils.formatBRL(Math.abs(balance), hideValues)} neste período.`;
+    } else if (commitment > 0.7) {
+      statusLabel = 'Atenção';
+      statusClass = 'warning';
+      statusIcon = '⚠️';
+      statusText = `Suas saídas comprometem ${Math.round(commitment * 100)}% das entradas do período.`;
+    } else {
+      statusText = `Suas entradas cobrem as saídas com margem de ${LinsoraUtils.formatBRL(balance, hideValues)} no período.`;
+    }
+
+    // 2. Relação entradas x saídas (barras proporcionais)
+    const maxVal = Math.max(income, expense, 1);
+    const incomePct = Math.round((income / maxVal) * 100);
+    const expensePct = Math.round((expense / maxVal) * 100);
+
+    // 3. Distribuição real das despesas por categoria (só categorias com movimento)
+    const catTotals = {};
+    txs.filter(t => t.type === 'DESPESA').forEach(t => {
+      const cat = t.category || 'Outros';
+      catTotals[cat] = (catTotals[cat] || 0) + (Number(t.amount) || 0);
     });
+    const catEntries = Object.entries(catTotals).sort((a, b) => b[1] - a[1]);
 
-    let topCategory = null;
-    let topCategoryVal = 0;
-    Object.entries(catCurrent).forEach(([cat, val]) => {
-      if (val > topCategoryVal) {
-        topCategoryVal = val;
-        topCategory = cat;
-      }
-    });
-
-    if (topCategory && currentExpense > 0) {
-      const topPct = Math.round((topCategoryVal / currentExpense) * 100);
-      const incomePct = currentIncome > 0 ? Math.round((topCategoryVal / currentIncome) * 100) : null;
-      
-      let tipText = '';
-      if (topCategoryVal > 0) {
-        tipText = `Sua categoria ${topCategory} consumiu ${LinsoraUtils.formatBRL(topCategoryVal, hideValues)} (${topPct}% das suas despesas no mês). `;
-        if (incomePct !== null && incomePct > 30) {
-          tipText += `Isso compromete ${incomePct}% de toda a sua renda mensal. Recomendamos estipular um teto limite para esta categoria e revisar gastos recorrentes.`;
-        } else if (incomePct !== null) {
-          tipText += `Uma economia de 15% nesta categoria liberaria ${LinsoraUtils.formatBRL(topCategoryVal * 0.15, hideValues)} para acelerar o progresso das suas metas!`;
-        } else {
-          tipText += `Acompanhe os lançamentos de ${topCategory} semanalmente para manter o controle absoluto do seu orçamento.`;
+    // 4. Comparação com o mês anterior (somente totais, somente no modo mensal)
+    let comparisonHTML = '';
+    if (showComparison) {
+      const prevList = Array.isArray(prevTxs) ? prevTxs : [];
+      const cmpRow = (label, curr, prev) => {
+        let badge = '<span class="category-variation-badge neutral">sem base ant.</span>';
+        if (prev > 0) {
+          const pct = Math.round(((curr - prev) / prev) * 100);
+          if (pct > 0) badge = `<span class="category-variation-badge danger">+${pct}%</span>`;
+          else if (pct < 0) badge = `<span class="category-variation-badge success">${pct}%</span>`;
+          else badge = '<span class="category-variation-badge neutral">0%</span>';
         }
-      } else {
-        tipText = 'Acompanhe seus lançamentos diários para manter o controle absoluto do seu orçamento.';
-      }
-
-      insights.push({
-        isHeroOffender: true,
-        type: 'danger',
-        category: topCategory,
-        amount: topCategoryVal,
-        pct: topPct,
-        incomePct,
-        tipText
-      });
-    }
-
-    if (prevExpense > 0) {
-      const expenseDiffPct = Math.round(((currentExpense - prevExpense) / prevExpense) * 100);
-      if (expenseDiffPct > 0) {
-        insights.push({
-          type: 'danger',
-          icon: '📈',
-          title: 'Aumento Global de Despesas',
-          message: `Seus gastos totais aumentaram ${expenseDiffPct}% em relação ao mês anterior (${LinsoraUtils.formatBRL(currentExpense, hideValues)} vs ${LinsoraUtils.formatBRL(prevExpense, hideValues)}).`
-        });
-      } else if (expenseDiffPct < 0) {
-        insights.push({
-          type: 'success',
-          icon: '🎉',
-          title: 'Economia Conquistada',
-          message: `Parabéns! Você reduziu seus gastos totais em ${Math.abs(expenseDiffPct)}% em relação ao mês anterior!`
-        });
-      }
-    }
-
-    const catPrev = {};
-    prevTxs.filter(t => t.type === 'DESPESA').forEach(t => {
-      catPrev[t.category] = (catPrev[t.category] || 0) + Number(t.amount);
-    });
-
-    Object.keys(catCurrent).forEach(cat => {
-      if (cat === topCategory) return; // já destacado no hero
-      const currVal = catCurrent[cat];
-      const prevVal = catPrev[cat] || 0;
-
-      if (prevVal > 0) {
-        const diffPct = Math.round(((currVal - prevVal) / prevVal) * 100);
-        if (diffPct >= 15) {
-          insights.push({
-            type: 'warning',
-            icon: '⚠️',
-            title: `Variação Significativa em ${cat}`,
-            message: `Sua conta/despesa de ${cat} aumentou ${diffPct}% em relação ao mês passado (de ${LinsoraUtils.formatBRL(prevVal, hideValues)} para ${LinsoraUtils.formatBRL(currVal, hideValues)}).`
-          });
-        } else if (diffPct <= -10) {
-          insights.push({
-            type: 'success',
-            icon: '🟢',
-            title: `Redução de Custos em ${cat}`,
-            message: `Você economizou ${Math.abs(diffPct)}% em ${cat} neste mês!`
-          });
-        }
-      }
-    });
-
-    if (insights.length === 0) {
-      insights.push({
-        type: 'success',
-        icon: '✨',
-        title: 'Finanças Sob Controle',
-        message: 'Seus padrões de consumo permanecem estáveis dentro da média habituada.'
-      });
-    }
-
-    container.innerHTML = insights.map(i => {
-      if (i.isHeroOffender) {
         return `
-          <div class="linsora-card hero-offender-card">
-            <div class="offender-badge-row">
-              <span class="offender-alert-badge">🚨 ALERTA FINANCEIRO</span>
-              <span class="offender-category-pill">${i.category}</span>
-            </div>
-            <h4 class="offender-title">Maior Ofensor Orçamentário</h4>
-            <div class="offender-stats-grid">
-              <div class="offender-stat-item">
-                <span class="offender-stat-label">Valor Gasto no Mês</span>
-                <strong class="offender-stat-val main-amount">${LinsoraUtils.formatBRL(i.amount, hideValues)}</strong>
-              </div>
-              <div class="offender-stat-item">
-                <span class="offender-stat-label">Impacto no Orçamento</span>
-                <strong class="offender-stat-val highlight-red">${i.pct}% <small>das despesas</small></strong>
-              </div>
-              ${i.incomePct !== null ? `
-              <div class="offender-stat-item">
-                <span class="offender-stat-label">Comprometimento Renda</span>
-                <strong class="offender-stat-val">${i.incomePct}% <small>da renda total</small></strong>
-              </div>
-              ` : ''}
-            </div>
-            <div class="offender-tip-box">
-              <div class="offender-tip-header">
-                <span class="tip-icon">💡</span>
-                <strong>Dica Prática Linsora:</strong>
-              </div>
-              <p>${i.tipText}</p>
-            </div>
+          <div class="extrato-cmp-row">
+            <span>${LinsoraUtils.escapeHTML(label)}</span>
+            <span class="extrato-cmp-vals">
+              <span>${LinsoraUtils.formatBRL(prev, hideValues)}</span>
+              <span>→</span>
+              <strong>${LinsoraUtils.formatBRL(curr, hideValues)}</strong>
+              ${badge}
+            </span>
           </div>
         `;
-      }
-      return `
+      };
+      const prevIncome = sumByType(prevList, 'RECEITA');
+      const prevExpense = sumByType(prevList, 'DESPESA');
+      comparisonHTML = `
+        <div class="linsora-card">
+          <strong class="extrato-card-title">Comparado ao mês anterior</strong>
+          ${cmpRow('Entradas', income, prevIncome)}
+          ${cmpRow('Saídas', expense, prevExpense)}
+          ${cmpRow('Saldo', balance, prevIncome - prevExpense)}
+        </div>
+      `;
+    }
+
+    // 5. Insights derivados dos dados reais
+    const insights = [];
+    if (balance < 0) {
+      insights.push({
+        type: 'danger', icon: '⚠️', title: statusLabel,
+        message: `Suas despesas ficaram acima das entradas neste período (${LinsoraUtils.formatBRL(expense, hideValues)} em saídas vs ${LinsoraUtils.formatBRL(income, hideValues)} em entradas).`
+      });
+    } else if (balance > 0) {
+      insights.push({
+        type: 'success', icon: '✅', title: statusLabel,
+        message: `Suas entradas ficaram acima das despesas neste período (${LinsoraUtils.formatBRL(income, hideValues)} em entradas vs ${LinsoraUtils.formatBRL(expense, hideValues)} em saídas).`
+      });
+    } else {
+      insights.push({
+        type: 'info', icon: '⚖️', title: statusLabel,
+        message: 'Entradas e despesas se equilibraram neste período.'
+      });
+    }
+    if (expense > 0 && catEntries.length > 0) {
+      const [topCat, topVal] = catEntries[0];
+      const topPct = Math.round((topVal / expense) * 100);
+      insights.push({
+        type: 'info', icon: '📊', title: 'Concentração de gastos',
+        message: `Uma parte significativa das suas despesas está concentrada em ${LinsoraUtils.escapeHTML(topCat)} (${topPct}% — ${LinsoraUtils.formatBRL(topVal, hideValues)}).`
+      });
+    }
+
+    container.innerHTML = `
+      <div class="linsora-card insight-card ${statusClass}">
+        <div class="insight-icon">${statusIcon}</div>
+        <div class="insight-content">
+          <strong>${LinsoraUtils.escapeHTML(statusLabel)}</strong>
+          <p>${statusText}</p>
+        </div>
+      </div>
+
+      <div class="linsora-card">
+        <strong class="extrato-card-title">Entradas x Saídas</strong>
+        <div class="extrato-ie-row">
+          <span class="extrato-ie-label">Entradas</span>
+          <div class="widget-bar"><div class="widget-bar-fill emerald" style="width: ${incomePct}%;"></div></div>
+          <span class="extrato-ie-val positive">${LinsoraUtils.formatBRL(income, hideValues)}</span>
+        </div>
+        <div class="extrato-ie-row">
+          <span class="extrato-ie-label">Saídas</span>
+          <div class="widget-bar"><div class="widget-bar-fill" style="width: ${expensePct}%;"></div></div>
+          <span class="extrato-ie-val negative">${LinsoraUtils.formatBRL(expense, hideValues)}</span>
+        </div>
+      </div>
+
+      ${expense > 0 ? `
+      <div class="linsora-card">
+        <strong class="extrato-card-title">Distribuição dos gastos</strong>
+        ${catEntries.map(([cat, val]) => {
+          const pct = Math.round((val / expense) * 100);
+          return `
+            <div class="category-variation-item">
+              <div class="cat-var-top">
+                <span class="cat-var-name">${LinsoraUtils.getCategoryIcon(cat)} ${LinsoraUtils.escapeHTML(cat)}</span>
+                <span class="cat-var-pct">${pct}%</span>
+              </div>
+              <div class="widget-bar"><div class="widget-bar-fill" style="width: ${pct}%;"></div></div>
+              <div class="cat-var-val">${LinsoraUtils.formatBRL(val, hideValues)}</div>
+            </div>
+          `;
+        }).join('')}
+      </div>
+      ` : ''}
+
+      ${comparisonHTML}
+
+      ${insights.map(i => `
         <div class="linsora-card insight-card ${i.type}">
           <div class="insight-icon">${i.icon}</div>
           <div class="insight-content">
-            <strong>${i.title}</strong>
+            <strong>${LinsoraUtils.escapeHTML(i.title)}</strong>
             <p>${i.message}</p>
           </div>
         </div>
-      `;
-    }).join('');
-  }
-
-  renderCategoryVariationsGrid(containerId, currentTxs, prevTxs, hideValues) {
-    const container = document.getElementById(containerId);
-    if (!container) return;
-
-    const catCurrent = {};
-    currentTxs.filter(t => t.type === 'DESPESA').forEach(t => {
-      catCurrent[t.category] = (catCurrent[t.category] || 0) + Number(t.amount);
-    });
-
-    const catPrev = {};
-    prevTxs.filter(t => t.type === 'DESPESA').forEach(t => {
-      catPrev[t.category] = (catPrev[t.category] || 0) + Number(t.amount);
-    });
-
-    // Lista dinâmica de categorias ativas (categorias com lançamentos atuais/anteriores + padrão)
-    const baseCats = ['Alimentação', 'Moradia', 'Transporte', 'Lazer', 'Saúde', 'Outros'];
-    const activeCats = Array.from(new Set([...baseCats, ...Object.keys(catCurrent), ...Object.keys(catPrev)]));
-
-    container.innerHTML = activeCats.map(cat => {
-      const curr = catCurrent[cat] || 0;
-      const prev = catPrev[cat] || 0;
-
-      let badgeHTML = `<span class="category-variation-badge neutral">Sem dados ant.</span>`;
-      if (prev > 0) {
-        const pct = Math.round(((curr - prev) / prev) * 100);
-        if (pct > 0) {
-          badgeHTML = `<span class="category-variation-badge danger">+${pct}% 🔺</span>`;
-        } else if (pct < 0) {
-          badgeHTML = `<span class="category-variation-badge success">${pct}% 🔻</span>`;
-        } else {
-          badgeHTML = `<span class="category-variation-badge neutral">0% 🟢</span>`;
-        }
-      }
-
-      return `
-        <div class="linsora-card category-variation-item">
-          <div class="cat-var-top">
-            <span class="cat-var-name">${LinsoraUtils.getCategoryIcon(cat)} ${cat}</span>
-            ${badgeHTML}
-          </div>
-          <div class="cat-var-val">${LinsoraUtils.formatBRL(curr, hideValues)}</div>
-        </div>
-      `;
-    }).join('');
+      `).join('')}
+    `;
   }
 
   renderGoalsList(containerId, goals = []) {

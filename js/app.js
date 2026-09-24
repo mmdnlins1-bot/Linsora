@@ -285,19 +285,39 @@ function renderAppUI(state) {
 
   LinsoraUI.renderTransactionsList('recentTransactionsList', state.transactions, 3);
   renderFilteredTransactions(state);
-  LinsoraUI.renderHealthTab(state);
   LinsoraUI.renderCardsCarousel('cardsCarousel', state.cards);
   LinsoraUI.renderGoalsList('goalsGridList', state.goals);
   LinsoraUI.renderFixedBillsList('fixedBillsList', state.fixedBills);
   LinsoraUI.renderNotificationsFeed('notificationsFeed', activeNotifs);
 }
 
+function getPeriodMonthKey(date, monthsAgo = 0) {
+  const base = date instanceof Date ? date : new Date();
+  const ref = new Date(base.getFullYear(), base.getMonth() - monthsAgo, 1);
+  return `${ref.getFullYear()}-${String(ref.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function getTxMonthKey(tx) {
+  return (tx && tx.date) ? String(tx.date).slice(0, 7) : '';
+}
+
 function renderFilteredTransactions(state) {
-  let list = [...state.transactions];
+  const all = [...(state.transactions || [])];
+  const hideValues = window.linsoraStore.isHideValues;
+
+  // Período selecionado controla lista, resumo e análise
+  const period = window.linsoraStore.filterPeriod || 'ALL';
+  const currentKey = getPeriodMonthKey(new Date(), 0);
+  const periodTxs = period === 'THIS_MONTH'
+    ? all.filter(t => getTxMonthKey(t) === currentKey)
+    : all;
+
+  // Lista: período + tipo + busca textual
+  let list = [...periodTxs];
 
   const query = window.linsoraStore.searchQuery.toLowerCase();
   if (query) {
-    list = list.filter(t => 
+    list = list.filter(t =>
       t.description.toLowerCase().includes(query) ||
       t.category.toLowerCase().includes(query) ||
       t.account.toLowerCase().includes(query)
@@ -310,12 +330,46 @@ function renderFilteredTransactions(state) {
 
   LinsoraUI.renderTransactionsList('fullTransactionsList', list);
 
-  const countEl = document.getElementById('filterTxCount');
-  if (countEl) countEl.innerText = `${list.length} transações`;
+  const countEl = document.getElementById('extratoListCount');
+  if (countEl) countEl.innerText = list.length === 1 ? '1 movimentação' : `${list.length} movimentações`;
 
-  const totalSum = list.reduce((acc, t) => acc + (t.type === 'RECEITA' ? t.amount : -t.amount), 0);
-  const totalEl = document.getElementById('filterTxTotal');
-  if (totalEl) totalEl.innerText = LinsoraUtils.formatBRL(totalSum, window.linsoraStore.isHideValues);
+  // Resumo do período (somente dados reais do período selecionado)
+  const periodIncome = periodTxs.filter(t => t.type === 'RECEITA').reduce((acc, t) => acc + (Number(t.amount) || 0), 0);
+  const periodExpense = periodTxs.filter(t => t.type === 'DESPESA').reduce((acc, t) => acc + (Number(t.amount) || 0), 0);
+  const periodBalance = periodIncome - periodExpense;
+
+  const incomeEl = document.getElementById('periodIncome');
+  if (incomeEl) incomeEl.innerText = LinsoraUtils.formatBRL(periodIncome, hideValues);
+
+  const expenseEl = document.getElementById('periodExpense');
+  if (expenseEl) expenseEl.innerText = LinsoraUtils.formatBRL(periodExpense, hideValues);
+
+  const balanceEl = document.getElementById('periodBalance');
+  if (balanceEl) {
+    balanceEl.innerText = LinsoraUtils.formatBRL(periodBalance, hideValues);
+    balanceEl.className = `summary-val ${periodBalance >= 0 ? 'positive' : 'negative'}`;
+  }
+
+  // Estado sem dados: mensagens claras, sem gráficos ou indicadores
+  const hasPeriodData = periodTxs.length > 0;
+  const emptyBlock = document.getElementById('extratoEmptyBlock');
+  if (emptyBlock) emptyBlock.classList.toggle('hidden', hasPeriodData);
+
+  const summaryBar = document.getElementById('periodSummaryBar');
+  if (summaryBar) summaryBar.classList.toggle('hidden', !hasPeriodData);
+
+  const analysisSection = document.getElementById('extratoAnalysisSection');
+  if (analysisSection) analysisSection.classList.toggle('hidden', !hasPeriodData);
+
+  // Análise do período + comparação com o mês anterior (somente no modo mensal)
+  if (hasPeriodData) {
+    const showComparison = period === 'THIS_MONTH';
+    const prevKey = getPeriodMonthKey(new Date(), 1);
+    const prevTxs = showComparison ? all.filter(t => getTxMonthKey(t) === prevKey) : [];
+    LinsoraUI.renderExtratoAnalysis('extratoAnalysisContainer', periodTxs, prevTxs, showComparison);
+  } else {
+    LinsoraUI.renderExtratoAnalysis('extratoAnalysisContainer', [], [], false);
+  }
 }
 
 function setupEventListeners() {
@@ -590,7 +644,6 @@ function setupEventListeners() {
   document.getElementById('btnNewTransactionHeader')?.addEventListener('click', () => openNewTxModal('DESPESA'));
   document.getElementById('btnQuickIncome')?.addEventListener('click', () => openNewTxModal('RECEITA'));
   document.getElementById('btnQuickExpense')?.addEventListener('click', () => openNewTxModal('DESPESA'));
-  document.getElementById('btnQuickHealth')?.addEventListener('click', () => window.switchTab('tabHealth'));
   document.getElementById('btnQuickCardPay')?.addEventListener('click', () => window.switchTab('tabCards'));
   document.getElementById('btnGoToTransactions')?.addEventListener('click', () => window.switchTab('tabTransactions'));
 
@@ -1095,9 +1148,17 @@ function setupEventListeners() {
 
   document.querySelectorAll('.chip-filter').forEach(chip => {
     chip.onclick = function() {
-      document.querySelectorAll('.chip-filter[data-filter-type="type"]').forEach(c => c.classList.remove('active'));
-      this.classList.add('active');
-      window.linsoraStore.filterType = this.getAttribute('data-value');
+      const group = this.getAttribute('data-filter-type');
+      const value = this.getAttribute('data-value');
+      if (group === 'period') {
+        document.querySelectorAll('.chip-filter[data-filter-type="period"]').forEach(c => c.classList.remove('active'));
+        this.classList.add('active');
+        window.linsoraStore.filterPeriod = value;
+      } else {
+        document.querySelectorAll('.chip-filter[data-filter-type="type"]').forEach(c => c.classList.remove('active'));
+        this.classList.add('active');
+        window.linsoraStore.filterType = value;
+      }
       renderFilteredTransactions(window.linsoraStore.state);
     };
   });

@@ -369,13 +369,6 @@
                   </div>
                   <span>Voz 🎙️</span>
                 </button>
-
-                <button type="button" class="action-tile" id="btnQuickHealth">
-                  <div class="tile-icon health-bg">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
-                  </div>
-                  <span>Saúde 🩺</span>
-                </button>
               </div>
             </div>
 
@@ -408,10 +401,13 @@
 
           </section>
 
-          <!-- TAB 2: TRANSAÇÕES / EXTRATO -->
+          <!-- TAB 2: EXTRATO (MOVIMENTAÇÕES + ANÁLISE FINANCEIRA) -->
           <section class="tab-page hidden" id="tabTransactions">
             <div class="page-title-bar">
-              <h2>Extrato & Transações</h2>
+              <div>
+                <h2>Extrato</h2>
+                <span class="page-title-sub">Veja suas movimentações e entenda sua vida financeira.</span>
+              </div>
               <div style="display: flex; gap: 8px; align-items: center;">
                 <button type="button" class="btn-mic-icon" id="btnMicHeader" title="Assistente de Voz">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
@@ -431,125 +427,50 @@
                 <button type="button" class="chip-filter" data-filter-type="type" data-value="RECEITA">Receitas</button>
                 <button type="button" class="chip-filter" data-filter-type="type" data-value="DESPESA">Despesas</button>
                 <button type="button" class="chip-filter" data-filter-type="period" data-value="THIS_MONTH">Este Mês</button>
-                <button type="button" class="chip-filter" data-filter-type="period" data-value="ALL">Todo Período</button>
+                <button type="button" class="chip-filter active" data-filter-type="period" data-value="ALL">Todo Período</button>
               </div>
             </div>
 
-            <div class="linsora-card filtered-summary-card" id="filteredSummaryBar">
+            <div class="linsora-card filtered-summary-card period-summary" id="periodSummaryBar">
               <div class="summary-card-col">
-                <span class="summary-label">Itens Filtrados</span>
-                <strong class="summary-val" id="filterTxCount">0 transações</strong>
+                <span class="summary-label">Entradas</span>
+                <strong class="summary-val positive" id="periodIncome">R$ 0,00</strong>
+              </div>
+              <div class="summary-card-col align-center">
+                <span class="summary-label">Saídas</span>
+                <strong class="summary-val negative" id="periodExpense">R$ 0,00</strong>
               </div>
               <div class="summary-card-col align-right">
-                <span class="summary-label">Balanço do Filtro</span>
-                <strong class="summary-val positive" id="filterTxTotal">R$ 0,00</strong>
+                <span class="summary-label">Saldo do período</span>
+                <strong class="summary-val positive" id="periodBalance">R$ 0,00</strong>
               </div>
             </div>
 
-            <div class="transactions-full-list" id="fullTransactionsList"></div>
-          </section>
-
-          <!-- TAB 3: SAÚDE FINANCEIRA & CONSULTOR INTELIGENTE -->
-          <section class="tab-page hidden" id="tabHealth">
-            <div class="page-title-bar">
-              <div>
-                <h2>Saúde Financeira</h2>
-                <span class="page-title-sub">Diagnóstico em Tempo Real & Consultoria Inteligente</span>
-              </div>
-            </div>
-
-            <!-- 1. CARD PRINCIPAL: INDICADOR DE SAÚDE FINANCEIRA & SCORE -->
-            <div class="linsora-card health-score-card">
-              <div class="card-bg-glow"></div>
-              <div class="health-score-header">
-                <div>
-                  <span class="card-label">Indicador de Saúde Geral</span>
-                  <div class="health-score-main-row">
-                    <div class="health-score-number" id="healthScoreNum">--/100</div>
-                    <span class="badge-status-chip" id="healthStatusBadge">Analisando...</span>
-                  </div>
-                </div>
-                <div class="health-pulse-icon-wrapper">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="var(--accent-green-neon)" stroke-width="2.2">
-                    <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
-                  </svg>
-                </div>
-              </div>
-
-              <!-- BARRA DE PROGRESSO VISUAL -->
-              <div class="health-progress-bar-container">
-                <div class="health-progress-bar-fill" id="healthScoreBarFill" style="width: 0%;"></div>
-              </div>
-
-              <div class="health-score-summary" id="healthScoreSummary">
-                Calculando o diagnóstico da sua saúde financeira com base nas suas movimentações reais...
-              </div>
-            </div>
-
-            <!-- 2. COMPARATIVO RECEITA VS DESPESAS (TAXA DE COMPROMETIMENTO E POUPANÇA) -->
-            <div class="health-comparative-grid">
-              <div class="linsora-card metric-mini-card health-metric-premium">
-                <div class="health-metric-header">
-                  <div class="health-metric-icon-wrap commitment">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-                  </div>
-                  <div class="health-metric-title-group">
-                    <span class="metric-mini-label">Comprometimento de Renda</span>
-                    <span class="health-badge-chip" id="healthCommitmentBadge">--</span>
-                  </div>
-                </div>
-                <div class="metric-val-row">
-                  <div class="metric-mini-val" id="healthCommitmentRate">0%</div>
-                </div>
-                <div class="health-mini-bar">
-                  <div class="health-mini-bar-fill" id="healthCommitmentBarFill" style="width: 0%;"></div>
-                </div>
-                <span class="metric-mini-sub" id="healthCommitmentStatus">--</span>
-              </div>
-
-              <div class="linsora-card metric-mini-card health-metric-premium">
-                <div class="health-metric-header">
-                  <div class="health-metric-icon-wrap savings">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
-                  </div>
-                  <div class="health-metric-title-group">
-                    <span class="metric-mini-label">Margem de Poupança</span>
-                    <span class="health-badge-chip emerald" id="healthSavingsBadge">--</span>
-                  </div>
-                </div>
-                <div class="metric-val-row">
-                  <div class="metric-mini-val" id="healthSavingsRate">0%</div>
-                </div>
-                <div class="health-mini-bar">
-                  <div class="health-mini-bar-fill emerald" id="healthSavingsBarFill" style="width: 0%;"></div>
-                </div>
-                <span class="metric-mini-sub" id="healthSavingsStatus">--</span>
-              </div>
-            </div>
-
-            <!-- 3. CONSULTOR PESSOAL & DIAGNÓSTICO AUTOMÁTICO (DADOS REAIS) -->
             <div class="section-block">
               <div class="section-header-row">
-                <h3>Diagnóstico Automático & Consultoria Pessoal 🩺</h3>
+                <h3>Movimentações</h3>
+                <span class="chart-subtitle" id="extratoListCount"></span>
               </div>
+              <div class="transactions-full-list" id="fullTransactionsList"></div>
+            </div>
 
-              <div class="health-insights-list" id="healthInsightsContainer">
-                <!-- Injetado dinamicamente com dados reais do usuário -->
+            <div class="section-block hidden" id="extratoEmptyBlock">
+              <div class="empty-state-card">
+                <div class="empty-icon">📊</div>
+                <p>Não há movimentações neste período.</p>
+                <span class="empty-sub">Adicione uma movimentação para começar a acompanhar sua vida financeira.</span>
               </div>
             </div>
 
-            <!-- 4. DISTRIBUIÇÃO POR CATEGORIA & VARIAÇÃO MENSAL -->
-            <div class="section-block">
+            <div class="section-block" id="extratoAnalysisSection">
               <div class="section-header-row">
-                <h3>Variação de Gastos por Categoria (vs. Mês Anterior)</h3>
+                <h3>Análise Financeira</h3>
               </div>
-              <div class="category-variations-grid" id="healthCategoryVariationsGrid">
-                <!-- Injetado dinamicamente pelo JS -->
-              </div>
+              <div class="extrato-analysis-stack" id="extratoAnalysisContainer"></div>
             </div>
           </section>
 
-          <!-- TAB 4: CARTÕES & FATURAS -->
+          <!-- TAB 3: CARTÕES & FATURAS -->
           <section class="tab-page hidden" id="tabCards">
             <div class="page-title-bar">
               <h2>Cartões de Crédito</h2>
@@ -607,7 +528,7 @@
             </div>
           </section>
 
-          <!-- TAB 5: METAS -->
+          <!-- TAB 4: METAS -->
           <section class="tab-page hidden" id="tabGoals">
             <div class="page-title-bar">
               <h2>Metas & Economia</h2>
@@ -630,7 +551,7 @@
             <div id="goalsSmartInsights" class="margin-top-md margin-bottom-md"></div>
           </section>
 
-          <!-- TAB 6: PERFIL & CONFIGURAÇÕES -->
+          <!-- TAB 5: PERFIL & CONFIGURAÇÕES -->
           <section class="tab-page hidden" id="tabProfile">
             <div class="page-title-bar">
               <h2>Perfil & Configurações</h2>
@@ -707,11 +628,6 @@
           <button type="button" class="nav-item" data-tab="tabTransactions">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
             <span>Extrato</span>
-          </button>
-
-          <button type="button" class="nav-item" data-tab="tabHealth">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
-            <span>Saúde</span>
           </button>
 
           <button type="button" class="nav-item" data-tab="tabCards">

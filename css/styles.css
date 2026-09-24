@@ -1608,6 +1608,26 @@ body.frame-mode .device-notch { display: block; }
 
 .transactions-full-list, .transactions-list-container { display: flex; flex-direction: column; gap: 8px; }
 
+/* EXTRATO — RESUMO DO PERÍODO & ANÁLISE FINANCEIRA (mobile-first) */
+.page-title-sub { display: block; font-size: 11.5px; color: var(--text-secondary); margin-top: 2px; }
+.period-summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.summary-card-col.align-center { align-items: center; text-align: center; }
+.summary-val.negative { color: var(--accent-red); }
+.period-summary .summary-val { font-size: 13.5px; }
+.extrato-analysis-stack { display: flex; flex-direction: column; gap: 12px; width: 100%; }
+.extrato-card-title { display: block; font-size: 13px; font-weight: 800; color: var(--text-primary); margin-bottom: 6px; }
+.extrato-ie-row { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
+.extrato-ie-label { font-size: 11.5px; font-weight: 700; color: var(--text-secondary); width: 58px; flex-shrink: 0; }
+.extrato-ie-row .widget-bar { flex: 1; min-width: 0; }
+.extrato-ie-val { font-size: 12.5px; font-weight: 800; min-width: 84px; text-align: right; flex-shrink: 0; }
+.extrato-ie-val.positive { color: var(--accent-green-neon); }
+.extrato-ie-val.negative { color: var(--accent-red); }
+.cat-var-pct { font-size: 11.5px; font-weight: 800; color: var(--text-secondary); }
+.extrato-cmp-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 7px 0; font-size: 12px; font-weight: 600; color: var(--text-primary); border-bottom: 1px dashed var(--border-color); }
+.extrato-cmp-row:last-child { border-bottom: none; }
+.extrato-cmp-vals { display: flex; gap: 6px; align-items: baseline; color: var(--text-secondary); font-size: 11.5px; font-weight: 400; }
+.extrato-cmp-vals strong { color: var(--text-primary); }
+
 .transaction-card {
   background: var(--bg-card);
   border: 1px solid var(--border-color);
@@ -1923,7 +1943,7 @@ body.frame-mode .device-notch { display: block; }
   backdrop-filter: blur(20px);
   border-top: 1px solid var(--border-color);
   display: grid;
-  grid-template-columns: repeat(6, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   align-items: center;
   z-index: 100;
   padding: 0 2px;
