@@ -47,12 +47,14 @@ test.describe('02. Dashboard & Métricas Principais', () => {
       const fabWidth = css('btnFabNewTransaction', 'width');
       const micBottom = css('btnFabVoice', 'bottom');
       const micHeight = css('btnFabVoice', 'height');
+      const micWidth = css('btnFabVoice', 'width');
       const tabsPad = parseFloat(getComputedStyle(document.querySelector('.tabs-container')).paddingBottom);
-      return { fabBottom, fabHeight, fabWidth, micBottom, micHeight, tabsPad };
+      return { fabBottom, fabHeight, fabWidth, micBottom, micHeight, micWidth, tabsPad };
     });
     expect(metrics.fabWidth).toBe(52);
     expect(metrics.fabHeight).toBe(52);
-    expect(metrics.micHeight).toBe(44);
+    expect(metrics.micHeight).toBe(52);
+    expect(metrics.micWidth).toBe(52);
     expect(metrics.micBottom - (metrics.fabBottom + metrics.fabHeight)).toBeGreaterThanOrEqual(12);
     expect(metrics.micBottom - (metrics.fabBottom + metrics.fabHeight)).toBeLessThanOrEqual(16);
     expect(metrics.tabsPad).toBeGreaterThanOrEqual(140);
@@ -74,6 +76,35 @@ test.describe('02. Dashboard & Métricas Principais', () => {
       });
       expect(inView).toBe(true);
     }
+  });
+
+  test('FABs com o mesmo contorno visual nos temas escuro e claro', async ({ page }) => {
+    const borders = () => page.evaluate(() => {
+      const b = (id) => {
+        const s = getComputedStyle(document.getElementById(id));
+        return { w: s.borderTopWidth, s: s.borderTopStyle, c: s.borderTopColor };
+      };
+      return { fab: b('btnFabNewTransaction'), mic: b('btnFabVoice') };
+    });
+
+    await page.click('.bottom-nav .nav-item[data-tab="tabDashboard"]');
+    const dark = await borders();
+    expect(dark.fab).toEqual(dark.mic);
+    expect(dark.fab.w).toBe('3px');
+    expect(dark.fab.s).toBe('solid');
+
+    await page.click('.bottom-nav .nav-item[data-tab="tabProfile"]');
+    await page.click('#btnToggleTheme');
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+    await page.click('.bottom-nav .nav-item[data-tab="tabDashboard"]');
+    const light = await borders();
+    expect(light.fab).toEqual(light.mic);
+    expect(light.fab.w).toBe('3px');
+    expect(light.fab.c).toBe('rgb(255, 255, 255)');
+
+    await page.click('.bottom-nav .nav-item[data-tab="tabProfile"]');
+    await page.click('#btnToggleTheme');
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
   });
 
   test('Ações Rápidas removidas: Início carrega sem os 6 tiles, com FABs e navegação', async ({ page }) => {

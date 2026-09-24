@@ -2013,11 +2013,11 @@ body.frame-mode .device-notch { display: block; }
   position: absolute;
   bottom: calc(146px + env(safe-area-inset-bottom, 0px));
   right: 16px;
-  width: 44px;
-  height: 44px;
+  width: 52px;
+  height: 52px;
   border-radius: 50%;
   background: linear-gradient(135deg, #10B981, #059669);
-  border: none;
+  border: 3px solid var(--bg-viewport);
   color: #FFFFFF;
   display: flex;
   align-items: center;
