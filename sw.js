@@ -1,12 +1,12 @@
 // ============================================================================
-// LINSORA Service Worker — v3 (PWA + Offline Seguro)
+// LINSORA Service Worker — v4 (PWA + Offline Seguro)
 // Regras:
 //  - NUNCA cachear Supabase / auth / APIs / dados do usuário (network-only).
 //  - Apenas arquivos estáticos same-origin entram em cache.
 //  - Navegação: network-first -> index.html (cache) -> offline.html.
 // ============================================================================
 
-const CACHE_NAME = 'linsora-v3';
+const CACHE_NAME = 'linsora-v4';
 
 const ASSETS_TO_CACHE = [
   './index.html',

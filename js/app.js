@@ -1315,14 +1315,19 @@ function setupEventListeners() {
       const value = this.value;
       window.linsoraStore.filterPeriod = value;
       if (value === 'CUSTOM') {
-        // Pré-preenche com o mês atual até o usuário aplicar outro intervalo
-        const today = new Date();
-        const start = `${getPeriodMonthKey(today, 0)}-01`;
-        window.linsoraStore.customPeriod = { start, end: toLocalDateKey(today) };
+        // Preserva as datas já escolhidas; pré-preenche com o mês atual
+        // somente na primeira entrada ou se o estado estiver inválido
+        const current = window.linsoraStore.customPeriod;
+        if (!current || !current.start || !current.end || current.end < current.start) {
+          const today = new Date();
+          const start = `${getPeriodMonthKey(today, 0)}-01`;
+          window.linsoraStore.customPeriod = { start, end: toLocalDateKey(today) };
+        }
+        const kept = window.linsoraStore.customPeriod;
         const startInput = document.getElementById('customStart');
         const endInput = document.getElementById('customEnd');
-        if (startInput) startInput.value = start;
-        if (endInput) endInput.value = toLocalDateKey(today);
+        if (startInput) startInput.value = kept.start;
+        if (endInput) endInput.value = kept.end;
       }
       renderFilteredTransactions(window.linsoraStore.state);
     };

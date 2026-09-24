@@ -170,4 +170,48 @@ test.describe('13. Extrato: categorias clicáveis + períodos', () => {
     await expect(page.locator('#toastContainer')).toContainText('anterior à data inicial');
     await expect(page.locator('#extratoEmptyBlock')).toBeVisible();
   });
+
+  test('Personalizado oculta ao trocar de período e preserva datas ao voltar', async ({ page }) => {
+    const today = await dateDaysAgo(page, 0);
+    const tenAgo = await dateDaysAgo(page, 10);
+    await createTransaction(page, { type: 'DESPESA', amount: '9000', description: 'Compra Preserva', category: 'Outros', date: tenAgo });
+
+    await page.selectOption('#periodSelect', 'CUSTOM');
+    await expect(page.locator('#customPeriodRow')).toBeVisible();
+    await page.fill('#customStart', tenAgo);
+    await page.fill('#customEnd', today);
+    await page.click('#btnApplyCustomPeriod');
+    await expect(page.locator('#fullTransactionsList')).toContainText('Compra Preserva');
+
+    await page.selectOption('#periodSelect', 'THIS_MONTH');
+    await expect(page.locator('#customPeriodRow')).toHaveClass(/hidden/);
+
+    await page.selectOption('#periodSelect', 'CUSTOM');
+    await expect(page.locator('#customPeriodRow')).toBeVisible();
+    await expect(page.locator('#customStart')).toHaveValue(tenAgo);
+    await expect(page.locator('#customEnd')).toHaveValue(today);
+    await expect(page.locator('#fullTransactionsList')).toContainText('Compra Preserva');
+  });
+
+  test('Cada categoria é um card independente e clicável', async ({ page }) => {
+    await createTransaction(page, { type: 'DESPESA', amount: '30000', description: 'Mercado Cards', category: 'Alimentação' });
+    await createTransaction(page, { type: 'DESPESA', amount: '15000', description: 'Uber Cards', category: 'Transporte' });
+    await createTransaction(page, { type: 'DESPESA', amount: '5000', description: 'Cinema Cards', category: 'Lazer' });
+
+    const cards = page.locator('.linsora-card.category-variation-item');
+    await expect(cards).toHaveCount(3);
+
+    await page.click('.linsora-card.category-variation-item:has-text("Transporte")');
+    await expect(page.locator('#activeCategoryName')).toHaveText('Transporte');
+    await expect(page.locator('#extratoAnalysisTitle')).toHaveText('Análise de Transporte');
+    await expect(page.locator('#fullTransactionsList')).toContainText('Uber Cards');
+    await expect(page.locator('#fullTransactionsList')).not.toContainText('Mercado Cards');
+    await expect(page.locator('#fullTransactionsList')).not.toContainText('Cinema Cards');
+    await expect(page.locator('#periodExpense')).toContainText('R$ 150,00');
+
+    await page.click('#btnActiveCategory');
+    await expect(page.locator('#fullTransactionsList')).toContainText('Mercado Cards');
+    await expect(page.locator('#fullTransactionsList')).toContainText('Cinema Cards');
+    await expect(await page.locator('.linsora-card.category-variation-item').count()).toBe(3);
+  });
 });

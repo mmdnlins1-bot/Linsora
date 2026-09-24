@@ -285,22 +285,20 @@ class LinsoraUIComponentEngine {
       </div>
 
       ${!activeCategory && expense > 0 ? `
-      <div class="linsora-card">
-        <strong class="extrato-card-title">Distribuição dos gastos</strong>
-        ${catEntries.map(([cat, val]) => {
-          const pct = Math.round((val / expense) * 100);
-          return `
-            <div class="category-variation-item clickable" data-category="${encodeURIComponent(cat)}" role="button" tabindex="0" title="Filtrar por ${LinsoraUtils.escapeHTML(cat)}">
-              <div class="cat-var-top">
-                <span class="cat-var-name">${LinsoraUtils.getCategoryIcon(cat)} ${LinsoraUtils.escapeHTML(cat)}</span>
-                <span class="cat-var-pct">${pct}%</span>
-              </div>
-              <div class="widget-bar"><div class="widget-bar-fill" style="width: ${pct}%;"></div></div>
-              <div class="cat-var-val">${LinsoraUtils.formatBRL(val, hideValues)}</div>
+      <strong class="extrato-card-title">Distribuição dos gastos</strong>
+      ${catEntries.map(([cat, val]) => {
+        const pct = Math.round((val / expense) * 100);
+        return `
+          <div class="linsora-card category-variation-item clickable" data-category="${encodeURIComponent(cat)}" role="button" tabindex="0" title="Filtrar por ${LinsoraUtils.escapeHTML(cat)}">
+            <div class="cat-var-top">
+              <span class="cat-var-name">${LinsoraUtils.getCategoryIcon(cat)} ${LinsoraUtils.escapeHTML(cat)}</span>
+              <span class="cat-var-pct">${pct}%</span>
             </div>
-          `;
-        }).join('')}
-      </div>
+            <div class="widget-bar"><div class="widget-bar-fill" style="width: ${pct}%;"></div></div>
+            <div class="cat-var-val">${LinsoraUtils.formatBRL(val, hideValues)}</div>
+          </div>
+        `;
+      }).join('')}
       ` : ''}
 
       ${comparisonHTML}

@@ -1638,6 +1638,7 @@ body.frame-mode .device-notch { display: block; }
 #categoryActiveRow { display: flex; }
 #btnClearFilters { align-self: flex-start; padding: 2px 0; }
 .category-variation-item.clickable { cursor: pointer; }
+.category-variation-item.linsora-card { padding: 12px; }
 .category-variation-item.clickable:active { transform: scale(0.99); }
 .category-variation-item.clickable:focus-visible { outline: 2px solid var(--accent-green-neon); outline-offset: 2px; }
 
