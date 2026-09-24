@@ -39,6 +39,43 @@ test.describe('02. Dashboard & Métricas Principais', () => {
     await expect(healthWidget).toBeVisible();
   });
 
+  test('FABs com tamanhos, gap, safe-area e visibilidade por aba corretos', async ({ page }) => {
+    const metrics = await page.evaluate(() => {
+      const css = (id, prop) => parseFloat(getComputedStyle(document.getElementById(id))[prop]);
+      const fabBottom = css('btnFabNewTransaction', 'bottom');
+      const fabHeight = css('btnFabNewTransaction', 'height');
+      const fabWidth = css('btnFabNewTransaction', 'width');
+      const micBottom = css('btnFabVoice', 'bottom');
+      const micHeight = css('btnFabVoice', 'height');
+      const tabsPad = parseFloat(getComputedStyle(document.querySelector('.tabs-container')).paddingBottom);
+      return { fabBottom, fabHeight, fabWidth, micBottom, micHeight, tabsPad };
+    });
+    expect(metrics.fabWidth).toBe(52);
+    expect(metrics.fabHeight).toBe(52);
+    expect(metrics.micHeight).toBe(44);
+    expect(metrics.micBottom - (metrics.fabBottom + metrics.fabHeight)).toBeGreaterThanOrEqual(12);
+    expect(metrics.micBottom - (metrics.fabBottom + metrics.fabHeight)).toBeLessThanOrEqual(16);
+    expect(metrics.tabsPad).toBeGreaterThanOrEqual(140);
+
+    await page.click('.bottom-nav .nav-item[data-tab="tabProfile"]');
+    await expect(page.locator('#btnFabNewTransaction')).toHaveClass(/hidden/);
+    await expect(page.locator('#btnFabVoice')).toHaveClass(/hidden/);
+    await page.click('.bottom-nav .nav-item[data-tab="tabDashboard"]');
+    await expect(page.locator('#btnFabNewTransaction')).toBeVisible();
+    await expect(page.locator('#btnFabVoice')).toBeVisible();
+
+    for (const width of [360, 1280]) {
+      await page.setViewportSize({ width, height: 800 });
+      const overflow = await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1);
+      expect(overflow).toBe(true);
+      const inView = await page.evaluate(() => {
+        const r = document.getElementById('btnFabNewTransaction').getBoundingClientRect();
+        return r.left >= 0 && r.right <= window.innerWidth && r.top >= 0 && r.bottom <= window.innerHeight;
+      });
+      expect(inView).toBe(true);
+    }
+  });
+
   test('Ações Rápidas removidas: Início carrega sem os 6 tiles, com FABs e navegação', async ({ page }) => {
     await page.click('.bottom-nav .nav-item[data-tab="tabDashboard"]');
     await expect(page.locator('#tabDashboard')).toBeVisible();

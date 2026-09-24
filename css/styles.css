@@ -1231,7 +1231,7 @@ body.frame-mode .device-notch { display: block; }
 .notification-badge-btn .unread-dot { position: absolute; top: 7px; right: 7px; width: 8px; height: 8px; background: var(--accent-red); border-radius: var(--radius-full); border: 2px solid var(--bg-viewport); display: none; }
 .notification-badge-btn.has-unread .unread-dot { display: block; }
 
-.tabs-container { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 16px 16px 90px 16px; }
+.tabs-container { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 16px 16px calc(140px + env(safe-area-inset-bottom, 0px)) 16px; }
 .tab-page { display: flex; flex-direction: column; gap: 16px; width: 100%; }
 
 .page-title-bar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 2px; }
@@ -1989,7 +1989,7 @@ body.frame-mode .device-notch { display: block; }
 
 .floating-fab {
   position: absolute;
-  bottom: 80px;
+  bottom: calc(80px + env(safe-area-inset-bottom, 0px));
   right: 16px;
   width: 52px;
   height: 52px;
@@ -2011,7 +2011,7 @@ body.frame-mode .device-notch { display: block; }
 
 .floating-voice-fab {
   position: absolute;
-  bottom: 142px;
+  bottom: calc(146px + env(safe-area-inset-bottom, 0px));
   right: 16px;
   width: 44px;
   height: 44px;
