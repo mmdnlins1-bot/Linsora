@@ -817,8 +817,171 @@ class LinsoraUIComponentEngine {
     `).join('');
   }
 
-  renderNotificationsFeed(containerId, notifs = []) {
+  /**
+   * Renderiza a lista de contas recorrentes (ordenada por próximo vencimento,
+   * desempate alfabético) com ações de editar/ativar/excluir.
+   */
+  renderRecurringBillsList(containerId, bills = []) {
     const container = document.getElementById(containerId);
+    if (!container) return;
+    const hideValues = window.linsoraStore.isHideValues;
+    const uid = window.linsoraStore?.state?.user?.id;
+    const today = LinsoraUtils.toLocalDateKey();
+    const occs = window.linsoraStore?.state?.occurrences || [];
+    const list = (bills || []).filter((b) => (b.userId || b.user_id) === uid);
+
+    if (list.length === 0) {
+      container.innerHTML = `
+        <div class="inspired-empty-state">
+          <div class="inspired-empty-icon">🧾</div>
+          <h3 class="inspired-empty-title">Você ainda não tem contas recorrentes cadastradas.</h3>
+          <p class="inspired-empty-desc">Cadastre contas como energia, água, internet e outras despesas mensais para acompanhar seus próximos compromissos.</p>
+          <button type="button" class="linsora-btn primary lg margin-top-xs" onclick="LinsoraUI.openBillForm()">Adicionar conta</button>
+        </div>
+      `;
+      return;
+    }
+
+    const withNext = list.map((b) => ({ bill: b, next: LinsoraUtils.nextBillDue(b, occs, today) }));
+    withNext.sort((a, b) => {
+      const da = a.next ? a.next.dueDate : '9999-12-31';
+      const db = b.next ? b.next.dueDate : '9999-12-31';
+      if (da !== db) return da < db ? -1 : 1;
+      return String(a.bill.title).localeCompare(String(b.bill.title), 'pt-BR');
+    });
+
+    container.innerHTML = withNext.map(({ bill: b, next }) => {
+      const isActive = b.active !== false;
+      const nextText = next ? LinsoraUtils.formatDateBR(next.dueDate) : '—';
+      const overdueTag = next && next.overdue ? ' <span class="badge-status-chip danger">em atraso</span>' : '';
+      return `
+        <div class="goal-item-card-enhanced">
+          <div class="goal-top">
+            <span class="goal-title">🧾 ${LinsoraUtils.escapeHTML(b.title)}</span>
+            <span class="badge-status-chip ${isActive ? 'success' : 'neutral'}">${isActive ? 'ATIVA' : 'INATIVA'}</span>
+          </div>
+          <div class="goal-values">
+            <span>Valor: <strong>${LinsoraUtils.formatBRL(b.amount, hideValues)}</strong></span>
+            <span>Categoria: <strong>${LinsoraUtils.getCategoryIcon(b.category)} ${LinsoraUtils.escapeHTML(b.category || 'Outros')}</strong></span>
+          </div>
+          <div class="goal-monthly-suggestion">💳 Vencimento dia ${b.dueDay} • Próximo: <strong>${nextText}</strong>${overdueTag}</div>
+          <div class="goal-card-actions">
+            <button type="button" class="linsora-btn secondary sm btn-edit-bill" data-bill-id="${b.id}">✏️ Editar</button>
+            <button type="button" class="linsora-btn outline sm btn-toggle-bill" data-bill-id="${b.id}">${isActive ? 'Desativar' : 'Ativar'}</button>
+            <button type="button" class="linsora-btn danger sm btn-delete-bill" data-bill-id="${b.id}" data-bill-title="${LinsoraUtils.escapeHTML(b.title)}">🗑️ Excluir</button>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    container.querySelectorAll('.btn-edit-bill').forEach((btn) => {
+      btn.onclick = () => this.openBillForm(btn.getAttribute('data-bill-id'));
+    });
+    container.querySelectorAll('.btn-toggle-bill').forEach((btn) => {
+      btn.onclick = async () => {
+        const id = btn.getAttribute('data-bill-id');
+        await window.linsoraStore.toggleRecurringBillActive(id);
+        const updated = (window.linsoraStore.state.recurringBills || []).find((x) => x.id === id);
+        if (!updated) {
+          LinsoraUI.showToast('Conta não encontrada.', 'error');
+          return;
+        }
+        LinsoraUI.showToast(`Conta "${updated.title}" ${updated.active === false ? 'desativada' : 'ativada'}.`, 'info');
+      };
+    });
+    container.querySelectorAll('.btn-delete-bill').forEach((btn) => {
+      btn.onclick = async () => {
+        const id = btn.getAttribute('data-bill-id');
+        const title = btn.getAttribute('data-bill-title') || 'esta conta';
+        const confirmed = await LinsoraUI.showConfirmModal(title, {
+          title: 'Excluir conta recorrente?',
+          message: 'Esta ação excluirá a conta recorrente e seu histórico de ocorrências. Transações já registradas continuarão no seu extrato.',
+          confirmLabel: 'Excluir'
+        });
+        if (confirmed) {
+          await window.linsoraStore.deleteRecurringBill(id);
+          LinsoraUI.showToast(`Conta "${title}" excluída.`, 'info');
+        }
+      };
+    });
+  }
+
+  /**
+   * Resumo compacto dos próximos compromissos (somente leitura, máx. 3).
+   */
+  renderUpcomingCommitments(containerId, limit = 3) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    const hideValues = window.linsoraStore.isHideValues;
+    const uid = window.linsoraStore?.state?.user?.id;
+    const today = LinsoraUtils.toLocalDateKey();
+    const occs = window.linsoraStore?.state?.occurrences || [];
+    const bills = ((window.linsoraStore?.state?.recurringBills) || [])
+      .filter((b) => (b.userId || b.user_id) === uid);
+
+    const upcoming = bills
+      .map((b) => ({ bill: b, next: LinsoraUtils.nextBillDue(b, occs, today) }))
+      .filter((x) => x.next)
+      .sort((a, b) => (a.next.dueDate !== b.next.dueDate
+        ? (a.next.dueDate < b.next.dueDate ? -1 : 1)
+        : String(a.bill.title).localeCompare(String(b.bill.title), 'pt-BR')))
+      .slice(0, Math.max(0, limit || 3));
+
+    if (upcoming.length === 0) {
+      container.innerHTML = `
+        <div class="empty-state-card">
+          <div class="empty-icon">📅</div>
+          <p>Nenhum compromisso próximo.</p>
+        </div>
+      `;
+      return;
+    }
+
+    container.innerHTML = upcoming.map(({ bill: b, next }) => `
+      <div class="fixed-bill-card">
+        <div style="display:flex; align-items:center; gap:10px;">
+          <div class="fixed-bill-icon">🧾</div>
+          <div>
+            <strong style="font-size:13.5px;">${LinsoraUtils.escapeHTML(b.title)}</strong>
+            <span style="display:block; font-size:11px; color:var(--text-muted);">Vence ${LinsoraUtils.formatDateBR(next.dueDate)}${next.overdue ? ' • em atraso' : ''}</span>
+          </div>
+        </div>
+        <strong style="font-size:14px;">${LinsoraUtils.formatBRL(b.amount, hideValues)}</strong>
+      </div>
+    `).join('');
+  }
+
+  /**
+   * Abre o formulário de conta recorrente (novo via billId nulo, ou edição).
+   */
+  openBillForm(billId = null) {
+    const cats = LinsoraUtils.getCategoriesByType('DESPESA');
+    const catSel = document.getElementById('billCategoryInput');
+    if (catSel) catSel.innerHTML = cats.map((c) => `<option value="${c}">${c}</option>`).join('');
+
+    const bills = window.linsoraStore?.state?.recurringBills || [];
+    const uid = window.linsoraStore?.state?.user?.id;
+    const bill = billId ? bills.find((b) => b.id === billId && (b.userId || b.user_id) === uid) : null;
+
+    const titleEl = document.getElementById('billFormTitle');
+    if (titleEl) titleEl.innerText = bill ? '✏️ Editar Conta Recorrente' : '+ Nova Conta Recorrente';
+
+    const setVal = (id, val) => {
+      const el = document.getElementById(id);
+      if (el) el.value = val;
+    };
+    setVal('billIdInput', bill ? bill.id : '');
+    setVal('billTitleInput', bill ? bill.title : '');
+    setVal('billAmountInput', bill ? LinsoraUtils.formatCurrencyInput(String(Math.round(Number(bill.amount) * 100))) : '');
+    if (catSel) catSel.value = bill ? bill.category : cats[0];
+    setVal('billDueDayInput', bill ? bill.dueDay : '');
+    setVal('billStartInput', bill ? bill.startDate : '');
+    setVal('billEndInput', bill ? (bill.endDate || '') : '');
+
+    this.openModal('modalBillForm');
+  }
+
+  renderNotificationsFeed(containerId, notifs = []) {    const container = document.getElementById(containerId);
     if (!container) return;
 
     if (!notifs || notifs.length === 0) {
@@ -884,11 +1047,13 @@ class LinsoraUIComponentEngine {
    * Exibe o modal nativo de confirmação de exclusão do Linsora.
    * Substitui o window.confirm() padrão do navegador.
    * @param {string} itemName - Nome do item a ser excluído
+   * @param {object} [options] - Sobrescritas opcionais {title, message, confirmLabel}
    * @returns {Promise<boolean>} - true se o usuário confirmou, false se cancelou
    */
-  showConfirmModal(itemName) {
+  showConfirmModal(itemName, options = {}) {
     return new Promise((resolve) => {
       const modal   = document.getElementById('modalConfirmDelete');
+      const titleEl = document.getElementById('confirmDeleteTitle');
       const msgEl   = document.getElementById('confirmDeleteMsg');
       const btnOk   = document.getElementById('btnConfirmDeleteConfirm');
       const btnCancel = document.getElementById('btnConfirmDeleteCancel');
@@ -899,7 +1064,9 @@ class LinsoraUIComponentEngine {
         return;
       }
 
-      msgEl.textContent = `Tem certeza que deseja excluir "${itemName}"? Esta ação não pode ser desfeita.`;
+      if (titleEl) titleEl.textContent = options.title || 'Confirmar exclusão';
+      msgEl.textContent = options.message || `Tem certeza que deseja excluir "${itemName}"? Esta ação não pode ser desfeita.`;
+      btnOk.textContent = options.confirmLabel ? `🗑️ ${options.confirmLabel}` : '🗑️ Excluir';
 
       const cleanup = () => {
         modal.classList.add('hidden');

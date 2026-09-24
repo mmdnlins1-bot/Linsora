@@ -256,6 +256,8 @@ function renderAppUI(state) {
   renderFilteredTransactions(state);
   LinsoraUI.renderCardsCarousel('cardsCarousel', state.cards);
   LinsoraUI.renderGoalsList('goalsGridList', state.goals);
+  LinsoraUI.renderRecurringBillsList('recurringBillsList', state.recurringBills);
+  LinsoraUI.renderUpcomingCommitments('upcomingBillsList', 3);
   LinsoraUI.renderFixedBillsList('fixedBillsList', state.fixedBills);
   LinsoraUI.renderNotificationsFeed('notificationsFeed', activeNotifs);
 
@@ -899,6 +901,77 @@ function setupEventListeners() {
       }
     } else {
       LinsoraUI.showToast('Nenhum cartão selecionado para remoção.', 'info');
+    }
+  });
+
+  document.getElementById('btnGoToRecurring')?.addEventListener('click', () => window.switchTab('tabRecurringBills'));
+  document.getElementById('btnBackToDashboard')?.addEventListener('click', () => window.switchTab('tabDashboard'));
+  document.getElementById('btnAddRecurring')?.addEventListener('click', () => LinsoraUI.openBillForm());
+
+  document.getElementById('billForm')?.addEventListener('submit', async function(e) {
+    if (e) e.preventDefault();
+    const billId = document.getElementById('billIdInput')?.value || '';
+    const title = (document.getElementById('billTitleInput')?.value || '').trim();
+    const amount = LinsoraUtils.parseCurrencyToFloat(document.getElementById('billAmountInput')?.value || '0');
+    const category = document.getElementById('billCategoryInput')?.value || '';
+    const dueDay = document.getElementById('billDueDayInput')?.value || '';
+    const start = document.getElementById('billStartInput')?.value || '';
+    const endRaw = document.getElementById('billEndInput')?.value || '';
+    const end = endRaw || null;
+
+    if (!title) {
+      LinsoraUI.showToast('Informe o nome da conta.', 'error');
+      return;
+    }
+    if (!(amount > 0)) {
+      LinsoraUI.showToast('Informe um valor maior que zero.', 'error');
+      return;
+    }
+    if (!category) {
+      LinsoraUI.showToast('Selecione a categoria.', 'error');
+      return;
+    }
+    const dueNum = parseInt(dueDay, 10);
+    if (!(dueNum >= 1 && dueNum <= 31)) {
+      LinsoraUI.showToast('Informe o dia de vencimento entre 1 e 31.', 'error');
+      return;
+    }
+    if (!start) {
+      LinsoraUI.showToast('Informe a data de início.', 'error');
+      return;
+    }
+    if (end && end < start) {
+      LinsoraUI.showToast('A data final não pode ser anterior à data inicial.', 'error');
+      return;
+    }
+
+    const payload = {
+      title, amount, category, frequency: 'MONTHLY',
+      due_day: dueNum, start_date: start, end_date: end, active: true
+    };
+
+    try {
+      if (billId) {
+        const ok = await window.linsoraStore.updateRecurringBill(billId, payload);
+        if (!ok) {
+          LinsoraUI.showToast('Não foi possível editar a conta.', 'error');
+          return;
+        }
+        LinsoraUI.closeModal('modalBillForm');
+        LinsoraUI.showToast(`Conta "${title}" atualizada com sucesso! ✏️`, 'success');
+      } else {
+        const rec = await window.linsoraStore.addRecurringBill(payload);
+        if (!rec) {
+          LinsoraUI.showToast('Não foi possível salvar a conta.', 'error');
+          return;
+        }
+        LinsoraUI.closeModal('modalBillForm');
+        LinsoraUI.showToast(`Conta "${title}" cadastrada com sucesso! 🧾`, 'success');
+      }
+    } catch (err) {
+      console.error('[LINSORA] Erro ao salvar conta recorrente:', err);
+      LinsoraUI.closeModal('modalBillForm');
+      LinsoraUI.showToast('Conta salva localmente!');
     }
   });
 

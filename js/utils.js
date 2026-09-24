@@ -143,6 +143,149 @@ const LinsoraUtils = {
     const day = String(d.getDate()).padStart(2, '0');
     return `${y}-${m}-${day}`;
   },
+
+  /**
+   * Prende um dia do mês ao tamanho real do mês (calendário local).
+   * Ex.: due_day 31 em fevereiro/2026 -> 28; em abril -> 30.
+   */
+  clampDayOfMonth(year, monthIndex0, day) {
+    const monthLen = new Date(year, monthIndex0 + 1, 0).getDate();
+    return Math.min(Math.max(1, parseInt(day, 10) || 1), monthLen);
+  },
+
+  /**
+   * Gera ocorrências mensais de uma regra recorrente dentro de uma janela
+   * [windowStartKey, windowEndKey] (chaves YYYY-MM-DD, comparação por string,
+   * sem UTC). Pura e determinística. Aceita campos snake_case (remoto) e
+   * camelCase (local). V1: somente frequency MONTHLY, regras ativas.
+   */
+  generateMonthlyOccurrences(rule, windowStartKey, windowEndKey) {
+    if (!rule || rule.active === false) return [];
+    if ((rule.frequency || 'MONTHLY') !== 'MONTHLY') return [];
+    const dueDay = parseInt(rule.due_day ?? rule.dueDay, 10);
+    if (!dueDay || dueDay < 1 || dueDay > 31) return [];
+    const uid = rule.user_id ?? rule.userId;
+    const billId = rule.id;
+    if (!uid || !billId) return [];
+    const amount = Number(rule.amount) || 0;
+    if (amount <= 0) return [];
+    const start = String(rule.start_date ?? rule.startDate ?? '');
+    if (!/^\d{4}-\d{2}-\d{2}/.test(start)) return [];
+    const endRaw = rule.end_date ?? rule.endDate ?? null;
+    const end = endRaw ? String(endRaw).slice(0, 10) : null;
+    if (!windowStartKey || !windowEndKey || windowEndKey < windowStartKey) return [];
+
+    const out = [];
+    let [y, m] = windowStartKey.split('-').map(Number);
+    m = m - 1;
+    const [ey, em0] = windowEndKey.split('-').map(Number);
+    const endM = em0 - 1;
+    let guard = 0;
+    while ((y < ey || (y === ey && m <= endM)) && guard++ < 1200) {
+      const d = this.clampDayOfMonth(y, m, dueDay);
+      const due = `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+      if (due >= windowStartKey && due <= windowEndKey && due >= start.slice(0, 10) && (!end || due <= end)) {
+        out.push({
+          recurring_bill_id: billId,
+          user_id: uid,
+          due_date: due,
+          expected_amount: amount,
+        });
+      }
+      m += 1;
+      if (m > 11) { m = 0; y += 1; }
+    }
+    return out;
+  },
+
+  /**
+   * Próximo vencimento relevante de uma regra recorrente (puro, sem persistir).
+   * Ordem: menor due_date PENDING >= hoje; senão a PENDING vencida mais
+   * recente; senão (regra ativa) o próximo vencimento derivado da regra;
+   * regra inativa sem PENDING retorna null (nada é inventado).
+   * Retorna { dueDate, overdue, source } ou null.
+   */
+  nextBillDue(bill, occurrences = [], todayKey) {
+    if (!bill) return null;
+    const today = todayKey || this.toLocalDateKey();
+    const list = (Array.isArray(occurrences) ? occurrences : [])
+      .filter((o) => o && o.recurringBillId === bill.id && o.status === 'PENDING' && o.dueDate);
+    const future = list
+      .filter((o) => o.dueDate >= today)
+      .sort((a, b) => (a.dueDate < b.dueDate ? -1 : 1))[0];
+    if (future) {
+      return { dueDate: future.dueDate, overdue: false, source: 'occurrence' };
+    }
+    const overdue = list
+      .filter((o) => o.dueDate < today)
+      .sort((a, b) => (a.dueDate < b.dueDate ? 1 : -1))[0];
+    if (overdue) {
+      return { dueDate: overdue.dueDate, overdue: true, source: 'occurrence' };
+    }
+    if (bill.active === false) return null;
+    const dueDay = parseInt(bill.dueDay ?? bill.due_day, 10);
+    if (!dueDay || dueDay < 1 || dueDay > 31) return null;
+    const [ty, tm0] = today.split('-').map(Number);
+    for (let step = 0; step < 36; step++) {
+      const total = (tm0 - 1) + step;
+      const y = ty + Math.floor(total / 12);
+      const m = ((total % 12) + 12) % 12;
+      const d = this.clampDayOfMonth(y, m, dueDay);
+      const due = `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+      if (due < today) continue;
+      const start = String(bill.startDate ?? bill.start_date ?? '').slice(0, 10);
+      const endRaw = bill.endDate ?? bill.end_date ?? null;
+      const end = endRaw ? String(endRaw).slice(0, 10) : null;
+      if (start && due < start) continue;
+      if (end && due > end) return null;
+      return { dueDate: due, overdue: false, source: 'derived' };
+    }
+    return null;
+  },
+
+  /**
+   * Data de vencimento de fatura elegível numa janela [start, end].
+   * Retorna o MAIOR vencimento mensal dentro da janela; se não houver,
+   * retorna o vencimento do mês anterior como carry de atraso, mas somente
+   * quando a janela alcança passado/presente (start <= hoje). Janelas
+   * estritamente futuras não herdam dívida passada. null = sem compromisso.
+   */
+  resolveInvoiceDueDate(dueDay, windowStartKey, windowEndKey, todayKey) {
+    const dd = parseInt(dueDay, 10);
+    if (!dd || dd < 1 || dd > 31) return null;
+    if (!windowStartKey || !windowEndKey || windowEndKey < windowStartKey) return null;
+    const today = todayKey || this.toLocalDateKey();
+    const clampDue = (y, m) => {
+      const d = this.clampDayOfMonth(y, m, dd);
+      return `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    };
+    const [sy, sm0] = windowStartKey.split('-').map(Number);
+    const [ey, em0] = windowEndKey.split('-').map(Number);
+    let y = sy;
+    let m = sm0 - 1;
+    let latestInWin = null;
+    let latestPast = null;
+    let guard = 0;
+    while ((y < ey || (y === ey && m <= em0 - 1)) && guard++ < 1200) {
+      const due = clampDue(y, m);
+      if (due >= windowStartKey && due <= windowEndKey) {
+        latestInWin = due;
+      } else if (due < windowStartKey && due <= windowEndKey && (!latestPast || due > latestPast)) {
+        latestPast = due;
+      }
+      m += 1;
+      if (m > 11) { m = 0; y += 1; }
+    }
+    if (latestInWin) return latestInWin;
+    if (latestPast && windowStartKey <= today) return latestPast;
+    if (windowStartKey <= today) {
+      let py = sy;
+      let pm = sm0 - 2;
+      if (pm < 0) { pm = 11; py = sy - 1; }
+      return clampDue(py, pm);
+    }
+    return null;
+  },
   /**
    * Traduz termos técnicos internos de Repetição/Recorrência para o Português
    * Evita a exibição de strings como "SINGLE", "single", "MONTHLY", "recurring", etc.

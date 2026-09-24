@@ -318,6 +318,15 @@
               </div>
             </div>
 
+            <!-- 3.1 PRÓXIMOS COMPROMISSOS (ATALHO PARA CONTAS RECORRENTES) -->
+            <div class="section-block">
+              <div class="section-header-row">
+                <h3>Próximos compromissos</h3>
+                <button type="button" class="link-btn-bold" id="btnGoToRecurring">Ver contas recorrentes →</button>
+              </div>
+              <div class="upcoming-bills-list" id="upcomingBillsList"></div>
+            </div>
+
             <!-- 4. GASTOS POR CATEGORIA -->
             <div class="section-block">
               <div class="linsora-card chart-card">
@@ -533,6 +542,24 @@
 
             <!-- INSIGHTS INTELIGENTES & RITMO DE ECONOMIA -->
             <div id="goalsSmartInsights" class="margin-top-md margin-bottom-md"></div>
+          </section>
+
+          <!-- TAB: CONTAS RECORRENTES (sem item na navegação inferior) -->
+          <section class="tab-page hidden" id="tabRecurringBills">
+            <div class="page-title-bar">
+              <div>
+                <h2>Contas Recorrentes</h2>
+                <span class="page-title-sub">Organize suas despesas mensais e acompanhe os próximos vencimentos.</span>
+              </div>
+              <div style="display: flex; gap: 8px; align-items: center;">
+                <button type="button" class="linsora-btn secondary sm" id="btnBackToDashboard">Voltar para Início</button>
+                <button type="button" class="linsora-btn primary sm" id="btnAddRecurring">+ Nova conta</button>
+              </div>
+            </div>
+
+            <div class="section-block">
+              <div class="recurring-bills-list" id="recurringBillsList"></div>
+            </div>
           </section>
 
           <!-- TAB 5: PERFIL & CONFIGURAÇÕES -->
@@ -1082,6 +1109,56 @@
             </div>
 
             <button type="submit" class="linsora-btn primary block lg margin-top-md" id="btnSaveGoal">Salvar Meta</button>
+          </form>
+        </div>
+      </div>
+
+      <!-- MODAL CONTA RECORRENTE -->
+      <div class="linsora-modal-overlay hidden" id="modalBillForm">
+        <div class="linsora-modal-content floating-center-card">
+          <div class="modal-header">
+            <h3 id="billFormTitle">+ Nova Conta Recorrente</h3>
+            <button type="button" class="modal-close" data-close-modal="modalBillForm">✕</button>
+          </div>
+          <form id="billForm" class="modal-form-unified" onsubmit="return false;">
+            <input type="hidden" id="billIdInput" value="">
+
+            <div class="form-group">
+              <label for="billTitleInput">Nome da conta</label>
+              <input type="text" id="billTitleInput" class="linsora-input" placeholder="Ex: Energia, Internet, Aluguel">
+            </div>
+
+            <div class="form-group">
+              <label for="billAmountInput">Valor (R$)</label>
+              <input type="text" id="billAmountInput" class="linsora-input currency-mask" placeholder="R$ 0,00">
+            </div>
+
+            <div class="form-group">
+              <label for="billCategoryInput">Categoria</label>
+              <select id="billCategoryInput" class="linsora-input select-input"></select>
+            </div>
+
+            <div class="form-group">
+              <label for="billDueDayInput">Dia de vencimento (1 a 31)</label>
+              <input type="number" id="billDueDayInput" class="linsora-input" placeholder="10">
+            </div>
+
+            <div class="form-group">
+              <label for="billStartInput">Data de início</label>
+              <input type="date" id="billStartInput" class="linsora-input">
+            </div>
+
+            <div class="form-group">
+              <label for="billEndInput">Data final (opcional)</label>
+              <input type="date" id="billEndInput" class="linsora-input">
+            </div>
+
+            <div class="form-group">
+              <label>Frequência</label>
+              <div class="frequency-static-text">Mensal</div>
+            </div>
+
+            <button type="submit" class="linsora-btn primary block lg margin-top-md" id="btnSaveBill">Salvar Conta</button>
           </form>
         </div>
       </div>

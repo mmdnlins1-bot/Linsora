@@ -837,6 +837,8 @@ class SupabaseRepository {
       pixKeys: [],
       goals: [],
       fixedBills: [],
+      recurringBills: [],
+      occurrences: [],
       transactions: []
     };
   }
@@ -871,6 +873,8 @@ class SupabaseRepository {
               transactions: (guestCache.transactions || []).map(t => ({ ...t, userId: activeId })),
               goals: (guestCache.goals || []).map(g => ({ ...g, userId: activeId })),
               pixKeys: (guestCache.pixKeys || []).map(p => ({ ...p, userId: activeId })),
+              recurringBills: (guestCache.recurringBills || []).map(b => ({ ...b, userId: activeId })),
+              occurrences: (guestCache.occurrences || []).map(o => ({ ...o, userId: activeId })),
               fixedBills: (guestCache.fixedBills || []).map(f => ({ ...f, userId: activeId }))
             };
             localStorage.setItem(key, JSON.stringify(localCache));
@@ -884,13 +888,15 @@ class SupabaseRepository {
     // Se estiver conectado ao Supabase remoto, busca via PostgREST/RLS
     if (this.supabase && activeId !== 'guest' && !activeId.startsWith('usr_')) {
       try {
-        const [accRes, cardsRes, txRes, goalsRes, pixRes, billsRes] = await Promise.all([
+        const [accRes, cardsRes, txRes, goalsRes, pixRes, billsRes, recBillsRes, occRes] = await Promise.all([
           this.supabase.from('accounts').select('*').eq('user_id', activeId),
           this.supabase.from('cards').select('*').eq('user_id', activeId),
           this.supabase.from('transactions').select('*').eq('user_id', activeId).order('date', { ascending: false }),
           this.supabase.from('goals').select('*').eq('user_id', activeId),
           this.supabase.from('pix_keys').select('*').eq('user_id', activeId),
-          this.supabase.from('fixed_bills').select('*').eq('user_id', activeId)
+          this.supabase.from('fixed_bills').select('*').eq('user_id', activeId),
+          this.supabase.from('recurring_bills').select('*').eq('user_id', activeId),
+          this.supabase.from('recurring_bill_occurrences').select('*').eq('user_id', activeId)
         ]);
 
         // Verificar e logar erros individuais por tabela sem abortar o merge
@@ -900,7 +906,9 @@ class SupabaseRepository {
           txRes.error    && `transactions: ${txRes.error.message}`,
           goalsRes.error && `goals: ${goalsRes.error.message}`,
           pixRes.error   && `pix_keys: ${pixRes.error.message}`,
-          billsRes.error && `fixed_bills: ${billsRes.error.message}`
+          billsRes.error && `fixed_bills: ${billsRes.error.message}`,
+          recBillsRes.error && `recurring_bills: ${recBillsRes.error.message}`,
+          occRes.error   && `recurring_bill_occurrences: ${occRes.error.message}`
         ].filter(Boolean);
         if (selectErrors.length > 0 && window.LinsoraLogger) {
           window.LinsoraLogger.error('Erros parciais na leitura do Supabase', selectErrors, activeId);
@@ -912,6 +920,18 @@ class SupabaseRepository {
         const remoteGoals        = goalsRes.data  || [];
         const remotePix          = pixRes.data    || [];
         const remoteBills        = billsRes.data  || [];
+        // Normaliza snake_case remoto para o formato camelCase local
+        const remoteRecBills = (recBillsRes.data || []).map(b => ({
+          id: b.id, userId: b.user_id, title: b.title, amount: b.amount,
+          category: b.category, frequency: b.frequency, dueDay: b.due_day,
+          startDate: b.start_date, endDate: b.end_date, active: b.active
+        }));
+        const remoteOccs = (occRes.data || []).map(o => ({
+          id: o.id, recurringBillId: o.recurring_bill_id, userId: o.user_id,
+          dueDate: o.due_date, expectedAmount: o.expected_amount,
+          paidAmount: o.paid_amount, status: o.status, paidAt: o.paid_at,
+          transactionId: o.transaction_id, skippedReason: o.skipped_reason
+        }));
 
         const hasRemoteData = remoteAccounts.length > 0 || remoteTransactions.length > 0 || remoteGoals.length > 0 || remoteCards.length > 0;
         const hasLocalData  = localCache && (localCache.transactions?.length > 0 || localCache.accounts?.length > 0 || localCache.cards?.length > 0 || localCache.goals?.length > 0);
@@ -943,7 +963,9 @@ class SupabaseRepository {
             transactions: mergeById(remoteTransactions, localCache?.transactions),
             goals:        mergeById(remoteGoals,        localCache?.goals),
             pixKeys:      mergeById(remotePix,          localCache?.pixKeys),
-            fixedBills:   mergeById(remoteBills,        localCache?.fixedBills)
+            fixedBills:   mergeById(remoteBills,        localCache?.fixedBills),
+            recurringBills: mergeById(remoteRecBills,   localCache?.recurringBills),
+            occurrences:  mergeById(remoteOccs,         localCache?.occurrences)
           };
         }
 
@@ -996,6 +1018,16 @@ class SupabaseRepository {
         const { error } = await this.supabase.from('transactions').upsert(txs);
         if (error) errors.push(`transactions: ${error.message}`);
       }
+      if (data.recurringBills?.length) {
+        const bills = data.recurringBills.map(b => ({ id: b.id, user_id: userId, title: b.title, amount: b.amount, category: b.category, frequency: b.frequency, due_day: b.dueDay, start_date: b.startDate, end_date: b.endDate, active: b.active !== false }));
+        const { error } = await this.supabase.from('recurring_bills').upsert(bills);
+        if (error) errors.push(`recurring_bills: ${error.message}`);
+      }
+      if (data.occurrences?.length) {
+        const occs = data.occurrences.map(o => ({ id: o.id, recurring_bill_id: o.recurringBillId, user_id: userId, due_date: o.dueDate, expected_amount: o.expectedAmount, paid_amount: o.paidAmount, status: o.status, paid_at: o.paidAt, transaction_id: o.transactionId, skipped_reason: o.skippedReason || null }));
+        const { error } = await this.supabase.from('recurring_bill_occurrences').upsert(occs);
+        if (error) errors.push(`recurring_bill_occurrences: ${error.message}`);
+      }
       if (data.user) {
         const profile = {
           id: userId,
@@ -1020,7 +1052,8 @@ class SupabaseRepository {
   /* ------------------------------------------------------------------------
      DELETE REMOTO — Remove registro de uma tabela no Supabase pelo ID
      Tabelas suportadas: 'transactions' | 'accounts' | 'cards' | 'goals' |
-                         'pix_keys' | 'fixed_bills'
+                         'pix_keys' | 'fixed_bills' | 'recurring_bills' |
+                         'recurring_bill_occurrences'
      Retorna { success: boolean, error: string|null }
      ------------------------------------------------------------------------ */
   async deleteDbRecord(table, recordId, userId) {

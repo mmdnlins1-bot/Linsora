@@ -324,6 +324,254 @@ class LinsoraStore {
   }
 
   /* ------------------------------------------------------------------------
+     COMPROMISSOS FINANCEIROS (ETAPA 1) — recorrências + motor puro.
+     Sem UI: estado via API do store; sem novas consultas (usa dados em memória).
+     ------------------------------------------------------------------------ */
+  async addRecurringBill(billData) {
+    const data = billData || {};
+    const title = String(data.title || '').trim();
+    const amount = parseFloat(data.amount);
+    const frequency = String(data.frequency || 'MONTHLY').toUpperCase();
+    const dueDay = parseInt(data.due_day ?? data.dueDay, 10);
+    const start = String(data.start_date ?? data.startDate ?? '').slice(0, 10);
+    const endRaw = data.end_date ?? data.endDate ?? null;
+    const end = endRaw ? String(endRaw).slice(0, 10) : null;
+    const category = String(data.category || '').trim();
+    // Validações da V1 (mensal, dia 1..31, valor > 0, início obrigatório)
+    if (!title) return false;
+    if (!(amount > 0)) return false;
+    if (!category) return false;
+    if (frequency !== 'MONTHLY') return false;
+    if (!(dueDay >= 1 && dueDay <= 31)) return false;
+    if (!/^\d{4}-\d{2}-\d{2}/.test(start)) return false;
+    if (end && end < start) return false;
+
+    const rec = {
+      id: 'rb_' + Date.now(),
+      userId: this.state?.user?.id || 'usr_guest',
+      title,
+      amount,
+      category,
+      frequency: 'MONTHLY',
+      dueDay,
+      startDate: start,
+      endDate: end,
+      active: data.active !== false
+    };
+    if (!Array.isArray(this.state.recurringBills)) this.state.recurringBills = [];
+    this.state.recurringBills.push(rec);
+    this.notify();
+    return rec;
+  }
+
+  /**
+   * Atualiza a regra recorrente (mesmas validações da criação).
+   * Nunca altera ocorrências PAID nem reescreve PENDING existentes:
+   * novas gerações usam os dados atualizados.
+   */
+  async updateRecurringBill(billId, billData) {
+    const data = billData || {};
+    const bills = this.state?.recurringBills || [];
+    const bill = bills.find((b) => b.id === billId && (b.userId || b.user_id) === this.state?.user?.id);
+    if (!bill) return false;
+    const title = String(data.title || '').trim();
+    const amount = parseFloat(data.amount);
+    const dueDay = parseInt(data.due_day ?? data.dueDay, 10);
+    const start = String(data.start_date ?? data.startDate ?? '').slice(0, 10);
+    const endRaw = data.end_date ?? data.endDate ?? null;
+    const end = endRaw ? String(endRaw).slice(0, 10) : null;
+    const category = String(data.category || '').trim();
+    if (!title || !(amount > 0) || !category) return false;
+    if (!(dueDay >= 1 && dueDay <= 31)) return false;
+    if (!/^\d{4}-\d{2}-\d{2}/.test(start)) return false;
+    if (end && end < start) return false;
+
+    bill.title = title;
+    bill.amount = amount;
+    bill.category = category;
+    bill.dueDay = dueDay;
+    bill.startDate = start;
+    bill.endDate = end;
+    this.notify();
+    return true;
+  }
+
+  /**
+   * Ativa/desativa a regra. Ao desativar, PENDING futuras (due > hoje)
+   * viram SKIPPED com motivo; vencidas e PAID permanecem intactas.
+   * Reativar não restaura SKIPPED (motor gera novas quando necessário).
+   */
+  async toggleRecurringBillActive(billId) {
+    const bills = this.state?.recurringBills || [];
+    const uid = this.state?.user?.id;
+    const bill = bills.find((b) => b.id === billId && (b.userId || b.user_id) === uid);
+    if (!bill) return false;
+    bill.active = bill.active === false;
+    if (bill.active === false) {
+      const today = LinsoraUtils.toLocalDateKey();
+      (this.state?.occurrences || [])
+        .filter((o) => o.recurringBillId === billId && o.userId === uid && o.status === 'PENDING' && o.dueDate && o.dueDate > today)
+        .forEach((o) => {
+          o.status = 'SKIPPED';
+          o.skippedReason = 'Regra desativada';
+        });
+    }
+    this.notify();
+    return bill.active !== false;
+  }
+
+  /**
+   * Exclusão real da regra (destrutiva: occurrences somem pelo CASCADE
+   * no banco; localmente filtra as vinculadas). Transactions preservadas.
+   */
+  async deleteRecurringBill(billId) {
+    const uid = this.state?.user?.id;
+    const bills = this.state?.recurringBills || [];
+    if (!bills.some((b) => b.id === billId && (b.userId || b.user_id) === uid)) return false;
+    this.state.recurringBills = bills.filter((b) => b.id !== billId);
+    this.state.occurrences = (this.state?.occurrences || []).filter((o) => o.recurringBillId !== billId);
+    this.notify();
+    const remoteResult = await window.supabaseRepo.deleteDbRecord('recurring_bills', billId, uid);
+    if (!remoteResult.success && window.LinsoraNotifications?.show) {
+      window.LinsoraNotifications.show('Conta excluída localmente, mas não foi possível remover do servidor.', 'warning');
+    }
+    return true;
+  }
+
+  /**
+   * Garante ocorrências PENDING para a janela (idempotente: nunca duplica).
+   * Retorna a quantidade criada. Persiste via notify (mesmo fluxo das demais).
+   */
+  ensureRecurringOccurrences(windowStartKey, windowEndKey) {
+    if (!windowStartKey || !windowEndKey || windowEndKey < windowStartKey) return 0;
+    const uid = this.state?.user?.id;
+    if (!uid) return 0;
+    if (!Array.isArray(this.state.recurringBills)) this.state.recurringBills = [];
+    if (!Array.isArray(this.state.occurrences)) this.state.occurrences = [];
+    let added = 0;
+    this.state.recurringBills.forEach((bill) => {
+      if ((bill.userId || bill.user_id) !== uid) return;
+      const generated = LinsoraUtils.generateMonthlyOccurrences(bill, windowStartKey, windowEndKey);
+      generated.forEach((g) => {
+        const exists = this.state.occurrences.some((o) =>
+          o.userId === uid && o.recurringBillId === g.recurring_bill_id && o.dueDate === g.due_date
+        );
+        if (!exists) {
+          this.state.occurrences.push({
+            id: 'rbocc_' + Date.now() + '_' + added,
+            recurringBillId: g.recurring_bill_id,
+            userId: uid,
+            dueDate: g.due_date,
+            expectedAmount: g.expected_amount,
+            status: 'PENDING',
+            paidAmount: null,
+            paidAt: null,
+            transactionId: null
+          });
+          added += 1;
+        }
+      });
+    });
+    if (added > 0) this.notify();
+    return added;
+  }
+
+  /**
+   * Altera status de ocorrência (nível de dado, sem UI). Valida enum,
+   * titularidade e vínculo de transação com o mesmo usuário.
+   */
+  setOccurrenceStatus(occurrenceId, patch = {}) {
+    const uid = this.state?.user?.id;
+    const occs = this.state?.occurrences || [];
+    const occ = occs.find((o) => o.id === occurrenceId && o.userId === uid);
+    if (!occ) return false;
+    const status = patch.status;
+    if (!['PENDING', 'PAID', 'SKIPPED'].includes(status)) return false;
+    if (patch.transaction_id !== undefined && patch.transaction_id !== null) {
+      const tx = (this.state?.transactions || []).find(
+        (t) => t.id === patch.transaction_id && t.userId === uid
+      );
+      if (!tx) return false;
+      occ.transactionId = patch.transaction_id;
+    }
+    occ.status = status;
+    if (status === 'PAID') {
+      occ.paidAmount = patch.paid_amount !== undefined && patch.paid_amount !== null
+        ? patch.paid_amount
+        : occ.expectedAmount;
+      if (!occ.paidAt) occ.paidAt = new Date().toISOString();
+    }
+    if (status === 'SKIPPED' && patch.skipped_reason !== undefined) {
+      occ.skippedReason = patch.skipped_reason;
+    }
+    this.notify();
+    return true;
+  }
+
+  getAccountsBalance() {
+    if (!this.state || !this.state.accounts) return 0;
+    return this.state.accounts.reduce((acc, a) => acc + (Number(a.balance) || 0), 0);
+  }
+
+  /**
+   * Motor central de compromissos: quanto do dinheiro atual já está
+   * comprometido até dateKey (YYYY-MM-DD). Puro sobre o estado em memória.
+   * Inclui: ocorrências PENDING (qualquer due_date <= dateKey, inclusive
+   * vencidas) + UMA obrigação por cartão com limit_used > 0 cujo vencimento
+   * seja elegível. Exclui: PAID, SKIPPED, transactions, goals,
+   * monthlyContribution, receitas futuras, patrimônio, fixed_bills e
+   * qualquer dado de outro usuário.
+   */
+  getCommittedAmountUntil(dateKey) {
+    const empty = { total: 0, items: [] };
+    if (!dateKey || !this.state?.user?.id) return empty;
+    const uid = this.state.user.id;
+    const todayKey = LinsoraUtils.toLocalDateKey();
+    const items = [];
+
+    (this.state.occurrences || [])
+      .filter((o) => o.userId === uid && o.status === 'PENDING' && o.dueDate && o.dueDate <= dateKey)
+      .forEach((o) => {
+        const bill = (this.state.recurringBills || []).find((b) => b.id === o.recurringBillId);
+        items.push({
+          type: 'RECURRING_BILL',
+          title: (bill && bill.title) || 'Conta recorrente',
+          amount: Number(o.expectedAmount) || 0,
+          dueDate: o.dueDate,
+          originId: o.id
+        });
+      });
+
+    (this.state.cards || [])
+      .filter((c) => (c.userId || c.user_id) === uid && (Number(c.limitUsed ?? c.limit_used) || 0) > 0)
+      .forEach((c) => {
+        const due = LinsoraUtils.resolveInvoiceDueDate(
+          c.dueDay ?? c.due_day, todayKey, dateKey, todayKey
+        );
+        if (due && due <= dateKey) {
+          items.push({
+            type: 'CARD_INVOICE',
+            title: `Fatura ${c.name}`,
+            amount: Number(c.limitUsed ?? c.limit_used) || 0,
+            dueDate: due,
+            originId: c.id
+          });
+        }
+      });
+
+    const total = items.reduce((acc, i) => acc + (Number(i.amount) || 0), 0);
+    return { total, items };
+  }
+
+  /**
+   * Margem disponível: saldos das contas menos compromissos elegíveis.
+   * Conceitual (V1): sem receitas futuras, sem metas, sem patrimônio.
+   */
+  getAvailableMargin(dateKey) {
+    return this.getAccountsBalance() - this.getCommittedAmountUntil(dateKey).total;
+  }
+
+  /* ------------------------------------------------------------------------
      OPERAÇÕES DE METAS
      ------------------------------------------------------------------------ */
   async addGoal(goalData) {

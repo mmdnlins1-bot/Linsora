@@ -119,6 +119,20 @@ class StrategicAdvisorEngine {
     
     const currentDailyLimit = daysRemaining > 0 ? (availableBalanceForMonth / daysRemaining) : availableBalanceForMonth;
 
+    // Compromissos futuros (Etapa 1): recorrências PENDING + faturas elegíveis
+    // até o fim do mês corrente. Aditivo: não altera nenhuma métrica existente.
+    let committedAmount = 0;
+    let committedItems = [];
+    try {
+      const monthEndKey = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${daysInMonth}`;
+      const committed = window.linsoraStore?.getCommittedAmountUntil
+        ? window.linsoraStore.getCommittedAmountUntil(monthEndKey)
+        : { total: 0, items: [] };
+      committedAmount = Number(committed.total) || 0;
+      committedItems = Array.isArray(committed.items) ? committed.items : [];
+    } catch (e) { /* motor indisponível: segue com zero */ }
+    const availableAfterCommitments = Math.max(0, availableBalanceForMonth - committedAmount);
+
     return {
       monthIncome,
       monthExpense,
@@ -128,7 +142,10 @@ class StrategicAdvisorEngine {
       currentDailyLimit,
       daysRemaining,
       totalBalance,
-      totalLiquidity
+      totalLiquidity,
+      committedAmount,
+      committedItems,
+      availableAfterCommitments
     };
   }
 
