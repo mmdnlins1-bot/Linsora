@@ -400,6 +400,26 @@ function syncExtratoFilterUI() {
   }
 }
 
+/**
+ * Janela equivalente no mês anterior (mesmos números de dia, com trava no
+ * tamanho do mês). Ex.: dia 24/09 → compara 01–24/09 com 01–24/08.
+ */
+function getEquivalentPrevWindow() {
+  const today = new Date();
+  const y = today.getFullYear();
+  const m = today.getMonth();
+  const d = today.getDate();
+  const prevLen = new Date(y, m, 0).getDate();
+  const dd = Math.min(d, prevLen);
+  const p = (v) => String(v).padStart(2, '0');
+  const pm = m === 0 ? 11 : m - 1;
+  const py = m === 0 ? y - 1 : y;
+  return { start: `${py}-${p(pm + 1)}-01`, end: `${py}-${p(pm + 1)}-${p(dd)}` };
+}
+
+// Visão resumida das movimentações: no máximo 3 + "Ver todas"
+let extratoExpanded = false;
+
 function renderFilteredTransactions(state) {
   const store = window.linsoraStore;
   const all = [...(state.transactions || [])];
@@ -434,10 +454,20 @@ function renderFilteredTransactions(state) {
     );
   }
 
-  LinsoraUI.renderTransactionsList('fullTransactionsList', list);
+  LinsoraUI.renderTransactionsList('fullTransactionsList', extratoExpanded ? list : list.slice(0, 3));
 
   const countEl = document.getElementById('extratoListCount');
   if (countEl) countEl.innerText = list.length === 1 ? '1 movimentação' : `${list.length} movimentações`;
+
+  const toggleBtn = document.getElementById('btnToggleMovements');
+  if (toggleBtn) {
+    if (list.length > 3) {
+      toggleBtn.classList.remove('hidden');
+      toggleBtn.innerText = extratoExpanded ? 'Ver menos' : `Ver todas (${list.length})`;
+    } else {
+      toggleBtn.classList.add('hidden');
+    }
+  }
 
   // Resumo do período + filtros (somente dados reais do conjunto combinado)
   const periodIncome = combined.filter(t => t.type === 'RECEITA').reduce((acc, t) => acc + (Number(t.amount) || 0), 0);
@@ -471,15 +501,30 @@ function renderFilteredTransactions(state) {
   const analysisSection = document.getElementById('extratoAnalysisSection');
   if (analysisSection) analysisSection.classList.toggle('hidden', !hasPeriodData);
 
-  // Análise do conjunto combinado + comparação com o mês anterior (modo mensal)
+  // Análise: conjunto combinado + comparação com o mês anterior (modo mensal).
+  // Com categoria, a comparação usa a janela equivalente do mês anterior.
   if (hasPeriodData) {
     const showComparison = (store.filterPeriod || 'ALL') === 'THIS_MONTH';
     const prevKey = getPeriodMonthKey(new Date(), 1);
     const prevBase = showComparison ? all.filter(t => getTxMonthKey(t) === prevKey) : [];
     const prevTxs = prevBase.filter(t => txMatchesType(t, store.filterType) && txMatchesCategory(t, activeCat));
-    LinsoraUI.renderExtratoAnalysis('extratoAnalysisContainer', combined, periodTxs, prevTxs, showComparison, activeCat);
+    const distBase = activeCat ? periodTxs.filter(t => txMatchesType(t, store.filterType)) : combined;
+    let catCompare = null;
+    if (showComparison && activeCat) {
+      const win = getEquivalentPrevWindow();
+      const inPrevWin = (t) => isValidTxDate(t) && String(t.date).slice(0, 10) >= win.start && String(t.date).slice(0, 10) <= win.end;
+      const catExpenseOf = (arr) => arr
+        .filter(t => t.type === 'DESPESA' && (t.category || 'Outros') === activeCat)
+        .reduce((acc, t) => acc + (Number(t.amount) || 0), 0);
+      // Janela atual = próprio período (Este mês = dia 01 → hoje); anterior = equivalente
+      catCompare = { curr: catExpenseOf(periodTxs), prev: catExpenseOf(all.filter(inPrevWin)) };
+    }
+    LinsoraUI.renderExtratoAnalysis('extratoAnalysisContainer', {
+      combined, period: periodTxs, dist: distBase, prev: prevTxs,
+      showComparison, activeCategory: activeCat, catCompare,
+    });
   } else {
-    LinsoraUI.renderExtratoAnalysis('extratoAnalysisContainer', [], [], [], false, null);
+    LinsoraUI.renderExtratoAnalysis('extratoAnalysisContainer', {});
   }
 
   syncExtratoFilterUI();
@@ -1295,6 +1340,11 @@ function setupEventListeners() {
 
   document.getElementById('btnActiveCategory')?.addEventListener('click', () => {
     window.linsoraStore.filterCategory = null;
+    renderFilteredTransactions(window.linsoraStore.state);
+  });
+
+  document.getElementById('btnToggleMovements')?.addEventListener('click', () => {
+    extratoExpanded = !extratoExpanded;
     renderFilteredTransactions(window.linsoraStore.state);
   });
 

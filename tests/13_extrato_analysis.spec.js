@@ -74,8 +74,8 @@ test.describe('13. Extrato: categorias clicáveis + períodos', () => {
     await expect(page.locator('#fullTransactionsList')).not.toContainText('Uber Cat');
     await expect(page.locator('#fullTransactionsList')).not.toContainText('Salário Cat');
     const analysis = page.locator('#extratoAnalysisContainer');
-    await expect(analysis).toContainText('Alimentação no período');
-    await expect(analysis).toContainText('R$ 300,00');
+    await expect(analysis.locator('.extrato-cat-total')).toContainText('R$ 300,00');
+    await expect(analysis.locator('.extrato-cat-count')).toContainText('1 movimentação');
     await expect(analysis).not.toContainText('Déficit no período');
 
     await page.click('#btnActiveCategory');
@@ -133,15 +133,16 @@ test.describe('13. Extrato: categorias clicáveis + períodos', () => {
     // Resumo Entradas/Saídas/Saldo fica oculto com categoria; análise traz fatos + contexto
     await expect(page.locator('#periodSummaryBar')).toHaveClass(/hidden/);
     const analysis3 = page.locator('#extratoAnalysisContainer');
-    await expect(analysis3).toContainText('Alimentação no período');
-    await expect(analysis3).toContainText('R$ 200,00');
-    await expect(analysis3).toContainText('positivo em R$ 1.740,00');
+    await expect(analysis3.locator('.extrato-cat-total')).toContainText('R$ 200,00');
+    await expect(analysis3.locator('.extrato-cat-count')).toContainText('2 movimentações');
+    await expect(analysis3).toContainText('Resultado do período');
+    await expect(analysis3).toContainText('+R$ 1.740,00');
 
     await page.click('#btnClearFilters');
-    await expect(page.locator('#periodSummaryBar')).not.toHaveClass(/hidden/);
-    await expect(page.locator('#periodIncome')).toContainText('R$ 2.000,00');
-    await expect(page.locator('#periodExpense')).toContainText('R$ 260,00');
     await expect(page.locator('#categoryActiveRow')).toHaveClass(/hidden/);
+    await expect(page.locator('#fullTransactionsList .transaction-card')).toHaveCount(3);
+    await expect(page.locator('#btnToggleMovements')).toContainText('Ver todas (4)');
+    await page.click('#btnToggleMovements');
     await expect(page.locator('#fullTransactionsList')).toContainText('Uber Combinado');
     await expect(page.locator('#fullTransactionsList')).toContainText('Salário Combinado');
   });
@@ -222,8 +223,8 @@ test.describe('13. Extrato: categorias clicáveis + períodos', () => {
     await expect(page.locator('#fullTransactionsList')).not.toContainText('Mercado Cards');
     await expect(page.locator('#fullTransactionsList')).not.toContainText('Cinema Cards');
     const analysisT = page.locator('#extratoAnalysisContainer');
-    await expect(analysisT).toContainText('Transporte no período');
-    await expect(analysisT).toContainText('R$ 150,00');
+    await expect(analysisT.locator('.extrato-cat-total')).toContainText('R$ 150,00');
+    await expect(analysisT.locator('.extrato-cat-count')).toContainText('1 movimentação');
 
     await page.click('#btnActiveCategory');
     await expect(page.locator('#periodSummaryBar')).not.toHaveClass(/hidden/);
@@ -246,9 +247,12 @@ test.describe('13. Extrato: categorias clicáveis + períodos', () => {
 
     await expect(page.locator('#periodSummaryBar')).toHaveClass(/hidden/);
     const analysis = page.locator('#extratoAnalysisContainer');
-    await expect(analysis).toContainText('Alimentação representa R$ 520,00');
-    await expect(analysis).toContainText('(8%)');
-    await expect(analysis).toContainText('negativo em R$ 1.690,00');
+    await expect(analysis.locator('.extrato-cat-total')).toContainText('R$ 520,00');
+    await expect(analysis.locator('.extrato-cat-count')).toContainText('1 movimentação');
+    await expect(analysis).toContainText('Alimentação representa');
+    await expect(analysis).toContainText('8%');
+    await expect(analysis).toContainText('Resultado do período');
+    await expect(analysis).toContainText('-R$ 1.690,00');
 
     await page.click('#btnActiveCategory');
     await page.click('.linsora-card.category-variation-item:has-text("Transporte")');
@@ -256,7 +260,7 @@ test.describe('13. Extrato: categorias clicáveis + períodos', () => {
     await expect(page.locator('#periodSummaryBar')).toHaveClass(/hidden/);
     await expect(page.locator('#fullTransactionsList')).toContainText('Viagem Contexto');
     await expect(page.locator('#fullTransactionsList')).not.toContainText('Mercado Contexto');
-    await expect(analysis).toContainText('Transporte no período');
+    await expect(analysis.locator('.extrato-cat-total')).toContainText('R$ 6.170,00');
 
     await page.click('#btnActiveCategory');
     await expect(page.locator('#periodSummaryBar')).not.toHaveClass(/hidden/);
@@ -306,5 +310,94 @@ test.describe('13. Extrato: categorias clicáveis + períodos', () => {
     expect(mobileBoxes.btn.top).toBeGreaterThanOrEqual(mobileBoxes.end.top + mobileBoxes.end.height);
     const mobileOverflow = await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1);
     expect(mobileOverflow).toBe(true);
+  });
+
+  test('Comparação da categoria com o mês anterior (menos, mais, igual, sem base)', async ({ page }) => {
+    const prevDate = await page.evaluate(() => {
+      const now = new Date();
+      const len = new Date(now.getFullYear(), now.getMonth(), 0).getDate();
+      const d = Math.min(now.getDate(), len);
+      const m = now.getMonth() === 0 ? 11 : now.getMonth() - 1;
+      const y = now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear();
+      const p = (v) => String(v).padStart(2, '0');
+      return `${y}-${p(m + 1)}-${p(d)}`;
+    });
+    await createTransaction(page, { type: 'DESPESA', amount: '65000', description: 'Mercado Anterior', category: 'Alimentação', date: prevDate });
+    await createTransaction(page, { type: 'DESPESA', amount: '30000', description: 'Mercado Atual A', category: 'Alimentação' });
+    await createTransaction(page, { type: 'DESPESA', amount: '22000', description: 'Mercado Atual B', category: 'Alimentação' });
+    await createTransaction(page, { type: 'DESPESA', amount: '30000', description: 'Gasolina Anterior', category: 'Transporte', date: prevDate });
+    await createTransaction(page, { type: 'DESPESA', amount: '36000', description: 'Gasolina Atual', category: 'Transporte' });
+    await createTransaction(page, { type: 'DESPESA', amount: '10000', description: 'Cinema Anterior', category: 'Lazer', date: prevDate });
+    await createTransaction(page, { type: 'DESPESA', amount: '10000', description: 'Cinema Atual', category: 'Lazer' });
+    await createTransaction(page, { type: 'DESPESA', amount: '5000', description: 'Curso Atual', category: 'Educação' });
+
+    await page.selectOption('#periodSelect', 'THIS_MONTH');
+    const analysis = page.locator('#extratoAnalysisContainer');
+
+    await page.click('.linsora-card.category-variation-item:has-text("Alimentação")');
+    await expect(analysis).toContainText('Comparação com o mês anterior');
+    await expect(analysis).toContainText('Você gastou 20% menos com Alimentação neste mês.');
+    await expect(analysis).toContainText('Mês anterior');
+    await expect(analysis).toContainText('R$ 650,00');
+    await expect(analysis).toContainText('Este mês');
+    await expect(analysis).toContainText('R$ 520,00');
+    await expect(analysis.locator('.extrato-cat-total')).toContainText('R$ 520,00');
+    await expect(analysis.locator('.extrato-cat-count')).toContainText('2 movimentações');
+
+    await page.click('#btnActiveCategory');
+    await page.click('.linsora-card.category-variation-item:has-text("Transporte")');
+    await expect(analysis).toContainText('Você gastou 20% a mais com Transporte neste mês.');
+    await expect(analysis).toContainText('Mês anterior');
+    await expect(analysis).toContainText('R$ 300,00');
+    await expect(analysis).toContainText('Este mês');
+    await expect(analysis).toContainText('R$ 360,00');
+
+    await page.click('#btnActiveCategory');
+    await page.click('.linsora-card.category-variation-item:has-text("Lazer")');
+    await expect(analysis).toContainText('Você gastou o mesmo valor com Lazer neste mês.');
+
+    await page.click('#btnActiveCategory');
+    await page.click('.linsora-card.category-variation-item:has-text("Educação")');
+    await expect(analysis).toContainText('Não houve gastos com Educação no período anterior.');
+    await expect(analysis).toContainText('Este mês');
+    await expect(analysis).toContainText('R$ 50,00');
+  });
+
+  test('Participação usa as saídas totais do período como denominador', async ({ page }) => {
+    await createTransaction(page, { type: 'DESPESA', amount: '52000', description: 'Mercado Share', category: 'Alimentação' });
+    await createTransaction(page, { type: 'DESPESA', amount: '48000', description: 'Uber Share', category: 'Transporte' });
+
+    await page.click('.linsora-card.category-variation-item:has-text("Alimentação")');
+    const analysis = page.locator('#extratoAnalysisContainer');
+    await expect(analysis).toContainText('52%');
+    await expect(analysis).toContainText('das suas despesas neste período');
+  });
+
+  test('Visão resumida mostra no máximo 3 movimentações com Ver todas', async ({ page }) => {
+    await createTransaction(page, { type: 'DESPESA', amount: '1000', description: 'Item Um Resumo', category: 'Outros' });
+    await createTransaction(page, { type: 'DESPESA', amount: '2000', description: 'Item Dois Resumo', category: 'Outros' });
+    await createTransaction(page, { type: 'DESPESA', amount: '3000', description: 'Item Três Resumo', category: 'Outros' });
+    await createTransaction(page, { type: 'DESPESA', amount: '4000', description: 'Item Quatro Resumo', category: 'Outros' });
+    await createTransaction(page, { type: 'DESPESA', amount: '5000', description: 'Item Cinco Resumo', category: 'Outros' });
+
+    await expect(page.locator('#fullTransactionsList .transaction-card')).toHaveCount(3);
+    await expect(page.locator('#btnToggleMovements')).toBeVisible();
+    await expect(page.locator('#btnToggleMovements')).toContainText('Ver todas (5)');
+
+    await page.click('#btnToggleMovements');
+    await expect(page.locator('#fullTransactionsList .transaction-card')).toHaveCount(5);
+    await expect(page.locator('#btnToggleMovements')).toContainText('Ver menos');
+
+    await page.click('#btnToggleMovements');
+    await expect(page.locator('#fullTransactionsList .transaction-card')).toHaveCount(3);
+
+    await page.click('.linsora-card.category-variation-item:has-text("Outros")');
+    await expect(page.locator('#fullTransactionsList .transaction-card')).toHaveCount(3);
+    await expect(page.locator('#btnToggleMovements')).toContainText('Ver todas (5)');
+    await page.click('#btnToggleMovements');
+    await expect(page.locator('#fullTransactionsList .transaction-card')).toHaveCount(5);
+    await page.click('#btnToggleMovements');
+    await page.click('#btnActiveCategory');
+    await expect(page.locator('#fullTransactionsList .transaction-card')).toHaveCount(3);
   });
 });
