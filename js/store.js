@@ -426,6 +426,48 @@ class LinsoraStore {
   }
 
   /**
+   * Transações do mês calendário atual (01 → hoje, local, sem UTC/futuras).
+   * Reutiliza a infraestrutura de período do Extrato (getPeriodBounds/txInBounds),
+   * disponível globalmente em tempo de execução. Base dos indicadores "do Mês".
+   */
+  getCurrentMonthTransactions() {
+    if (!this.state || !this.state.transactions) return [];
+    if (typeof getPeriodBounds !== 'function' || typeof txInBounds !== 'function') {
+      return [...this.state.transactions];
+    }
+    const bounds = getPeriodBounds('THIS_MONTH');
+    return this.state.transactions.filter(t => txInBounds(t, bounds));
+  }
+
+  getCurrentMonthIncome() {
+    return this.getCurrentMonthTransactions()
+      .filter(t => t.type === 'RECEITA')
+      .reduce((acc, t) => acc + (Number(t.amount) || 0), 0);
+  }
+
+  getCurrentMonthExpense() {
+    return this.getCurrentMonthTransactions()
+      .filter(t => t.type === 'DESPESA')
+      .reduce((acc, t) => acc + (Number(t.amount) || 0), 0);
+  }
+
+  getCurrentMonthBalance() {
+    return this.getCurrentMonthIncome() - this.getCurrentMonthExpense();
+  }
+
+  getCurrentMonthCommitmentPct() {
+    const income = this.getCurrentMonthIncome();
+    if (income <= 0) return 0;
+    const expense = this.getCurrentMonthExpense();
+    return Math.min(100, Math.round((expense / income) * 100));
+  }
+
+  getCurrentMonthSaved() {
+    const balance = this.getCurrentMonthBalance();
+    return balance > 0 ? balance : 0;
+  }
+
+  /**
    * Indicador de Saúde Financeira (0 a 100) — Condicional
    */
   calculateFinancialHealthScore() {
@@ -437,9 +479,9 @@ class LinsoraStore {
     }
 
     let score = 100;
-    const income = this.getMonthIncome();
-    const expense = this.getMonthExpense();
-    const commitmentPct = this.getIncomeCommitmentPct();
+    const income = this.getCurrentMonthIncome();
+    const expense = this.getCurrentMonthExpense();
+    const commitmentPct = this.getCurrentMonthCommitmentPct();
 
     if (income > 0) {
       if (commitmentPct > 90) score -= 35;
@@ -536,7 +578,7 @@ class LinsoraStore {
     const now = new Date();
     const hours = String(now.getHours()).padStart(2, '0');
     const mins = String(now.getMinutes()).padStart(2, '0');
-    return `Atualizado hoje às ${hours}:${mins}`;
+    return `Visualizado hoje às ${hours}:${mins}`;
   }
 
   /**
@@ -551,16 +593,16 @@ class LinsoraStore {
       };
     }
 
-    const income = this.getMonthIncome();
-    const expense = this.getMonthExpense();
-    const balance = this.getMonthBalance();
+    const income = this.getCurrentMonthIncome();
+    const expense = this.getCurrentMonthExpense();
+    const balance = this.getCurrentMonthBalance();
     const hideValues = this.isHideValues;
     const goals = this.state.goals || [];
 
-    // Encontrar maior categoria
-    const expTxs = this.state.transactions.filter(t => t.type === 'DESPESA');
+    // Encontrar maior categoria do mês atual
+    const expTxs = this.getCurrentMonthTransactions().filter(t => t.type === 'DESPESA');
     const catTotals = {};
-    expTxs.forEach(t => catTotals[t.category] = (catTotals[t.category] || 0) + t.amount);
+    expTxs.forEach(t => catTotals[t.category] = (catTotals[t.category] || 0) + (Number(t.amount) || 0));
     let topCat = null;
     let topCatVal = 0;
     Object.keys(catTotals).forEach(c => {
@@ -574,7 +616,7 @@ class LinsoraStore {
       return {
         isActionable: true,
         title: '⚠️ Alerta de Orçamento',
-        text: `Suas despesas superaram suas receitas em **${LinsoraUtils.formatBRL(Math.abs(balance), hideValues)}**. Recomendamos cortar gastos secundários em **${topCat || 'Outros'}**.`
+        text: `Suas despesas superaram suas receitas em ${LinsoraUtils.formatBRL(Math.abs(balance), hideValues)}. Recomendamos cortar gastos secundários em ${topCat || 'Outros'}.`
       };
     }
 
@@ -583,7 +625,7 @@ class LinsoraStore {
       return {
         isActionable: true,
         title: '🎯 Oportunidade de Economia',
-        text: `Você possui **${LinsoraUtils.formatBRL(balance, hideValues)}** livres este mês. Que tal guardar uma parte na sua meta **"${targetGoal.title}"**?`
+        text: `Você possui ${LinsoraUtils.formatBRL(balance, hideValues)} livres este mês. Que tal guardar uma parte na sua meta "${LinsoraUtils.escapeHTML(targetGoal.title)}"?`
       };
     }
 
@@ -591,14 +633,14 @@ class LinsoraStore {
       return {
         isActionable: true,
         title: '✨ Boa Margem Financeira',
-        text: `Suas receitas superaram as despesas em **${LinsoraUtils.formatBRL(balance, hideValues)}**. Mantenha essa margem para reforçar sua reserva de emergência.`
+        text: `Suas receitas superaram as despesas em ${LinsoraUtils.formatBRL(balance, hideValues)}. Mantenha essa margem para reforçar sua reserva de emergência.`
       };
     }
 
     return {
       isActionable: true,
       title: '📊 Análise de Movimentações',
-      text: `Seu maior volume de gasto no mês foi em **${topCat || 'Alimentação'}** (${LinsoraUtils.formatBRL(topCatVal, hideValues)}).`
+      text: `Seu maior volume de gasto no mês foi em ${topCat || 'Alimentação'} (${LinsoraUtils.formatBRL(topCatVal, hideValues)}).`
     };
   }
 

@@ -38,21 +38,6 @@ window.switchTab = function(tabId) {
     if (tabId === 'tabProfile') fabVoiceBtn.classList.add('hidden');
     else fabVoiceBtn.classList.remove('hidden');
   }
-
-  if (tabId === 'tabDashboard' && window.linsoraStore && window.linsoraStore.state) {
-    setTimeout(() => {
-      const activePeriodPill = document.querySelector('#periodPillsSelector .period-pill.active');
-      const activeMetricPill = document.querySelector('#metricPillsSelector .period-pill.active');
-
-      const period = activePeriodPill ? activePeriodPill.getAttribute('data-period') : 'monthly';
-      const metric = activeMetricPill ? activeMetricPill.getAttribute('data-metric') : 'all';
-
-      if (window.LinsoraChartEngine) {
-        LinsoraChartEngine.renderCashflowChart('cashflowChart', window.linsoraStore.state.transactions, period, metric);
-        LinsoraChartEngine.renderCategoryDonutChart('categoryChart', window.linsoraStore.state.transactions, 'categoryLegendGrid');
-      }
-    }, 50);
-  }
 };
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -204,12 +189,11 @@ function renderAppUI(state) {
   const healthObj = window.linsoraStore.calculateFinancialHealthScore();
   LinsoraUI.renderFinancialHealthScore(healthObj);
 
-  // 1. HERO CARD: SALDO DO MÊS, TIMESTAMP E REFORMA DO PATRIMÔNIO COM VARIAÇÃO
-  const monthBalance = window.linsoraStore.getMonthBalance();
-  const monthIncome = window.linsoraStore.getMonthIncome();
-  const monthExpense = window.linsoraStore.getMonthExpense();
+  // 1. HERO CARD: SALDO DO MÊS (mês calendário atual) + PATRIMÔNIO TOTAL (atual)
+  const monthBalance = window.linsoraStore.getCurrentMonthBalance();
+  const monthIncome = window.linsoraStore.getCurrentMonthIncome();
+  const monthExpense = window.linsoraStore.getCurrentMonthExpense();
   const totalNetWorth = window.linsoraStore.getTotalNetWorth();
-  const netWorthVar = window.linsoraStore.getMonthNetWorthVariation();
   const lastUpdated = window.linsoraStore.getLastUpdatedTimestamp();
 
   const elMonthBalance = document.getElementById('monthBalanceAmount');
@@ -235,12 +219,6 @@ function renderAppUI(state) {
   const elNetWorthMain = document.getElementById('totalNetWorthMain');
   if (elNetWorthMain) elNetWorthMain.innerText = LinsoraUtils.formatBRL(totalNetWorth, hideValues);
 
-  const elNetWorthVarBadge = document.getElementById('netWorthVariationBadge');
-  if (elNetWorthVarBadge) {
-    elNetWorthVarBadge.innerText = netWorthVar.text;
-    elNetWorthVarBadge.className = `nw-variation-badge ${netWorthVar.isPositive ? 'positive' : 'negative'}`;
-  }
-
   // 2. INSIGHTS INTELIGENTES RECOMENDATÓRIOS ACIONÁVEIS
   const insightObj = window.linsoraStore.generateSmartInsights();
   const insightContainer = document.getElementById('smartInsightBody');
@@ -252,16 +230,14 @@ function renderAppUI(state) {
     `;
   }
 
-  // 3. PAINEL DE RESUMO FINANCEIRO (GRID OU BANNER SIMPLIFICADO)
-  const commitmentPct = window.linsoraStore.getIncomeCommitmentPct();
-  const savedAmount = window.linsoraStore.getSavedAmountMonth();
+  // 3. PAINEL DE RESUMO FINANCEIRO (mês atual + estados atuais)
+  const commitmentPct = window.linsoraStore.getCurrentMonthCommitmentPct();
+  const savedAmount = window.linsoraStore.getCurrentMonthSaved();
   const openInvoicesTotal = window.linsoraStore.getOpenInvoicesTotal();
   const goalsAvgPct = window.linsoraStore.getAverageGoalProgress();
-  const billsCount = (state.fixedBills || []).length;
-  const availableAmount = Math.max(0, monthBalance);
   const hasTxData = (state.transactions || []).length > 0;
 
-  LinsoraUI.renderResumoWidgets(commitmentPct, savedAmount, openInvoicesTotal, goalsAvgPct, billsCount, availableAmount, hasTxData);
+  LinsoraUI.renderResumoWidgets(commitmentPct, savedAmount, openInvoicesTotal, goalsAvgPct, hasTxData);
 
   // 4. NOTIFICAÇÕES & GRÁFICOS
   const activeNotifs = window.linsoraNotifs.evaluate(state);
@@ -273,14 +249,7 @@ function renderAppUI(state) {
   }
 
   if (window.LinsoraChartEngine) {
-    const activePeriodPill = document.querySelector('#periodPillsSelector .period-pill.active');
-    const activeMetricPill = document.querySelector('#metricPillsSelector .period-pill.active');
-
-    const period = activePeriodPill ? activePeriodPill.getAttribute('data-period') : 'monthly';
-    const metric = activeMetricPill ? activeMetricPill.getAttribute('data-metric') : 'all';
-
-    LinsoraChartEngine.renderCashflowChart('cashflowChart', state.transactions, period, metric);
-    LinsoraChartEngine.renderCategoryDonutChart('categoryChart', state.transactions, 'categoryLegendGrid');
+    LinsoraChartEngine.renderCategoryDonutChart('categoryChart', window.linsoraStore.getCurrentMonthTransactions(), 'categoryLegendGrid');
   }
 
   LinsoraUI.renderTransactionsList('recentTransactionsList', state.transactions, 3);
@@ -316,8 +285,8 @@ function isValidTxDate(tx) {
  * Limites do período selecionado em chaves locais YYYY-MM-DD (sem UTC,
  * sem deslocamento de dia). Retorna null para Todo Período (sem limites).
  */
-function getPeriodBounds() {
-  const period = window.linsoraStore.filterPeriod || 'ALL';
+function getPeriodBounds(forcePeriod) {
+  const period = forcePeriod || window.linsoraStore.filterPeriod || 'ALL';
   const today = new Date();
   const todayKey = toLocalDateKey(today);
   switch (period) {
@@ -639,38 +608,6 @@ function setupEventListeners() {
       e.stopPropagation();
       const tabId = this.getAttribute('data-tab');
       window.switchTab(tabId);
-    };
-  });
-
-  // Seletor de Período do Fluxo de Caixa (Diário / Semanal / Mensal)
-  document.querySelectorAll('#periodPillsSelector .period-pill').forEach(pill => {
-    pill.onclick = function() {
-      document.querySelectorAll('#periodPillsSelector .period-pill').forEach(p => p.classList.remove('active'));
-      this.classList.add('active');
-      
-      const period = this.getAttribute('data-period');
-      const activeMetricPill = document.querySelector('#metricPillsSelector .period-pill.active');
-      const metric = activeMetricPill ? activeMetricPill.getAttribute('data-metric') : 'all';
-
-      if (window.LinsoraChartEngine && window.linsoraStore && window.linsoraStore.state) {
-        LinsoraChartEngine.renderCashflowChart('cashflowChart', window.linsoraStore.state.transactions, period, metric);
-      }
-    };
-  });
-
-  // Seletor de Métrica do Fluxo de Caixa (Todas | Entradas | Saídas | Saldo)
-  document.querySelectorAll('#metricPillsSelector .period-pill').forEach(pill => {
-    pill.onclick = function() {
-      document.querySelectorAll('#metricPillsSelector .period-pill').forEach(p => p.classList.remove('active'));
-      this.classList.add('active');
-
-      const metric = this.getAttribute('data-metric');
-      const activePeriodPill = document.querySelector('#periodPillsSelector .period-pill.active');
-      const period = activePeriodPill ? activePeriodPill.getAttribute('data-period') : 'monthly';
-
-      if (window.LinsoraChartEngine && window.linsoraStore && window.linsoraStore.state) {
-        LinsoraChartEngine.renderCashflowChart('cashflowChart', window.linsoraStore.state.transactions, period, metric);
-      }
     };
   });
 

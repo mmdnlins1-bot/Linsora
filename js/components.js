@@ -20,7 +20,7 @@ class LinsoraUIComponentEngine {
         <div class="empty-state-card">
           <div class="empty-icon">💸</div>
           <p>Nenhuma transação cadastrada</p>
-          <span class="empty-sub">Clique no botão **+ Nova Transação** ou nas Ações Rápidas para registrar.</span>
+          <span class="empty-sub">Você ainda não tem movimentações neste período. Toque no botão + para registrar uma receita ou despesa.</span>
         </div>
       `;
       return;
@@ -36,7 +36,7 @@ class LinsoraUIComponentEngine {
       const dateFormatted = LinsoraUtils.formatDateBR(tx.date);
 
       return `
-        <div class="transaction-card ${isIncome ? 'income-card' : 'expense-card'}" onclick="LinsoraUI.openTxDetails('${tx.id}')">
+        <div class="transaction-card ${isIncome ? 'income-card' : 'expense-card'}" role="button" tabindex="0" onclick="LinsoraUI.openTxDetails('${tx.id}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();LinsoraUI.openTxDetails('${tx.id}')}">
           <div class="tx-left">
             <div class="tx-icon-wrapper ${isIncome ? 'income-glow' : 'expense-glow'}">${icon}</div>
             <div class="tx-info">
@@ -91,7 +91,7 @@ class LinsoraUIComponentEngine {
   /**
    * Renderiza os Cards de Resumo Financeiro ou Banner Simplificado se sem dados
    */
-  renderResumoWidgets(commitmentPct, savedAmount, openInvoicesTotal, goalsAvgPct, billsCount, availableAmount, hasTxData) {
+  renderResumoWidgets(commitmentPct, savedAmount, openInvoicesTotal, goalsAvgPct, hasTxData) {
     const container = document.getElementById('resumoWidgetsContainer');
     if (!container) return;
 
