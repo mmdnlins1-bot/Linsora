@@ -105,4 +105,39 @@ test.describe('10 - Assistente Pessoal Inteligente & Conselheiro Estratégico', 
     await expect(responseCard).toBeVisible();
     await expect(responseCard).toContainText('Análise Diagnóstica');
   });
+
+  test('Deve atualizar o feed do Conselheiro após criar e excluir movimentação', async ({ page }) => {
+    const feedCard = page.locator('#strategicFeedContainer .smart-insights-card');
+    await expect(feedCard).toBeVisible();
+
+    const baseline = await page.locator('#strategicFeedContainer').innerHTML();
+
+    // Cria receita relevante via fluxo normal do store (notify -> renderAppUI)
+    await page.evaluate(() => window.linsoraStore.saveTransaction({
+      type: 'RECEITA',
+      amount: 5000,
+      description: 'Salário Feed Teste',
+      category: 'Salário',
+      date: window.LinsoraUtils.toLocalDateKey(),
+      account: 'Conta Principal',
+      repetition: 'SINGLE',
+      notes: '',
+    }));
+
+    const afterCreate = await page.locator('#strategicFeedContainer').innerHTML();
+    expect(afterCreate).not.toBe(baseline);
+    // Sem duplicação: continua existindo exatamente um card com botão funcional
+    await expect(page.locator('#strategicFeedContainer .smart-insights-card')).toHaveCount(1);
+    await expect(page.locator('#btnOpenAdvisorFromFeed')).toBeVisible();
+
+    // Exclui a movimentação: feed deve ser recalculado (volta ao estado anterior)
+    await page.evaluate(async () => {
+      const tx = window.linsoraStore.state.transactions.find(t => t.description === 'Salário Feed Teste');
+      if (tx) await window.linsoraStore.deleteTransaction(tx.id);
+    });
+
+    const afterDelete = await page.locator('#strategicFeedContainer').innerHTML();
+    expect(afterDelete).toBe(baseline);
+    await expect(page.locator('#strategicFeedContainer .smart-insights-card')).toHaveCount(1);
+  });
 });

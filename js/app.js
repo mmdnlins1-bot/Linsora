@@ -258,6 +258,13 @@ function renderAppUI(state) {
   LinsoraUI.renderGoalsList('goalsGridList', state.goals);
   LinsoraUI.renderFixedBillsList('fixedBillsList', state.fixedBills);
   LinsoraUI.renderNotificationsFeed('notificationsFeed', activeNotifs);
+
+  // Conselheiro IA: recalcula o feed a cada render com os dados em memória.
+  // Ponto único de atualização (usa o subscribe/notify existente, sem timers
+  // ou listeners novos). O boot com setTimeout permanece como fallback.
+  if (window.LinsoraStrategicAdvisor) {
+    window.LinsoraStrategicAdvisor.renderHomeFeed();
+  }
 }
 
 function toLocalDateKey(date) {
