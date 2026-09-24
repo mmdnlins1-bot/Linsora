@@ -203,12 +203,6 @@
             <button type="submit" class="linsora-btn primary block lg" id="btnSubmitAuth">Entrar na Conta</button>
           </form>
 
-          <div style="margin-top: 12px;">
-            <button type="button" class="linsora-btn secondary outline block sm" id="btnBiometricAuth">
-              ⚡ Acesso Rápido por PIN / Biometria
-            </button>
-          </div>
-
           <div class="auth-toggle">
             <span id="toggleText">Ainda não tem conta?</span>
             <button type="button" class="link-btn-bold" id="btnToggleAuthMode">Cadastrar-se</button>
@@ -680,15 +674,6 @@
                 </div>
 
                 <div class="setting-item">
-                  <div class="setting-icon">🔒</div>
-                  <div class="setting-text">
-                    <strong>Segurança por PIN</strong>
-                    <span>Exigir código PIN de 4 dígitos ao abrir</span>
-                  </div>
-                  <button type="button" class="linsora-btn outline sm" id="btnTogglePIN">Configurar PIN</button>
-                </div>
-
-                <div class="setting-item">
                   <div class="setting-icon">🤖</div>
                   <div class="setting-text">
                     <strong>Classificação Automática por IA</strong>
@@ -1032,41 +1017,6 @@
               Enviar Link de Redefinição
             </button>
           </form>
-        </div>
-      </div>
-
-      <div class="linsora-modal-overlay hidden" id="modalPinPad">
-        <div class="linsora-modal-content floating-center-card pin-modal-enhanced" style="text-align: center; max-width: 340px;">
-          <div class="modal-header">
-            <h3 id="pinPadTitle">🔒 Digite seu PIN de 4 Dígitos</h3>
-            <button type="button" class="modal-close" data-close-modal="modalPinPad">✕</button>
-          </div>
-
-          <p id="pinPadSubtitle" style="font-size: 13px; color: var(--text-muted); margin-bottom: 20px;">
-            Proteja suas finanças com um código de segurança.
-          </p>
-
-          <div class="pin-dots" id="pinDots">
-            <span class="pin-dot"></span>
-            <span class="pin-dot"></span>
-            <span class="pin-dot"></span>
-            <span class="pin-dot"></span>
-          </div>
-
-          <div class="pin-keypad">
-            <button type="button" class="pin-key" data-num="1">1</button>
-            <button type="button" class="pin-key" data-num="2">2</button>
-            <button type="button" class="pin-key" data-num="3">3</button>
-            <button type="button" class="pin-key" data-num="4">4</button>
-            <button type="button" class="pin-key" data-num="5">5</button>
-            <button type="button" class="pin-key" data-num="6">6</button>
-            <button type="button" class="pin-key" data-num="7">7</button>
-            <button type="button" class="pin-key" data-num="8">8</button>
-            <button type="button" class="pin-key" data-num="9">9</button>
-            <button type="button" class="pin-key action" id="btnPinBiometric" title="Desbloquear por Biometria">👆</button>
-            <button type="button" class="pin-key" data-num="0">0</button>
-            <button type="button" class="pin-key action" id="btnPinDelete" title="Apagar último dígito">⌫</button>
-          </div>
         </div>
       </div>
 

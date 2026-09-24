@@ -830,8 +830,6 @@ class SupabaseRepository {
         email: userObj?.email ? String(userObj.email).toLowerCase().trim() : 'usuario@linsora.com.br',
         avatar: userObj?.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80',
         plan: 'PRO',
-        isPinEnabled: false,
-        pinCode: '1234',
         isAiClassificationEnabled: true
       },
       accounts: [],
@@ -938,8 +936,6 @@ class SupabaseRepository {
               email: userObj?.email ? String(userObj.email).toLowerCase().trim() : (localCache?.user?.email || 'usuario@linsora.com.br'),
               avatar: userObj?.avatar || localCache?.user?.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80',
               plan: 'PRO',
-              isPinEnabled: localCache?.user?.isPinEnabled || false,
-              pinCode: localCache?.user?.pinCode || '1234',
               isAiClassificationEnabled: localCache?.user?.isAiClassificationEnabled !== false
             },
             accounts:     mergeById(remoteAccounts,     localCache?.accounts),
@@ -1006,8 +1002,6 @@ class SupabaseRepository {
           full_name: data.user.name,
           avatar_url: data.user.avatar,
           plan: data.user.plan,
-          pin_code: data.user.pinCode,
-          is_pin_enabled: data.user.isPinEnabled,
           is_ai_enabled: data.user.isAiClassificationEnabled
         };
         const { error } = await this.supabase.from('profiles').upsert([profile]);

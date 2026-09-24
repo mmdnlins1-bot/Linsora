@@ -86,22 +86,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   const sessionRes = await window.supabaseRepo.checkActiveSession();
   console.log('[AUDITORIA_SESSAO] Restauração da sessão concluída. Resultado:', sessionRes?.success);
 
-  // 5. Roteamento único e definitivo após a verificação
+  // 5. Roteamento único e definitivo após a verificação.
+  // Sessão válida entra direto no aplicativo (sem PIN/biometria).
   if (sessionRes.success) {
     // Carrega os dados do usuário e renderiza a UI com estado real
     await window.linsoraStore.loadUserData(sessionRes.user);
     renderAppUI(window.linsoraStore.state);
-
-    const userState = window.linsoraStore.state?.user;
-    if (userState && userState.isPinEnabled) {
-      // Sessão válida com PIN: esconde splash, pede PIN/biometria
-      hideSplashScreen();
-      openPinPad('UNLOCK');
-      triggerBiometricAuth();
-    } else {
-      // Sessão válida sem PIN: vai direto para o Dashboard
-      grantAppAccess();
-    }
+    grantAppAccess();
   } else {
     // Sem sessão: renderiza estado vazio e exibe tela de login
     renderAppUI(window.linsoraStore.state);
@@ -185,11 +176,6 @@ function renderAppUI(state) {
 
   const userAvatarHeader = document.getElementById('userAvatar');
   if (userAvatarHeader && state.user.avatar) userAvatarHeader.src = state.user.avatar;
-
-  const btnTogglePIN = document.getElementById('btnTogglePIN');
-  if (btnTogglePIN) {
-    btnTogglePIN.innerText = state.user.isPinEnabled ? 'Ativado 🔒' : 'Configurar PIN';
-  }
 
   const btnToggleAI = document.getElementById('btnToggleAI');
   if (btnToggleAI) {
@@ -590,234 +576,6 @@ function setupEventListeners() {
       const res = await window.supabaseRepo.resetPassword(email);
       LinsoraUI.closeModal('modalForgotPassword');
       LinsoraUI.showToast(res.message);
-    };
-  }
-
-  let enteredPin = '';
-  let currentPinMode = 'UNLOCK';
-
-  async function triggerBiometricAuth() {
-    try {
-      if (window.PublicKeyCredential && await window.PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable()) {
-        const challenge = new Uint8Array(32);
-        window.crypto.getRandomValues(challenge);
-        
-        const options = {
-          publicKey: {
-            challenge: challenge,
-            rp: { name: "LINSORA Finances" },
-            user: {
-              id: new Uint8Array(16),
-              name: window.linsoraStore.state.user?.email || "usuario@linsora.com.br",
-              displayName: window.linsoraStore.state.user?.name || "Usuário"
-            },
-            pubKeyCredParams: [{ alg: -7, type: "public-key" }],
-            timeout: 60000,
-            authenticatorSelection: { authenticatorAttachment: "platform", userVerification: "preferred" }
-          }
-        };
-
-        try {
-          await navigator.credentials.create(options);
-          LinsoraUI.closeModal('modalPinPad');
-          grantAppAccess();
-          return true;
-        } catch (authErr) {
-          if (authErr.name !== 'NotAllowedError') {
-            LinsoraUI.closeModal('modalPinPad');
-            grantAppAccess();
-            return true;
-          }
-        }
-      }
-    } catch (e) {
-      console.warn('Biometria não disponível neste dispositivo:', e);
-    }
-    
-    return false;
-  }
-
-  const btnBiometric = document.getElementById('btnBiometricAuth');
-  if (btnBiometric) {
-    btnBiometric.onclick = async () => {
-      let userToLog = null;
-      try {
-        const rawSession = localStorage.getItem('LINSORA_ACTIVE_LOCAL_SESSION');
-        if (rawSession) {
-          userToLog = JSON.parse(rawSession);
-        } else {
-          const allUsersRaw = localStorage.getItem('LINSORA_REGISTERED_USERS');
-          const allUsers = allUsersRaw ? JSON.parse(allUsersRaw) : [];
-          userToLog = allUsers.find(u => u.isPinEnabled && u.pinCode) || allUsers[0];
-        }
-      } catch(e) {}
-
-      if (userToLog) {
-         await window.linsoraStore.loadUserData(userToLog);
-         openPinPad('UNLOCK');
-         await triggerBiometricAuth();
-      } else {
-         LinsoraUI.showToast('Nenhuma conta salva com PIN. Faça login com e-mail e senha.', 'error');
-      }
-    };
-  }
-
-  const btnPinBiometric = document.getElementById('btnPinBiometric');
-  if (btnPinBiometric) {
-    btnPinBiometric.onclick = async () => {
-      await triggerBiometricAuth();
-    };
-  }
-
-  function openPinPad(mode = 'UNLOCK') {
-    enteredPin = '';
-    currentPinMode = mode;
-    updatePinDots();
-    
-    const title = document.getElementById('pinPadTitle');
-    const subtitle = document.getElementById('pinPadSubtitle');
-
-    if (mode === 'SETUP') {
-      if (title) title.innerText = '🔒 Defina seu PIN de 4 Dígitos';
-      if (subtitle) subtitle.innerText = 'Digite um novo código numérico para proteger o app.';
-    } else {
-      if (title) title.innerText = '🔑 Digite seu PIN de Acesso';
-      if (subtitle) subtitle.innerText = 'Insira seu PIN de 4 dígitos para desbloquear.';
-    }
-
-    LinsoraUI.openModal('modalPinPad');
-  }
-
-  document.querySelectorAll('.pin-key[data-num]').forEach(key => {
-    key.onclick = function() {
-      if (enteredPin.length < 4) {
-        enteredPin += this.getAttribute('data-num');
-        updatePinDots();
-
-        if (enteredPin.length === 4) {
-          setTimeout(() => processPinEntry(), 150);
-        }
-      }
-    };
-  });
-
-  document.getElementById('btnPinClear')?.addEventListener('click', () => {
-    enteredPin = '';
-    updatePinDots();
-  });
-
-  document.getElementById('btnPinDelete')?.addEventListener('click', () => {
-    if (enteredPin.length > 0) {
-      enteredPin = enteredPin.slice(0, -1);
-      updatePinDots();
-    }
-  });
-
-  function updatePinDots() {
-    document.querySelectorAll('#pinDots .pin-dot').forEach((dot, idx) => {
-      if (idx < enteredPin.length) dot.classList.add('filled');
-      else dot.classList.remove('filled');
-    });
-  }
-
-  // S8B: rate-limit do PIN pad (por usuário, somente contadores — nunca o PIN).
-  const PIN_MAX_ATTEMPTS = 5;
-  const PIN_MAX_LOCK_MS = 15 * 60 * 1000;
-
-  function processPinEntry() {
-    if (!window.linsoraStore.state.user) {
-      enteredPin = '';
-      updatePinDots();
-      LinsoraUI.closeModal('modalPinPad');
-      LinsoraUI.showToast('Erro: Sessão não encontrada. Faça login com e-mail.', 'error');
-      return;
-    }
-    const savedPin = window.linsoraStore.state.user?.pinCode;
-
-    if (currentPinMode === 'SETUP') {
-      window.linsoraStore.setPinCode(enteredPin);
-      enteredPin = '';
-      updatePinDots();
-      LinsoraUI.closeModal('modalPinPad');
-      return;
-    }
-
-    if (!savedPin) {
-      window.linsoraStore.setPinCode(enteredPin);
-      LinsoraUI.closeModal('modalPinPad');
-      grantAppAccess();
-      return;
-    }
-
-    // S8B: somente o PIN configurado desbloqueia (sem bypass). Proteção contra
-    // tentativas repetidas: 5 falhas consecutivas bloqueiam progressivamente
-    // (30s dobrando até 15min). Contador por usuário, sem expor o PIN.
-    const pinLock = getPinLockState();
-    if (pinLock.lockedUntil && Date.now() < pinLock.lockedUntil) {
-      const secs = Math.ceil((pinLock.lockedUntil - Date.now()) / 1000);
-      enteredPin = '';
-      updatePinDots();
-      LinsoraUI.showToast(`PIN temporariamente bloqueado após várias tentativas. Tente novamente em ${secs}s.`, 'error');
-      return;
-    }
-
-    if (enteredPin === savedPin) {
-      clearPinLockState();
-      LinsoraUI.closeModal('modalPinPad');
-      grantAppAccess();
-    } else {
-      const count = (pinLock.count || 0) + 1;
-      if (count >= PIN_MAX_ATTEMPTS) {
-        const lockedUntil = Date.now() + pinLockMs(count);
-        setPinLockState(count, lockedUntil);
-        const secs = Math.ceil(pinLockMs(count) / 1000);
-        LinsoraUI.showToast(`Muitas tentativas incorretas. PIN bloqueado por ${secs}s.`, 'error');
-      } else {
-        setPinLockState(count, 0);
-        LinsoraUI.showToast(`PIN incorreto. Tentativa ${count} de ${PIN_MAX_ATTEMPTS}.`, 'error');
-      }
-      enteredPin = '';
-      updatePinDots();
-    }
-  }
-
-  function pinAttemptKey() {
-    const uid = (window.linsoraStore.state.user && window.linsoraStore.state.user.id) || 'guest';
-    return 'LINSORA_PIN_ATTEMPTS_' + uid;
-  }
-
-  function getPinLockState() {
-    try {
-      const raw = localStorage.getItem(pinAttemptKey());
-      if (!raw) return { count: 0, lockedUntil: 0 };
-      const o = JSON.parse(raw);
-      return { count: o.count || 0, lockedUntil: o.lockedUntil || 0 };
-    } catch (e) {
-      return { count: 0, lockedUntil: 0 };
-    }
-  }
-
-  function setPinLockState(count, lockedUntil) {
-    try {
-      if (!count && !lockedUntil) localStorage.removeItem(pinAttemptKey());
-      else localStorage.setItem(pinAttemptKey(), JSON.stringify({ count, lockedUntil }));
-    } catch (e) { /* storage indisponível: segue sem persistir */ }
-  }
-
-  function clearPinLockState() {
-    setPinLockState(0, 0);
-  }
-
-  function pinLockMs(count) {
-    const step = Math.max(0, count - PIN_MAX_ATTEMPTS);
-    return Math.min(PIN_MAX_LOCK_MS, 30000 * Math.pow(2, step));
-  }
-
-  const btnTogglePIN = document.getElementById('btnTogglePIN');
-  if (btnTogglePIN) {
-    btnTogglePIN.onclick = () => {
-      const isEnabled = window.linsoraStore.togglePinSecurity();
-      if (isEnabled) openPinPad('SETUP');
     };
   }
 

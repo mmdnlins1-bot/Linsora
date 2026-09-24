@@ -27,22 +27,6 @@ test.describe('06. Módulo de Configurações, Perfil & Relatórios', () => {
     await expect(btnAi).toBeVisible();
   });
 
-  test('Deve abrir o teclado PIN de Segurança', async ({ page }) => {
-    await page.click('.bottom-nav .nav-item[data-tab="tabProfile"]');
-    
-    await page.click('#btnTogglePIN');
-    await expect(page.locator('#modalPinPad')).toBeVisible();
-    await expect(page.locator('#pinPadTitle')).toContainText('PIN');
-
-    // Digitar PIN 1-2-3-4
-    await page.click('.pin-key[data-num="1"]');
-    await page.click('.pin-key[data-num="2"]');
-    await page.click('.pin-key[data-num="3"]');
-    await page.click('.pin-key[data-num="4"]');
-
-    await expect(page.locator('#modalPinPad')).toHaveClass(/hidden/, { timeout: 5000 });
-  });
-
   test('Deve alterar a foto de perfil, atualizar a interface imediatamente e persistir após fechar/reabrir', async ({ page }) => {
     await page.click('.bottom-nav .nav-item[data-tab="tabProfile"]');
     await expect(page.locator('#tabProfile')).toBeVisible();

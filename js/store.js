@@ -91,20 +91,6 @@ class LinsoraStore {
     return this.state.user.isAiClassificationEnabled;
   }
 
-  setPinCode(pin) {
-    if (!this.state.user) return;
-    this.state.user.pinCode = pin;
-    this.state.user.isPinEnabled = true;
-    this.notify();
-  }
-
-  togglePinSecurity() {
-    if (!this.state.user) return false;
-    this.state.user.isPinEnabled = !this.state.user.isPinEnabled;
-    this.notify();
-    return this.state.user.isPinEnabled;
-  }
-
   /* ------------------------------------------------------------------------
      OPERAÇÕES DE TRANSAÇÕES
      ------------------------------------------------------------------------ */
