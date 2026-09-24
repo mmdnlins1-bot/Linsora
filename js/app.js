@@ -66,17 +66,18 @@ document.addEventListener('DOMContentLoaded', async () => {
   setupEventListeners();
   LinsoraUtils.attachCurrencyMasks();
 
-  // 2. Warm-up do storage: carrega o token Supabase do Capacitor.Preferences
-  //    para o _supabaseMemCache ANTES de qualquer chamada ao Supabase SDK.
-  //    Crítico para que getSession() encontre o token já na primeira chamada.
+  // 2. Warm-up do storage: carrega os tokens Supabase do storage persistente
+  //    (Capacitor Preferences + localStorage) para o _supabaseMemCache ANTES
+  //    de criar o cliente. Crítico para que getSession() encontre o token
+  //    já na primeira chamada, inclusive após fechar totalmente o app.
   console.log('[AUDITORIA_SESSAO] Pré-aquecendo storage do Supabase...');
   if (window.supabaseRepo?.warmUpStorage) {
     await window.supabaseRepo.warmUpStorage();
   }
 
-  // 3. Re-inicializa o SDK com o cache já populado (necessário quando
-  //    a configuração já existia e o SDK foi criado no construtor sem warm-up)
-  if (window.supabaseRepo?.config?.url && window.supabaseRepo?.initSupabaseSDK) {
+  // 3. Inicialização ÚNICA do SDK (o construtor não inicializa; initSupabaseSDK
+  //    é idempotente e registra onAuthStateChange uma única vez).
+  if (window.supabaseRepo?.initSupabaseSDK) {
     window.supabaseRepo.initSupabaseSDK();
   }
 
@@ -160,6 +161,10 @@ function grantAppAccess() {
 
   window.switchTab('tabDashboard');
 }
+
+// Exposto para os testes automatizados (tests/helpers/auth.js) acionarem
+// a entrada no app sem passar pelo formulário. Sem efeito no fluxo real.
+window.grantAppAccess = grantAppAccess;
 
 function renderAppUI(state) {
   if (!state) return;

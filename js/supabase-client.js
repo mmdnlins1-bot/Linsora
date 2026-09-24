@@ -79,48 +79,141 @@ class SupabaseRepository {
     this.config = this.getSupabaseConfig();
     this.supabase = null;
     this.currentUserId = 'guest';
-    // NÃO chama initSupabaseSDK aqui — app.js chama initSupabaseSDKAsync() antes
-    // de checkActiveSession() para garantir que o warm-up seja aguardado.
-    this.initSupabaseSDK();
+    // Inicialização única e controlada: o boot (app.js) executa
+    // `await warmUpStorage()` e depois `initSupabaseSDK()` uma única vez.
+    // O construtor NÃO cria o cliente, para não inicializar antes do warm-up
+    // (o que descartaria o token persistido) nem registrar listeners duplicados.
+    this._sdkInitKey = null;
+    this._authSubscription = null;
   }
 
   /**
-   * Pré-carrega as chaves de sessão do Capacitor.Preferences para o _supabaseMemCache
-   * ANTES de instanciar o Supabase Client. Isso garante que storage.getItem() retorne
-   * o token de forma síncrona quando o SDK inicializar.
+   * Acesso unificado ao Capacitor Preferences.
+   * Usa a MESMA camada para persistir e recuperar (resolve a divergência
+   * entre a API antiga `Capacitor.Plugins.Preferences` e a nova
+   * `Capacitor.Preferences`). No navegador/PWA sem Capacitor, retorna null
+   * e o chamador usa localStorage como base.
+   */
+  _prefsPlugin() {
+    if (window.Capacitor?.Plugins?.Preferences) return window.Capacitor.Plugins.Preferences;
+    if (window.Capacitor?.Preferences) return window.Capacitor.Preferences;
+    return null;
+  }
+
+  async _prefsGet(key) {
+    try {
+      const plugin = this._prefsPlugin();
+      if (!plugin) return null;
+      const res = await plugin.get({ key }).catch(() => ({}));
+      return (res && typeof res.value === 'string') ? res.value : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  async _prefsSet(key, value) {
+    try {
+      const plugin = this._prefsPlugin();
+      if (!plugin) return;
+      await plugin.set({ key, value }).catch(() => {});
+    } catch (e) { /* persistência best-effort */ }
+  }
+
+  async _prefsRemove(key) {
+    try {
+      const plugin = this._prefsPlugin();
+      if (!plugin) return;
+      await plugin.remove({ key }).catch(() => {});
+    } catch (e) { /* remoção best-effort */ }
+  }
+
+  async _prefsKeys() {
+    try {
+      const plugin = this._prefsPlugin();
+      if (!plugin || typeof plugin.keys !== 'function') return [];
+      const res = await plugin.keys().catch(() => ({}));
+      return (res && Array.isArray(res.keys)) ? res.keys : [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  /**
+   * Pré-carrega as chaves de sessão do storage persistente para o _supabaseMemCache
+   * ANTES de instanciar o Supabase Client. Isso garante que storage.getItem()
+   * retorne o token de forma síncrona quando o SDK inicializar.
    *
    * Deve ser chamado com `await` antes de initSupabaseSDK().
+   * Carrega TODAS as chaves `sb-*` (não apenas uma), descobrindo via `keys()`
+   * as que existam somente no Capacitor Preferences (caso Android).
    */
   async warmUpStorage() {
-    if (!window.Capacitor?.Plugins?.Preferences || !this.config.url) return;
     try {
-      // Determina o prefixo da chave de sessão do Supabase (ex: sb-xyzabc-auth-token)
-      const urlHost = new URL(this.config.url).hostname;
-      const projectRef = urlHost.split('.')[0];
-      const sessionKey = `sb-${projectRef}-auth-token`;
-
-      const { value } = await window.Capacitor.Plugins.Preferences.get({ key: sessionKey })
-        .catch(() => ({ value: null }));
-
-      if (value) {
-        _supabaseMemCache[sessionKey] = value;
-        // Sincroniza de volta ao localStorage para redundância
-        localStorage.setItem(sessionKey, value);
-        console.log('[LINSORA Auth] warmUpStorage: token de sessão carregado do Capacitor Preferences para memCache.');
-      } else {
-        console.log('[LINSORA Auth] warmUpStorage: nenhum token encontrado no Capacitor Preferences.');
+      const wanted = new Set();
+      // 1. Chave da sessão derivada da URL do projeto (quando configurada)
+      if (this.config && this.config.url) {
+        try {
+          const urlHost = new URL(this.config.url).hostname;
+          const projectRef = urlHost.split('.')[0];
+          if (projectRef) wanted.add(`sb-${projectRef}-auth-token`);
+        } catch (e) { /* URL inválida: ignora chave derivada */ }
       }
-    } catch(e) {
+      // 2. Chaves sb-* já conhecidas (ex: vindas do localStorage no boot)
+      Object.keys(_supabaseMemCache).forEach(k => {
+        if (k.startsWith('sb-') || k === 'supabase.auth.token') wanted.add(k);
+      });
+      try {
+        for (let i = 0; i < localStorage.length; i++) {
+          const k = localStorage.key(i);
+          if (k && (k.startsWith('sb-') || k === 'supabase.auth.token')) wanted.add(k);
+        }
+      } catch (e) { /* localStorage indisponível */ }
+      // 3. Chaves existentes somente no Capacitor Preferences (Android)
+      const prefKeys = await this._prefsKeys();
+      prefKeys.forEach(k => {
+        if (k && (k.startsWith('sb-') || k === 'supabase.auth.token')) wanted.add(k);
+      });
+
+      let loaded = 0;
+      for (const key of wanted) {
+        if (key in _supabaseMemCache && _supabaseMemCache[key] != null) continue;
+        const fromPrefs = await this._prefsGet(key);
+        const value = fromPrefs != null ? fromPrefs : (() => {
+          try { return localStorage.getItem(key); } catch (e) { return null; }
+        })();
+        if (value != null) {
+          _supabaseMemCache[key] = value;
+          try { localStorage.setItem(key, value); } catch (e) { /* espelho best-effort */ }
+          loaded++;
+        }
+      }
+      console.log(`[LINSORA Auth] warmUpStorage: ${loaded} chave(s) de sessão carregada(s) para memCache.`);
+    } catch (e) {
       console.warn('[LINSORA Auth] warmUpStorage falhou (não crítico):', e);
     }
   }
 
   /**
-   * Inicializa o Supabase SDK de forma síncrona.
+   * Inicializa o Supabase SDK de forma síncrona (INICIALIZAÇÃO ÚNICA).
    * IMPORTANTE: Para que a sessão persista no Android, chame `await warmUpStorage()`
-   * ANTES de chamar este método (ou de instanciar SupabaseRepository).
+   * ANTES de chamar este método pela primeira vez (o boot em app.js já faz isso).
+   * Chamadas repetidas com a mesma configuração são ignoradas (sem recriar o
+   * cliente e sem registrar listeners duplicados de onAuthStateChange).
    */
   initSupabaseSDK() {
+    // Recarrega a configuração (permite override via saveSupabaseConfig após o boot)
+    this.config = this.getSupabaseConfig();
+    const initKey = `${this.config.url || ''}|${this.config.key || ''}`;
+    if (this.supabase && this._sdkInitKey === initKey) {
+      return; // já inicializado com esta configuração: nada a fazer
+    }
+    // Troca de configuração: remove o listener anterior antes de recriar
+    if (this._authSubscription) {
+      try {
+        if (typeof this._authSubscription.unsubscribe === 'function') this._authSubscription.unsubscribe();
+      } catch (e) { /* ignora */ }
+      this._authSubscription = null;
+    }
     if (this.config.url && this.config.key && window.supabase) {
       try {
         /**
@@ -143,19 +236,16 @@ class SupabaseRepository {
           setItem: (key, value) => {
             // Atualiza cache síncrono imediatamente
             _supabaseMemCache[key] = value;
-            // Persiste em localStorage (síncrono e confiável)
-            localStorage.setItem(key, value);
-            // Persiste em Capacitor Preferences (assíncrono, melhor durabilidade no Android)
-            if (window.Capacitor?.Plugins?.Preferences) {
-              window.Capacitor.Plugins.Preferences.set({ key, value }).catch(() => {});
-            }
+            // Persiste em localStorage (síncrono e confiável no navegador/PWA)
+            try { localStorage.setItem(key, value); } catch (e) { /* sem localStorage */ }
+            // Espelha no Capacitor Preferences (durável no Android).
+            // Fire-and-forget proposital: o SDK exige setItem síncrono.
+            this._prefsSet(key, value);
           },
           removeItem: (key) => {
             delete _supabaseMemCache[key];
-            localStorage.removeItem(key);
-            if (window.Capacitor?.Plugins?.Preferences) {
-              window.Capacitor.Plugins.Preferences.remove({ key }).catch(() => {});
-            }
+            try { localStorage.removeItem(key); } catch (e) { /* sem localStorage */ }
+            this._prefsRemove(key);
           }
         };
 
@@ -169,9 +259,10 @@ class SupabaseRepository {
         });
         console.log('⚡ Supabase Client SDK inicializado com memCache síncrono e suporte a Capacitor Preferences!');
 
-        // Listener reativo para manter memCache e currentUserId sincronizados
-        // com o ciclo de vida do token (refresh, expiração, logout)
-        this.supabase.auth.onAuthStateChange(async (event, session) => {
+        // Listener reativo único para manter memCache e currentUserId sincronizados
+        // com o ciclo de vida do token (refresh, expiração, logout).
+        // A inscrição é guardada para permitir unsubscribe em re-inicializações.
+        const _authStateResult = this.supabase.auth.onAuthStateChange(async (event, session) => {
           console.log('[LINSORA Auth] onAuthStateChange:', event, session?.user?.id || 'no-user');
 
           if (event === 'SIGNED_OUT' || event === 'USER_DELETED') {
@@ -201,6 +292,9 @@ class SupabaseRepository {
             this.currentUserId = session.user.id;
           }
         });
+        const _authListenerData = (_authStateResult && _authStateResult.data) || null;
+        this._authSubscription = (_authListenerData && _authListenerData.subscription) || null;
+        this._sdkInitKey = initKey;
 
       } catch (e) {
         console.warn('[LINSORA Auth] Erro ao inicializar Supabase SDK:', e);
@@ -208,13 +302,65 @@ class SupabaseRepository {
     }
   }
 
+  _readMetaContent(name) {
+    try {
+      // Pode haver mais de uma tag (placeholder vazio do HTML + valor injetado
+      // pelo build): retorna o primeiro conteúdo NÃO vazio encontrado.
+      const els = document.querySelectorAll(`meta[name="${name}"]`);
+      for (const el of els) {
+        const content = (el.getAttribute('content') || '').trim();
+        if (content) return content;
+      }
+      return '';
+    } catch (e) {
+      return '';
+    }
+  }
+
+  /**
+   * Configuração do Supabase em build time, sem segredos no código-fonte.
+   * Fontes, por prioridade:
+   *   1. Override manual em localStorage (`LINSORA_SUPABASE_CONFIG`, via saveSupabaseConfig)
+   *   2. Meta tags de build (`linsora:supabase-url` / `linsora:supabase-anon-key`)
+   *   3. Globais injetadas (`window.__LINSORA_SUPABASE_URL__` /
+   *      `window.__LINSORA_SUPABASE_ANON_KEY__` ou
+   *      `window.__LINSORA_SUPABASE__ = { url, anonKey }`)
+   * Somente URL pública + anon/public key. NUNCA service_role no frontend.
+   */
   getSupabaseConfig() {
+    const empty = { url: '', key: '', isConnected: false };
+    const normalize = (url, key) => {
+      const cleanUrl = String(url || '').trim();
+      const cleanKey = String(key || '').trim();
+      if (!cleanUrl || !cleanKey) return empty;
+      return { url: cleanUrl, key: cleanKey, isConnected: true };
+    };
+
+    // 1. Override manual (ex: configurado uma vez via saveSupabaseConfig)
     try {
       const stored = localStorage.getItem(this.configKey);
-      return stored ? JSON.parse(stored) : { url: '', key: '', isConnected: false };
-    } catch (e) {
-      return { url: '', key: '', isConnected: false };
-    }
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed && parsed.url && parsed.key) {
+          return { url: parsed.url, key: parsed.key, isConnected: Boolean(parsed.url && parsed.key) };
+        }
+      }
+    } catch (e) { /* sem override válido: tenta próximas fontes */ }
+
+    // 2. Meta tags de build (Vercel / build Capacitor preenchem o content)
+    const metaUrl = this._readMetaContent('linsora:supabase-url');
+    const metaKey = this._readMetaContent('linsora:supabase-anon-key');
+    if (metaUrl && metaKey) return normalize(metaUrl, metaKey);
+
+    // 3. Globais injetadas antes do carregamento dos scripts
+    try {
+      const injected = window.__LINSORA_SUPABASE__ || {};
+      const winUrl = window.__LINSORA_SUPABASE_URL__ || injected.url;
+      const winKey = window.__LINSORA_SUPABASE_ANON_KEY__ || injected.anonKey || injected.key;
+      if (winUrl && winKey) return normalize(winUrl, winKey);
+    } catch (e) { /* sem injeção: segue sem configuração */ }
+
+    return empty;
   }
 
   saveSupabaseConfig(url, key) {
@@ -234,12 +380,9 @@ class SupabaseRepository {
         const val = JSON.stringify(userProfile);
         // Triple-layer storage for bulletproof persistence
         await idbSet('LINSORA_ACTIVE_LOCAL_SESSION', val);
-        localStorage.setItem('LINSORA_ACTIVE_LOCAL_SESSION', val);
-        if (window.Capacitor?.Plugins?.Preferences) {
-          await window.Capacitor.Plugins.Preferences.set({ key: 'LINSORA_ACTIVE_LOCAL_SESSION', value: val }).catch(()=>{});
-        } else if (window.Capacitor?.Preferences) {
-          await window.Capacitor.Preferences.set({ key: 'LINSORA_ACTIVE_LOCAL_SESSION', value: val }).catch(()=>{});
-        }
+        try { localStorage.setItem('LINSORA_ACTIVE_LOCAL_SESSION', val); } catch (e) { /* sem localStorage */ }
+        // Mesma camada de Preferences usada pelo warm-up/storage do Supabase
+        await this._prefsSet('LINSORA_ACTIVE_LOCAL_SESSION', val);
       }
     } catch (e) {
       console.warn('Falha ao salvar sessão local:', e);
@@ -249,15 +392,12 @@ class SupabaseRepository {
   async getActiveLocalSession() {
     try {
       let raw = await idbGet('LINSORA_ACTIVE_LOCAL_SESSION');
-      if (!raw && window.Capacitor?.Plugins?.Preferences) {
-        const res = await window.Capacitor.Plugins.Preferences.get({ key: 'LINSORA_ACTIVE_LOCAL_SESSION' }).catch(()=>({}));
-        if (res && res.value) raw = res.value;
-      } else if (!raw && window.Capacitor?.Preferences) {
-        const res = await window.Capacitor.Preferences.get({ key: 'LINSORA_ACTIVE_LOCAL_SESSION' }).catch(()=>({}));
-        if (res && res.value) raw = res.value;
+      if (!raw) {
+        // Mesma camada de Preferences usada na persistência e no warm-up
+        raw = await this._prefsGet('LINSORA_ACTIVE_LOCAL_SESSION');
       }
       if (!raw) {
-        raw = localStorage.getItem('LINSORA_ACTIVE_LOCAL_SESSION');
+        try { raw = localStorage.getItem('LINSORA_ACTIVE_LOCAL_SESSION'); } catch (e) { /* sem localStorage */ }
       }
       return raw ? JSON.parse(raw) : null;
     } catch (e) {
@@ -268,12 +408,8 @@ class SupabaseRepository {
   async removeActiveLocalSession() {
     try {
       await idbRemove('LINSORA_ACTIVE_LOCAL_SESSION');
-      localStorage.removeItem('LINSORA_ACTIVE_LOCAL_SESSION');
-      if (window.Capacitor?.Plugins?.Preferences) {
-        await window.Capacitor.Plugins.Preferences.remove({ key: 'LINSORA_ACTIVE_LOCAL_SESSION' }).catch(()=>{});
-      } else if (window.Capacitor?.Preferences) {
-        await window.Capacitor.Preferences.remove({ key: 'LINSORA_ACTIVE_LOCAL_SESSION' }).catch(()=>{});
-      }
+      try { localStorage.removeItem('LINSORA_ACTIVE_LOCAL_SESSION'); } catch (e) { /* sem localStorage */ }
+      await this._prefsRemove('LINSORA_ACTIVE_LOCAL_SESSION');
     } catch (e) {
       console.warn('Falha ao limpar sessão local:', e);
     }
@@ -303,13 +439,12 @@ class SupabaseRepository {
         const { data: { session }, error } = await this.supabase.auth.getSession();
 
         if (error) {
-          // Erro na leitura da sessão (ex: token corrompido) — limpar e forçar login
-          console.warn('[LINSORA Auth] Erro ao ler sessão Supabase, limpando storage local:', error.message);
-          await this.removeActiveLocalSession();
-          return { success: false };
-        }
-
-        if (session && session.user) {
+          // Erro TRANSITÓRIO de leitura (rede, storage momentaneamente indisponível):
+          // NÃO apaga a sessão persistida aqui. Segue para o fallback local abaixo
+          // e deixa o autoRefreshToken do SDK tentar renovar. A sessão local só é
+          // removida no logout real (signOut / evento SIGNED_OUT).
+          console.warn('[LINSORA Auth] Erro ao ler sessão Supabase (sem wipe, tentando fallback):', error.message);
+        } else if (session && session.user) {
           this.currentUserId = session.user.id;
           const userMeta = session.user.user_metadata || {};
           const db = await this.getDbData(session.user.id, {

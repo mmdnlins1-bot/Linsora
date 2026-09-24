@@ -20,6 +20,14 @@
     if (!window.Chart) document.write('<script src="https://cdn.jsdelivr.net/npm/chart.js"><\/script>');
   </script>
 
+  <!-- Configuração Supabase Auth (build time, sem segredos no código).
+       Preenchida pelo ambiente de build/deploy (ex: Vercel) ou pelo passo
+       de build Capacitor a partir de LINSORA_SUPABASE_URL /
+       LINSORA_SUPABASE_ANON_KEY. Nunca commite chaves reais aqui.
+       Somente URL pública + anon key. NUNCA service_role no frontend. -->
+  <meta name="linsora:supabase-url" content="">
+  <meta name="linsora:supabase-anon-key" content="">
+
   <!-- Configurações PWA & Aplicativo Android Mobile -->
   <meta name="theme-color" content="#070B12">
   <link rel="manifest" href="manifest.webmanifest">
