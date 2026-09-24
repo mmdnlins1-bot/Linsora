@@ -1350,8 +1350,9 @@ function setupEventListeners() {
     renderFilteredTransactions(window.linsoraStore.state);
   });
 
-  // Categorias clicáveis na análise (delegação única: sem múltiplos listeners)
-  const analysisContainer = document.getElementById('extratoAnalysisContainer');
+  // Categorias clicáveis na análise (delegação nos dois containers que podem
+  // exibir a distribuição: principal e cauda após as movimentações).
+  // Troca direta: outra categoria substitui a ativa; mesma categoria alterna.
   const toggleCategoryFilter = (row) => {
     if (!row || !row.getAttribute) return;
     let cat = null;
@@ -1364,17 +1365,20 @@ function setupEventListeners() {
     window.linsoraStore.filterCategory = window.linsoraStore.filterCategory === cat ? null : cat;
     renderFilteredTransactions(window.linsoraStore.state);
   };
-  analysisContainer?.addEventListener('click', (e) => {
-    const row = e.target && e.target.closest ? e.target.closest('[data-category]') : null;
-    if (row) toggleCategoryFilter(row);
-  });
-  analysisContainer?.addEventListener('keydown', (e) => {
-    if (e.key !== 'Enter' && e.key !== ' ') return;
-    const row = e.target && e.target.closest ? e.target.closest('[data-category]') : null;
-    if (row) {
-      e.preventDefault();
-      toggleCategoryFilter(row);
-    }
+  ['extratoAnalysisContainer', 'extratoAnalysisTail'].forEach((containerId) => {
+    const containerEl = document.getElementById(containerId);
+    containerEl?.addEventListener('click', (e) => {
+      const row = e.target && e.target.closest ? e.target.closest('[data-category]') : null;
+      if (row) toggleCategoryFilter(row);
+    });
+    containerEl?.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter' && e.key !== ' ') return;
+      const row = e.target && e.target.closest ? e.target.closest('[data-category]') : null;
+      if (row) {
+        e.preventDefault();
+        toggleCategoryFilter(row);
+      }
+    });
   });
 
   document.getElementById('btnActiveCategory')?.addEventListener('click', () => {

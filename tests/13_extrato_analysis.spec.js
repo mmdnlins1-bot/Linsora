@@ -522,4 +522,29 @@ test.describe('13. Extrato: categorias clicáveis + períodos', () => {
     await page.click('#btnActiveCategory');
     await expect(page.locator('#fullTransactionsList .transaction-card')).toHaveCount(3);
   });
+
+  test('Troca direta de categoria sem limpar a anterior (ida e volta)', async ({ page }) => {
+    await createTransaction(page, { type: 'DESPESA', amount: '30000', description: 'Mercado Troca', category: 'Alimentação' });
+    await createTransaction(page, { type: 'DESPESA', amount: '15000', description: 'Uber Troca', category: 'Transporte' });
+
+    await page.click('.linsora-card.category-variation-item:has-text("Alimentação")');
+    await expect(page.locator('#activeCategoryName')).toHaveText('Alimentação');
+    await expect(page.locator('#extratoAnalysisTitle')).toHaveText('Análise de Alimentação');
+
+    await page.click('.linsora-card.category-variation-item:has-text("Transporte")');
+    await expect(page.locator('#activeCategoryName')).toHaveText('Transporte');
+    await expect(page.locator('#extratoAnalysisTitle')).toHaveText('Análise de Transporte');
+    await expect(page.locator('#extratoMovementsTitle')).toHaveText('Movimentações de Transporte');
+    await expect(page.locator('#fullTransactionsList')).toContainText('Uber Troca');
+    await expect(page.locator('#fullTransactionsList')).not.toContainText('Mercado Troca');
+    const tailAfter = page.locator('#extratoAnalysisTail');
+    await expect(tailAfter.locator('.linsora-card.category-variation-item.selected .cat-var-name')).toContainText('Transporte');
+
+    await page.click('.linsora-card.category-variation-item:has-text("Alimentação")');
+    await expect(page.locator('#activeCategoryName')).toHaveText('Alimentação');
+    await expect(page.locator('#extratoAnalysisTitle')).toHaveText('Análise de Alimentação');
+    await expect(page.locator('#extratoMovementsTitle')).toHaveText('Movimentações de Alimentação');
+    await expect(page.locator('#fullTransactionsList')).toContainText('Mercado Troca');
+    await expect(page.locator('#fullTransactionsList')).not.toContainText('Uber Troca');
+  });
 });
