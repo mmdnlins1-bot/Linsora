@@ -49,6 +49,9 @@ class StrategicAdvisorEngine {
     const amount = parsedData.amount || parsedData.target || 0;
     
     // 3. Cruzar com Dados Reais
+    if (window.linsoraStore?.ensureCurrentWindowOccurrences) {
+      window.linsoraStore.ensureCurrentWindowOccurrences({ silent: true });
+    }
     const metrics = this.calculateRealMetrics(state);
 
     if (intent === 'EXPLICIT_COMMAND' && amount > 0) {
@@ -168,31 +171,71 @@ class StrategicAdvisorEngine {
     };
   }
 
+  formatCommitmentsSummary(items, totalAmount) {
+    if (!Array.isArray(items) || items.length === 0 || !totalAmount) return '';
+    const formattedTotal = LinsoraUtils.formatBRL(totalAmount);
+    if (items.length === 1) {
+      const it = items[0];
+      const dueStr = it.dueDate ? `, com vencimento em ${LinsoraUtils.formatDateBR(it.dueDate)}` : '';
+      return `um compromisso de ${LinsoraUtils.formatBRL(it.amount)} com ${it.title}${dueStr}`;
+    }
+    const details = items.slice(0, 2).map(it => {
+      const dueStr = it.dueDate ? ` (vence ${LinsoraUtils.formatDateBR(it.dueDate)})` : '';
+      return `${it.title} (${LinsoraUtils.formatBRL(it.amount)}${dueStr})`;
+    }).join(' e ');
+    const remainingCount = items.length - 2;
+    const moreText = remainingCount > 0 ? ` e mais ${remainingCount} outro(s)` : '';
+    return `${formattedTotal} em compromissos próximos (${details}${moreText})`;
+  }
+
   handleViabilityQuestion(parsedData, metrics, rawText, intent) {
     const isGoal = parsedData.action === 'APORTE' || parsedData.type?.includes('Meta') || parsedData.type?.includes('Reserva');
     const amount = parsedData.amount || parsedData.target;
     
+    const hasCommitments = (metrics.committedAmount > 0) && (Array.isArray(metrics.committedItems) && metrics.committedItems.length > 0);
+    const commitSummary = hasCommitments ? this.formatCommitmentsSummary(metrics.committedItems, metrics.committedAmount) : '';
+    // Base da decisão de viabilidade: margem após os compromissos futuros
+    // relevantes (reutiliza o valor já calculado, sem nova fonte de verdade).
+    const effectiveMargin = Number(metrics.availableAfterCommitments ?? metrics.availableBalanceForMonth) || 0;
+
     if (isGoal) {
-        let rec = amount <= metrics.availableBalanceForMonth ? 'Aporte viável.' : 'Aporte compromete suas despesas livres mensais.';
+        let rec = amount <= effectiveMargin ? 'Aporte viável.' : 'Aporte compromete suas despesas livres mensais.';
+        if (hasCommitments && amount > effectiveMargin) {
+          rec += ` Há ${commitSummary} já previsto, deixando sua margem em ${LinsoraUtils.formatBRL(effectiveMargin)}.`;
+        }
         if (intent === 'AMBIGUOUS') {
           rec = 'Não ficou claro se é um registro ou simulação. ' + rec + ' Por favor, diga "Registre..." ou "Simule...".';
         }
+        const goalImpact = hasCommitments
+          ? `Livre no mês: ${LinsoraUtils.formatBRL(metrics.availableBalanceForMonth)} | Compromissos Próximos: ${LinsoraUtils.formatBRL(metrics.committedAmount)}.`
+          : `Livre no mês: ${LinsoraUtils.formatBRL(metrics.availableBalanceForMonth)}.`;
         return {
           severity: 'info',
           title: intent === 'AMBIGUOUS' ? '🤔 Simulação ou Registro?' : '🔮 Simulação de Aporte/Meta',
           diagnosis: `Você mencionou destinar ${LinsoraUtils.formatBRL(amount)} para ${parsedData.title}.`,
-          impact: `Livre no mês: ${LinsoraUtils.formatBRL(metrics.availableBalanceForMonth)}.`,
+          impact: goalImpact,
           recommendation: rec,
           action: null
         };
     }
 
+    const technicalIndicators = [
+      { label: 'Caixa Livre do Mês', value: LinsoraUtils.formatBRL(metrics.availableBalanceForMonth) },
+      { label: 'Saldo em Contas', value: LinsoraUtils.formatBRL(metrics.totalBalance) },
+      { label: 'Receitas do Mês', value: LinsoraUtils.formatBRL(metrics.monthIncome) },
+      { label: 'Despesas do Mês', value: LinsoraUtils.formatBRL(metrics.monthExpense) },
+      { label: 'Compromissos Próximos', value: LinsoraUtils.formatBRL(metrics.committedAmount) },
+      { label: 'Limite Diário', value: LinsoraUtils.formatBRL(metrics.currentDailyLimit) }
+    ];
+
     if (!amount || amount === 0) {
+      const commitNote = hasCommitments ? ` (já reservados ${LinsoraUtils.formatBRL(metrics.committedAmount)} em compromissos)` : '';
       return {
         severity: 'info',
         title: '💡 Limite Seguro',
-        diagnosis: `Com base nas suas receitas, despesas, reservas e saldo, o seu caixa livre no momento é de ${LinsoraUtils.formatBRL(metrics.availableBalanceForMonth)}.`,
+        diagnosis: `Com base nas suas receitas, despesas, reservas e saldo, o seu caixa livre no momento é de ${LinsoraUtils.formatBRL(metrics.availableBalanceForMonth)}${commitNote}.`,
         impact: `Caixa Livre do Mês: ${LinsoraUtils.formatBRL(metrics.availableBalanceForMonth)} | Saldo em Contas: ${LinsoraUtils.formatBRL(metrics.totalBalance)} | Despesas: ${LinsoraUtils.formatBRL(metrics.monthExpense)}`,
+        technicalIndicators,
         recommendation: `Para não comprometer suas finanças, recomendo que seus gastos fiquem dentro de **${LinsoraUtils.formatBRL(metrics.currentDailyLimit)}** por dia até o próximo mês.`,
         action: null
       };
@@ -214,18 +257,34 @@ class StrategicAdvisorEngine {
     if (amount > metrics.totalLiquidity) {
       severity = 'danger';
       recommendation = `Faltam fundos! Esse gasto de ${LinsoraUtils.formatBRL(amount)} é maior do que o seu saldo consolidado e renda livre.`;
-    } else if (amount > metrics.availableBalanceForMonth) {
+    } else if (amount > effectiveMargin) {
       severity = 'warning';
-      recommendation = `Você tem saldo nas contas para cobrir, mas esse gasto de ${LinsoraUtils.formatBRL(amount)} ultrapassa a sua renda livre do mês (${LinsoraUtils.formatBRL(metrics.availableBalanceForMonth)}). Você precisará entrar nas suas reservas acumuladas.`;
+      if (amount > metrics.availableBalanceForMonth) {
+        if (hasCommitments) {
+          recommendation = `Você tem saldo nas contas para cobrir, mas esse gasto de ${LinsoraUtils.formatBRL(amount)} ultrapassa a sua renda livre do mês (${LinsoraUtils.formatBRL(metrics.availableBalanceForMonth)}). Além disso, há ${commitSummary} já previsto, deixando sua margem em ${LinsoraUtils.formatBRL(effectiveMargin)}. Você precisará entrar nas suas reservas acumuladas.`;
+        } else {
+          recommendation = `Você tem saldo nas contas para cobrir, mas esse gasto de ${LinsoraUtils.formatBRL(amount)} ultrapassa a sua renda livre do mês (${LinsoraUtils.formatBRL(metrics.availableBalanceForMonth)}). Você precisará entrar nas suas reservas acumuladas.`;
+        }
+      } else {
+        recommendation = `Esse gasto de ${LinsoraUtils.formatBRL(amount)} comprometeria sua margem disponível. Você precisa considerar ${commitSummary}, o que deixa aproximadamente ${LinsoraUtils.formatBRL(effectiveMargin)} disponíveis no mês.`;
+      }
     } else if (amount <= metrics.currentDailyLimit) {
       severity = 'success';
-      recommendation = `Perfeito! O valor cabe perfeitamente no seu limite diário atual de ${LinsoraUtils.formatBRL(metrics.currentDailyLimit)}.`;
+      if (hasCommitments) {
+        recommendation = `Perfeito! O valor de ${LinsoraUtils.formatBRL(amount)} cabe no seu limite diário atual de ${LinsoraUtils.formatBRL(metrics.currentDailyLimit)}. Lembre-se de que há ${commitSummary}, restando aproximadamente ${LinsoraUtils.formatBRL(effectiveMargin)} de margem disponível no mês.`;
+      } else {
+        recommendation = `Perfeito! O valor cabe perfeitamente no seu limite diário atual de ${LinsoraUtils.formatBRL(metrics.currentDailyLimit)}.`;
+      }
     } else {
       severity = 'warning';
-      recommendation = `É viável no mês, mas passa do seu teto diário de ${LinsoraUtils.formatBRL(metrics.currentDailyLimit)}. Se gastar isso hoje, vai precisar segurar a onda nos próximos dias.`;
+      if (hasCommitments) {
+        recommendation = `É viável no mês considerando seus compromissos, mas passa do seu teto diário de ${LinsoraUtils.formatBRL(metrics.currentDailyLimit)}. Você precisa considerar ${commitSummary}. Sua margem livre restante após esse gasto será de ${LinsoraUtils.formatBRL(effectiveMargin - amount)}.`;
+      } else {
+        recommendation = `É viável no mês, mas passa do seu teto diário de ${LinsoraUtils.formatBRL(metrics.currentDailyLimit)}. Se gastar isso hoje, vai precisar segurar a onda nos próximos dias.`;
+      }
     }
     
-    const impactMath = `Caixa Livre do Mês: ${LinsoraUtils.formatBRL(metrics.availableBalanceForMonth)} | Saldo em Contas: ${LinsoraUtils.formatBRL(metrics.totalBalance)} | Receitas do Mês: ${LinsoraUtils.formatBRL(metrics.monthIncome)} | Despesas do Mês: ${LinsoraUtils.formatBRL(metrics.monthExpense)} | Limite Diário: ${LinsoraUtils.formatBRL(metrics.currentDailyLimit)}`;
+    const impactMath = `Caixa Livre do Mês: ${LinsoraUtils.formatBRL(metrics.availableBalanceForMonth)} | Saldo em Contas: ${LinsoraUtils.formatBRL(metrics.totalBalance)} | Receitas do Mês: ${LinsoraUtils.formatBRL(metrics.monthIncome)} | Despesas do Mês: ${LinsoraUtils.formatBRL(metrics.monthExpense)} | Compromissos Próximos: ${LinsoraUtils.formatBRL(metrics.committedAmount)} | Limite Diário: ${LinsoraUtils.formatBRL(metrics.currentDailyLimit)}`;
 
     if (intent === 'AMBIGUOUS') {
       recommendation = `Para me ajudar, por favor, seja mais direto: diga "Registre ${LinsoraUtils.formatBRL(amount)}${catText}" ou "Posso gastar ${LinsoraUtils.formatBRL(amount)}${catText}?".`;
@@ -236,6 +295,7 @@ class StrategicAdvisorEngine {
       title: intent === 'AMBIGUOUS' ? '🤔 Simulação ou Registro?' : '🔮 Simulação de Gasto',
       diagnosis,
       impact: impactMath,
+      technicalIndicators,
       recommendation,
       action: null
     };
@@ -459,7 +519,17 @@ class StrategicAdvisorEngine {
             </summary>
             <div style="margin-top: 8px; padding: 12px; background: var(--bg-color); border-radius: 8px; font-size: 0.85rem; color: var(--text-muted); border: 1px solid var(--border); line-height: 1.4;">
               <strong style="color: var(--text-color);">Análise Diagnóstica:</strong><br/>${safeDiagnosis}<br/><br/>
-              <strong style="color: var(--text-color);">Visão Consolidada:</strong><br/>${safeImpact}
+              <strong style="color: var(--text-color);">Visão Consolidada:</strong>
+              ${Array.isArray(advice.technicalIndicators) && advice.technicalIndicators.length > 0 ? `
+                <div class="technical-metrics-list" style="margin-top: 10px; display: flex; flex-direction: column; gap: 10px;">
+                  ${advice.technicalIndicators.map(ind => `
+                    <div class="tech-metric-item" style="display: flex; flex-direction: column; gap: 2px;">
+                      <span style="font-size: 0.8rem; color: var(--text-muted); font-weight: 500;">${LinsoraUtils.escapeHTML(ind.label)}</span>
+                      <strong style="font-size: 0.95rem; color: var(--text-color);">${LinsoraUtils.escapeHTML(ind.value)}</strong>
+                    </div>
+                  `).join('')}
+                </div>
+              ` : `<br/>${safeImpact}`}
             </div>
           </details>
           

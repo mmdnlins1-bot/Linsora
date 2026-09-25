@@ -76,10 +76,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (sessionRes.success) {
     // Carrega os dados do usuário e renderiza a UI com estado real
     await window.linsoraStore.loadUserData(sessionRes.user);
+    window.linsoraStore.ensureCurrentWindowOccurrences();
     renderAppUI(window.linsoraStore.state);
     grantAppAccess();
   } else {
     // Sem sessão: renderiza estado vazio e exibe tela de login
+    window.linsoraStore.ensureCurrentWindowOccurrences();
     renderAppUI(window.linsoraStore.state);
     console.log('[AUDITORIA_SESSAO] Usuário não logado. Exibindo tela de login/onboarding.');
     hideSplashScreen();
@@ -743,6 +745,9 @@ function setupEventListeners() {
           return;
         }
         await window.linsoraStore.loadUserData(res.user);
+        // O loadUserData já garante as ocorrências; reforço idempotente do
+        // fluxo real de registro (não duplica, não altera o motor).
+        window.linsoraStore.ensureCurrentWindowOccurrences?.({ silent: true });
       } else {
         const res = await window.supabaseRepo.signInWithEmail(email, password);
         if (!res.success) {
@@ -750,6 +755,9 @@ function setupEventListeners() {
           return;
         }
         await window.linsoraStore.loadUserData(res.user);
+        // O loadUserData já garante as ocorrências; reforço idempotente do
+        // fluxo real de login (não duplica, não altera o motor).
+        window.linsoraStore.ensureCurrentWindowOccurrences?.({ silent: true });
       }
 
       grantAppAccess();
@@ -904,7 +912,10 @@ function setupEventListeners() {
     }
   });
 
-  document.getElementById('btnGoToRecurring')?.addEventListener('click', () => window.switchTab('tabRecurringBills'));
+  document.getElementById('btnGoToRecurring')?.addEventListener('click', () => {
+    window.linsoraStore?.ensureCurrentWindowOccurrences?.();
+    window.switchTab('tabRecurringBills');
+  });
   document.getElementById('btnBackToDashboard')?.addEventListener('click', () => window.switchTab('tabDashboard'));
   document.getElementById('btnAddRecurring')?.addEventListener('click', () => LinsoraUI.openBillForm());
 
@@ -957,6 +968,7 @@ function setupEventListeners() {
           LinsoraUI.showToast('Não foi possível editar a conta.', 'error');
           return;
         }
+        window.linsoraStore.ensureCurrentWindowOccurrences();
         LinsoraUI.closeModal('modalBillForm');
         LinsoraUI.showToast(`Conta "${title}" atualizada com sucesso! ✏️`, 'success');
       } else {
@@ -965,6 +977,7 @@ function setupEventListeners() {
           LinsoraUI.showToast('Não foi possível salvar a conta.', 'error');
           return;
         }
+        window.linsoraStore.ensureCurrentWindowOccurrences();
         LinsoraUI.closeModal('modalBillForm');
         LinsoraUI.showToast(`Conta "${title}" cadastrada com sucesso! 🧾`, 'success');
       }

@@ -37,6 +37,14 @@ class LinsoraStore {
   async init(userObj = null) {
     const userId = userObj?.id || window.supabaseRepo?.currentUserId || 'guest';
     this.state = await window.supabaseRepo.getDbData(userId, userObj);
+    // Integração recorrências → fluxo real (abertura/recarga do app):
+    // garante as ocorrências do mês corrente de forma idempotente, sem
+    // alterar o motor. Silent para não duplicar o notify abaixo.
+    try {
+      if (typeof this.ensureCurrentWindowOccurrences === 'function') {
+        this.ensureCurrentWindowOccurrences({ silent: true });
+      }
+    } catch (e) { /* motor indisponível: segue sem ocorrências */ }
     this.currentTheme = localStorage.getItem('LINSORA_THEME') || 'dark';
     document.documentElement.setAttribute('data-theme', this.currentTheme);
     this.notify();
@@ -45,6 +53,14 @@ class LinsoraStore {
   async loadUserData(userObj) {
     if (!userObj) return;
     this.state = await window.supabaseRepo.getDbData(userObj.id, userObj);
+    // Integração recorrências → fluxo real (login/registro/troca de usuário):
+    // garante as ocorrências do mês corrente de forma idempotente, sem
+    // alterar o motor. Silent para não duplicar o notify abaixo.
+    try {
+      if (typeof this.ensureCurrentWindowOccurrences === 'function') {
+        this.ensureCurrentWindowOccurrences({ silent: true });
+      }
+    } catch (e) { /* motor indisponível: segue sem ocorrências */ }
     this.notify();
   }
 
@@ -442,7 +458,7 @@ class LinsoraStore {
    * Garante ocorrências PENDING para a janela (idempotente: nunca duplica).
    * Retorna a quantidade criada. Persiste via notify (mesmo fluxo das demais).
    */
-  ensureRecurringOccurrences(windowStartKey, windowEndKey) {
+  ensureRecurringOccurrences(windowStartKey, windowEndKey, options = {}) {
     if (!windowStartKey || !windowEndKey || windowEndKey < windowStartKey) return 0;
     const uid = this.state?.user?.id;
     if (!uid) return 0;
@@ -472,8 +488,23 @@ class LinsoraStore {
         }
       });
     });
-    if (added > 0) this.notify();
+    if (added > 0 && options?.silent !== true) this.notify();
     return added;
+  }
+
+  /**
+   * Garante ocorrências para a janela do mês corrente.
+   * Idempotente, não duplica ocorrências existentes.
+   */
+  ensureCurrentWindowOccurrences(options = {}) {
+    const today = new Date();
+    const y = today.getFullYear();
+    const m = today.getMonth();
+    const p = (v) => String(v).padStart(2, '0');
+    const startKey = `${y}-${p(m + 1)}-01`;
+    const lastDay = new Date(y, m + 1, 0).getDate();
+    const endKey = `${y}-${p(m + 1)}-${p(lastDay)}`;
+    return this.ensureRecurringOccurrences(startKey, endKey, options);
   }
 
   /**
