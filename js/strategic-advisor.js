@@ -8,6 +8,10 @@
 class StrategicAdvisorEngine {
   constructor() {
     this.name = 'Conselheiro Linsora';
+    // Contexto da conversa de conferência de compromissos ("posso gastar X?"
+    // -> "já pagou alguma?" -> confirmação -> recálculo). Mantém a pergunta
+    // original até o fluxo terminar; null fora do fluxo.
+    this.commitmentFlow = null;
   }
 
   /**
@@ -27,6 +31,16 @@ class StrategicAdvisorEngine {
         impact: '-',
         recommendation: 'Faça login para utilizar o assistente.'
       };
+    }
+
+    // 0. Continuidade de conversa: se há uma conferência de compromissos
+    // em andamento, a mensagem pode ser a resposta (número, "nenhuma",
+    // "sim"/"não") ou uma pergunta nova (nesse caso o fluxo é encerrado
+    // e a mensagem é processada normalmente abaixo).
+    if (this.commitmentFlow) {
+      const followUp = this.handleCommitmentFollowUp(rawText, lowerText, state);
+      if (followUp) return followUp;
+      this.commitmentFlow = null;
     }
 
     // 1. Detectar Intenção (Pergunta/Simulação vs Comando Explícito)
@@ -208,6 +222,307 @@ class StrategicAdvisorEngine {
   }
 
   handleViabilityQuestion(parsedData, metrics, rawText, intent) {
+    const advice = this.answerViability(parsedData, metrics, rawText, intent);
+    return this.maybeAttachCommitmentCheck(advice, parsedData, metrics, rawText, intent);
+  }
+
+  /**
+   * Anexa a conferência de compromissos à resposta normal de viabilidade de
+   * GASTO (perguntas "posso gastar X?"): mantém a conclusão calculada pela
+   * lógica existente e acrescenta a lista numerada + pergunta contextual,
+   * abrindo o fluxo de confirmação. Não altera valores nem decisões.
+   */
+  maybeAttachCommitmentCheck(advice, parsedData, metrics, rawText, intent) {
+    if (!advice || intent !== 'QUESTION' || this.commitmentFlow) return advice;
+    const amount = (parsedData && (parsedData.amount || parsedData.target)) || 0;
+    if (!amount || amount <= 0) return advice;
+    const isGoal = parsedData.action === 'APORTE' || parsedData.type?.includes('Meta') || parsedData.type?.includes('Reserva');
+    if (isGoal) return advice;
+    const options = this.getPendingRecurringOptions(metrics);
+    if (options.length === 0) return advice;
+    this.commitmentFlow = {
+      stage: 'awaiting_selection',
+      originalQuery: typeof rawText === 'string' ? rawText : '',
+      originalParsed: { ...(parsedData || {}) },
+      amount,
+      options,
+      selected: []
+    };
+    return {
+      ...advice,
+      commitmentOptions: options.map(o => ({
+        n: o.n,
+        title: o.title,
+        amount: LinsoraUtils.formatBRL(o.amount),
+        dueDate: o.dueDate ? LinsoraUtils.formatDateBR(o.dueDate) : ''
+      })),
+      recommendation: `${advice.recommendation} Antes de concluir, me diga: você já pagou alguma dessas contas? Responda com o número (ex.: 1), "1 e 2" ou "nenhuma".`
+    };
+  }
+
+  /**
+   * Opções numeráveis de conferência: somente compromissos do tipo conta
+   * recorrente (possuem ocorrência e podem ser marcados como pagos pelo
+   * fluxo existente). Faturas de cartão seguem só no cálculo da margem.
+   */
+  getPendingRecurringOptions(metrics) {
+    const items = (metrics && Array.isArray(metrics.committedItems)) ? metrics.committedItems : [];
+    return items
+      .filter(it => it && it.type === 'RECURRING_BILL' && it.originId)
+      .map((it, idx) => ({
+        n: idx + 1,
+        occurrenceId: it.originId,
+        title: it.title || 'Conta recorrente',
+        amount: Number(it.amount) || 0,
+        dueDate: it.dueDate || ''
+      }));
+  }
+
+  /**
+   * Trata mensagens enviadas durante a conferência de compromissos.
+   * Retorna a resposta (advice) ou null quando a mensagem é uma pergunta
+   * nova — nesse caso o fluxo é encerrado e o processamento normal segue.
+   * Nunca altera dados financeiros; só a confirmação explícita o faz.
+   */
+  handleCommitmentFollowUp(rawText, lowerText, state) {
+    const flow = this.commitmentFlow;
+    if (!flow) return null;
+    const norm = this.normCommitText(rawText);
+    if (this.isNewViabilityQuery(lowerText || norm)) return null;
+
+    if (flow.stage === 'awaiting_confirmation') {
+      if (this.isAffirmative(norm)) return this.applyCommitmentConfirmation();
+      if (this.isNegative(norm)) return this.cancelCommitmentConfirmation();
+      return this.repeatConfirmationPrompt();
+    }
+
+    const parsed = this.parseCommitmentSelection(norm, flow.options);
+    if (parsed.kind === 'none') {
+      const core = this.answerOriginalViability(flow);
+      this.commitmentFlow = null;
+      return {
+        ...core,
+        recommendation: `Entendido, mantive todos os compromissos como pendentes. ${core.recommendation}`
+      };
+    }
+    if (parsed.kind === 'ambiguous') {
+      return this.buildClarificationAdvice(parsed.candidates);
+    }
+    flow.stage = 'awaiting_confirmation';
+    flow.selected = parsed.ids;
+    return this.buildSelectionConfirmation();
+  }
+
+  normCommitText(text) {
+    return String(text || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  }
+
+  /**
+   * Detecta pergunta nova de viabilidade (ex.: "posso gastar 200 hoje?"):
+   * palavra de pergunta + número. Nesse caso o fluxo anterior é encerrado.
+   */
+  isNewViabilityQuery(lowerText) {
+    if (!lowerText) return false;
+    const hasQ = ['posso', 'devo', 'vale a pena', 'consigo', 'da pra', 'simule', 'simulacao', 'qual o limite', 'quanto posso', 'sera que', 'e viavel'].some(k => lowerText.includes(k));
+    return hasQ && /\d/.test(lowerText);
+  }
+
+  isAffirmative(norm) {
+    const t = String(norm || '').trim();
+    if (/^(sim|confirmo|confirmar|pode|ok|isso|fechado|bora|vai|confirmado)$/.test(t)) return true;
+    return t.includes('pode confirmar') || t.includes('pode marcar') || t.includes('marca como paga') || t.includes('marcar como paga');
+  }
+
+  isNegative(norm) {
+    const t = String(norm || '').trim();
+    if (/^(nao|n|cancelar|cancela|desiste|deixa|melhor nao)$/.test(t)) return true;
+    return t.includes('cancela') || t.includes('nao quero') || t.includes('deixa como esta') || t.includes('melhor nao');
+  }
+
+  titleMatches(normText, title) {
+    const nt = this.normCommitText(title);
+    if (!nt) return false;
+    if (normText.includes(nt)) return true;
+    return nt.split(/\s+/).filter(w => w.length >= 4).some(w => normText.includes(w));
+  }
+
+  /**
+   * Interpreta a resposta sobre contas pagas. Retorna:
+   * {kind:'none'} | {kind:'selected', ids:[occurrenceIds]} |
+   * {kind:'ambiguous', candidates:[options]}. Nunca inventa correspondências:
+   * sem número válido e sem título inequívoco, pede esclarecimento.
+   */
+  parseCommitmentSelection(norm, options) {
+    const t = String(norm || '').trim();
+    const allWords = /\btodas\b|\bas duas\b|\bos dois\b|\bambas\b|\bambos\b|tudo pago|todas pagas/.test(t);
+    const digits = [...t.matchAll(/(\d+)/g)].map(m => parseInt(m[1], 10));
+    const fromNumbers = digits.filter(n => n >= 1 && n <= options.length);
+    const outOfRange = digits.some(n => n < 1 || n > options.length);
+    const fromTitles = options.filter(o => this.titleMatches(t, o.title)).map(o => o.n);
+    if (allWords) return { kind: 'selected', ids: options.map(o => o.occurrenceId) };
+    if (fromNumbers.length > 0) {
+      const ids = new Set();
+      fromNumbers.forEach(n => ids.add(options[n - 1].occurrenceId));
+      fromTitles.forEach(n => ids.add(options[n - 1].occurrenceId));
+      return { kind: 'selected', ids: [...ids] };
+    }
+    if (fromTitles.length === 1) {
+      return { kind: 'selected', ids: [options[fromTitles[0] - 1].occurrenceId] };
+    }
+    if (fromTitles.length > 1) {
+      return { kind: 'ambiguous', candidates: options.filter(o => fromTitles.includes(o.n)) };
+    }
+    if (/nenhuma|nao paguei|ainda nao|todas pendentes|todas em aberto|^nao$|^0$/.test(t)) {
+      return { kind: 'none' };
+    }
+    if (outOfRange) return { kind: 'ambiguous', candidates: options };
+    return { kind: 'ambiguous', candidates: options };
+  }
+
+  fmtCommitOption(o) {
+    return {
+      n: o.n,
+      title: o.title,
+      amount: LinsoraUtils.formatBRL(o.amount),
+      dueDate: o.dueDate ? LinsoraUtils.formatDateBR(o.dueDate) : ''
+    };
+  }
+
+  freshMetrics() {
+    if (window.linsoraStore?.ensureCurrentWindowOccurrences) {
+      window.linsoraStore.ensureCurrentWindowOccurrences({ silent: true });
+    }
+    return this.calculateRealMetrics(window.linsoraStore.state);
+  }
+
+  /**
+   * Responde a pergunta original com dados recalculados, sem reanexar
+   * a conferência (usa a lógica direta de viabilidade).
+   */
+  answerOriginalViability(flow) {
+    const metrics = this.freshMetrics();
+    return this.answerViability(flow.originalParsed, metrics, flow.originalQuery, 'QUESTION');
+  }
+
+  buildClarificationAdvice(candidates) {
+    const list = (Array.isArray(candidates) && candidates.length > 0 ? candidates : this.commitmentFlow.options);
+    return {
+      severity: 'info',
+      title: '❓ Qual conta você quis dizer?',
+      diagnosis: 'Não consegui identificar exatamente qual compromisso já foi pago.',
+      commitmentOptions: list.map(o => this.fmtCommitOption(o)),
+      technicalIndicators: this.buildTechnicalIndicators(this.freshMetrics()),
+      recommendation: 'Me diga o número (ex.: 1), os números (ex.: 1 e 2) ou "nenhuma" se todas continuam pendentes.',
+      action: null
+    };
+  }
+
+  /**
+   * Pede confirmação explícita das contas identificadas. Somente leitura:
+   * nenhum dado financeiro é alterado aqui (requisito obrigatório).
+   */
+  buildSelectionConfirmation() {
+    const flow = this.commitmentFlow;
+    const sel = flow.options.filter(o => (flow.selected || []).includes(o.occurrenceId));
+    const fmt = (o) => `${o.title} de ${LinsoraUtils.formatBRL(o.amount)}`;
+    let diagnosis;
+    if (sel.length === 1) {
+      diagnosis = `Você informou que ${fmt(sel[0])} já foi pago.`;
+    } else {
+      diagnosis = `Você informou que estas contas já foram pagas: ${sel.map(o => `${o.n}. ${fmt(o)}`).join('; ')}.`;
+    }
+    return {
+      severity: 'warning',
+      title: '✋ Confirmar pagamento',
+      diagnosis,
+      commitmentOptions: sel.map(o => this.fmtCommitOption(o)),
+      recommendation: sel.length === 1
+        ? `Deseja marcar essa conta como paga?`
+        : `Deseja marcar as ${sel.length} contas como pagas?`,
+      actions: [
+        { type: 'CONFIRM_COMMITMENT_PAID', buttonText: 'Confirmar' },
+        { type: 'CANCEL_COMMITMENT_PAID', buttonText: 'Cancelar' }
+      ],
+      action: null
+    };
+  }
+
+  repeatConfirmationPrompt() {
+    if (!this.commitmentFlow || this.commitmentFlow.stage !== 'awaiting_confirmation') {
+      return this.expiredConfirmationAdvice();
+    }
+    return this.buildSelectionConfirmation();
+  }
+
+  expiredConfirmationAdvice() {
+    return {
+      severity: 'info',
+      title: 'ℹ️ Confirmação expirada',
+      diagnosis: 'Essa confirmação já foi concluída ou expirou.',
+      impact: 'Nenhum dado foi alterado.',
+      recommendation: 'Se precisar, pergunte novamente (ex.: "Posso gastar 100 hoje?").',
+      action: null
+    };
+  }
+
+  cancelCommitmentConfirmation() {
+    const flow = this.commitmentFlow;
+    this.commitmentFlow = null;
+    if (!flow) return this.expiredConfirmationAdvice();
+    const core = this.answerOriginalViability(flow);
+    const names = flow.options
+      .filter(o => (flow.selected || []).includes(o.occurrenceId))
+      .map(o => o.title).join(' e ');
+    return {
+      ...core,
+      recommendation: `Tudo bem, mantive ${names || 'os compromissos'} como pendente(s), sem alterar nada. ${core.recommendation}`
+    };
+  }
+
+  /**
+   * Aplica a confirmação usando o fluxo financeiro existente
+   * (setOccurrenceStatus -> PAID), sem criar transações nem duplicar nada:
+   * só ocorrências ainda PENDING são marcadas; PAID sai de committedItems
+   * pela regra atual do motor. Em seguida recalcula tudo e responde a
+   * pergunta original com os dados atualizados.
+   */
+  applyCommitmentConfirmation() {
+    const flow = this.commitmentFlow;
+    this.commitmentFlow = null;
+    if (!flow || flow.stage !== 'awaiting_confirmation') return this.expiredConfirmationAdvice();
+    const store = window.linsoraStore;
+    const applied = [];
+    (flow.selected || []).forEach(id => {
+      const occ = store?.state?.occurrences?.find(o => o.id === id);
+      if (!occ || occ.status !== 'PENDING') return;
+      const opt = flow.options.find(o => o.occurrenceId === id);
+      if (store.setOccurrenceStatus(id, { status: 'PAID' })) {
+        applied.push(opt || { title: 'Conta recorrente', amount: 0 });
+      }
+    });
+    const metrics = this.freshMetrics();
+    const core = this.answerViability(flow.originalParsed, metrics, flow.originalQuery, 'QUESTION');
+    const bal = LinsoraUtils.formatBRL(metrics.totalBalance);
+    const paidTxt = applied.length === 1
+      ? `${applied[0].title} de ${LinsoraUtils.formatBRL(applied[0].amount)} foi marcado como pago`
+      : `${applied.map(a => `${a.title} de ${LinsoraUtils.formatBRL(a.amount)}`).join('; ')} foram marcados como pagos`;
+    const remaining = (metrics.committedItems || []).filter(i => i.type === 'RECURRING_BILL');
+    const remainingTxt = remaining.length === 0
+      ? 'nenhum compromisso pendente'
+      : remaining.map(i => `${i.title} de ${LinsoraUtils.formatBRL(i.amount)}`).join('; ');
+    const marginTxt = LinsoraUtils.formatBRL(metrics.availableAfterCommitments);
+    const spendTxt = LinsoraUtils.formatBRL(flow.amount);
+    const afterTxt = LinsoraUtils.formatBRL(metrics.availableAfterCommitments - flow.amount);
+    const settlement = applied.length === 0
+      ? `Não foi possível marcar o pagamento (registro não encontrado ou já pago). Você tem ${bal} em contas. Restam ${remainingTxt} como compromissos. Sua margem após os compromissos é de ${marginTxt}.`
+      : `Você tem ${bal} em contas. O ${paidTxt}. Restam ${remainingTxt} como compromissos. Sua margem após os compromissos é de ${marginTxt}. Considerando o gasto de ${spendTxt}, sua margem ficaria em ${afterTxt}.`;
+    return {
+      ...core,
+      recommendation: `${settlement} ${core.recommendation}`
+    };
+  }
+
+  answerViability(parsedData, metrics, rawText, intent) {
     const isGoal = parsedData.action === 'APORTE' || parsedData.type?.includes('Meta') || parsedData.type?.includes('Reserva');
     const amount = parsedData.amount || parsedData.target;
     
@@ -468,6 +783,8 @@ class StrategicAdvisorEngine {
     }
 
     let actionBtnHtml = '';
+    let bindFlowActions = null;
+    const self = this;
     if (advice.action) {
       const btnId = 'btnAct_' + Date.now();
       // S8B: texto do botão também é dado dinâmico — escapar.
@@ -508,6 +825,54 @@ class StrategicAdvisorEngine {
       }, 50);
     }
 
+    // Botões de confirmação do fluxo de compromissos (Confirmar/Cancelar):
+    // cada um resolve para a resposta específica do fluxo (sem o genérico
+    // "Sucesso!" acima). Ligação direta e síncrona aos nós criados abaixo
+    // (sem setTimeout/id): determinística em desktop e mobile.
+    // Desabilitados após o clique (sem duplo disparo).
+    if (Array.isArray(advice.actions) && advice.actions.length > 0) {
+      const flowActions = advice.actions;
+      actionBtnHtml += flowActions.map((a, idx) => {
+        const btnText = LinsoraUtils.escapeHTML(a.buttonText || 'Confirmar');
+        const primary = idx === 0;
+        return `
+          <button class="linsora-btn ${primary ? 'primary' : 'outline'}" data-flow-action="${LinsoraUtils.escapeHTML(a.type || '')}" style="margin-top: 10px; width: 100%; border-radius: 10px; font-weight: 600; padding: 12px;">
+            ${btnText}
+          </button>
+        `;
+      }).join('');
+
+      bindFlowActions = () => {
+        resEl.querySelectorAll('[data-flow-action]').forEach((btn) => {
+          btn.addEventListener('click', () => {
+            try {
+              // Trava todos os botões do fluxo contra duplo clique.
+              const container = btn.parentElement;
+              if (container) {
+                container.querySelectorAll('[data-flow-action]').forEach(b => { b.disabled = true; });
+              } else {
+                btn.disabled = true;
+              }
+              btn.innerText = 'Processando...';
+              const flowType = btn.getAttribute('data-flow-action');
+              const res = (flowType === 'CONFIRM_COMMITMENT_PAID')
+                ? self.applyCommitmentConfirmation()
+                : self.cancelCommitmentConfirmation();
+              if (res) self.appendAdvisorResponse(res);
+            } catch (err) {
+              self.appendAdvisorResponse({
+                severity: 'danger',
+                title: '❌ Falha ao processar',
+                diagnosis: 'Houve um erro: ' + err.message,
+                impact: 'Nenhum dado foi alterado.',
+                recommendation: 'Por favor, tente novamente.'
+              });
+            }
+          });
+        });
+      };
+    }
+
     // S8B: campos do conselheiro podem conter dados derivados do usuário
     // (ex: título de meta vindo da fala) — escapar antes de interpolar.
     const safeTitle = LinsoraUtils.escapeHTML(advice.title);
@@ -526,6 +891,19 @@ class StrategicAdvisorEngine {
           <div style="color: var(--text-color); line-height: 1.5; margin-bottom: 4px;">
             ${safeRecommendation}
           </div>
+
+          ${Array.isArray(advice.commitmentOptions) && advice.commitmentOptions.length > 0 ? `
+            <div class="commitment-options-list" style="margin-top: 12px; display: flex; flex-direction: column; gap: 10px;">
+              <strong style="font-size: 0.9rem; color: var(--text-color);">Compromissos próximos</strong>
+              ${advice.commitmentOptions.map(opt => `
+                <div class="commitment-option-item" style="display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; background: var(--bg-color); border: 1px solid var(--border); border-radius: 8px;">
+                  <span style="font-size: 0.9rem; font-weight: 700; color: var(--text-color);">${LinsoraUtils.escapeHTML(String(opt.n))}. ${LinsoraUtils.escapeHTML(opt.title)}</span>
+                  <strong style="font-size: 0.95rem; color: var(--text-color);">${LinsoraUtils.escapeHTML(opt.amount)}</strong>
+                  ${opt.dueDate ? `<span style="font-size: 0.8rem; color: var(--text-muted);">Vencimento: ${LinsoraUtils.escapeHTML(opt.dueDate)}</span>` : ''}
+                </div>
+              `).join('')}
+            </div>
+          ` : ''}
           
           <details style="margin-top: 12px; cursor: pointer; user-select: none;">
             <summary style="font-size: 0.85rem; font-weight: 600; color: var(--text-muted); padding: 4px 0; outline: none; transition: color 0.2s;">
@@ -555,6 +933,7 @@ class StrategicAdvisorEngine {
 
     chatContainer.appendChild(resEl);
     chatContainer.scrollTop = chatContainer.scrollHeight;
+    if (typeof bindFlowActions === 'function') bindFlowActions();
   }
 
   executeAction(action) {
