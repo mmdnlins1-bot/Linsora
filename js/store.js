@@ -363,7 +363,10 @@ class LinsoraStore {
     if (end && end < start) return false;
 
     const rec = {
-      id: 'rb_' + Date.now(),
+      // ID UUID v4: compatível com recurring_bills.id (UUID) no Supabase.
+      // Registros legados 'rb_*' continuam válidos localmente (migração em
+      // normalizeLegacyRecurringIds) e são filtrados só no upsert remoto.
+      id: LinsoraUtils.generateUUID(),
       userId: this.state?.user?.id || 'usr_guest',
       title,
       amount,
@@ -455,8 +458,85 @@ class LinsoraStore {
   }
 
   /**
-   * Garante ocorrências PENDING para a janela (idempotente: nunca duplica).
-   * Retorna a quantidade criada. Persiste via notify (mesmo fluxo das demais).
+   * Persiste o estado sem notificar listeners (sem re-render da UI).
+   * Usado pelos pontos de garantia (ensures): a ocorrência precisa
+   * sobreviver a reload/logout/login, mas a garantia não deve redesenhar
+   * a interface. Fire-and-forget: saveDbData grava o localStorage na hora
+   * e sincroniza com o Supabase em segundo plano (somente linhas com IDs
+   * UUID válidos sobem; legados 'rb_*'/'rbocc_*' permanecem locais —
+   * ver syncToSupabaseRemote). Nunca lança.
+   */
+  persistState() {
+    try {
+      if (this.state?.user && window.supabaseRepo?.saveDbData) {
+        const p = window.supabaseRepo.saveDbData(this.state, this.state.user.id);
+        if (p && typeof p.catch === 'function') p.catch(() => {});
+      }
+    } catch (e) { /* durabilidade best-effort: a memória segue válida */ }
+  }
+
+  /**
+   * Migração local, idempotente e NÃO destrutiva de IDs legados das
+   * recorrências ('rb_*' nas regras, 'rbocc_*' nas ocorrências) para UUID v4
+   * (formato exigido pelas colunas UUID do Supabase). Só toca registros do
+   * usuário corrente com ID fora do padrão UUID; reescreve as referências
+   * (occurrence.recurringBillId) e remove duplicatas resultantes da mesma
+   * chave (userId + recurringBillId + dueDate), preferindo PENDING.
+   * Nenhum registro é apagado por conteúdo: só IDs são reemitidos.
+   * Retorna a quantidade de campos reemitidos.
+   */
+  normalizeLegacyRecurringIds() {
+    const uid = this.state?.user?.id;
+    if (!uid || !Array.isArray(this.state?.recurringBills) || !Array.isArray(this.state?.occurrences)) return 0;
+    const isUUID = (v) => (window.LinsoraUtils?.isUUID
+      ? window.LinsoraUtils.isUUID(v)
+      : /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(v || '')));
+    let remapped = 0;
+    const billIdMap = new Map();
+    this.state.recurringBills.forEach((b) => {
+      if ((b.userId || b.user_id) !== uid) return;
+      if (!isUUID(b.id)) {
+        const nu = LinsoraUtils.generateUUID();
+        billIdMap.set(b.id, nu);
+        b.id = nu;
+        remapped += 1;
+      }
+    });
+    this.state.occurrences.forEach((o) => {
+      if (o.userId !== uid) return;
+      if (billIdMap.has(o.recurringBillId)) {
+        o.recurringBillId = billIdMap.get(o.recurringBillId);
+        remapped += 1;
+      }
+      if (!isUUID(o.id)) {
+        o.id = LinsoraUtils.generateUUID();
+        remapped += 1;
+      }
+    });
+    if (remapped > 0) {
+      const rank = { PENDING: 0, PAID: 1, SKIPPED: 2 };
+      const best = new Map();
+      this.state.occurrences.forEach((o) => {
+        const k = `${o.userId}|${o.recurringBillId}|${o.dueDate}`;
+        const cur = best.get(k);
+        if (!cur || (rank[o.status] ?? 9) < (rank[cur.status] ?? 9)) best.set(k, o);
+      });
+      if (best.size !== this.state.occurrences.length) {
+        this.state.occurrences = this.state.occurrences.filter(
+          (o) => best.get(`${o.userId}|${o.recurringBillId}|${o.dueDate}`) === o
+        );
+      }
+    }
+    return remapped;
+  }
+
+  /**
+   * Garante ocorrências PENDING para a janela (idempotente: nunca duplica —
+   * chave userId + recurringBillId + dueDate).
+   * Retorna a quantidade criada. Durabilidade: se criou ocorrências ou
+   * migrou IDs legados, persiste (localStorage + sync Supabase); com
+   * silent:true, persiste SEM notificar listeners, preservando o cálculo
+   * puro a jusante (getCommitmentsUntilNextReceipt segue leitura pura).
    */
   ensureRecurringOccurrences(windowStartKey, windowEndKey, options = {}) {
     if (!windowStartKey || !windowEndKey || windowEndKey < windowStartKey) return 0;
@@ -464,6 +544,8 @@ class LinsoraStore {
     if (!uid) return 0;
     if (!Array.isArray(this.state.recurringBills)) this.state.recurringBills = [];
     if (!Array.isArray(this.state.occurrences)) this.state.occurrences = [];
+    let migrated = 0;
+    try { migrated = this.normalizeLegacyRecurringIds(); } catch (e) { migrated = 0; }
     let added = 0;
     this.state.recurringBills.forEach((bill) => {
       if ((bill.userId || bill.user_id) !== uid) return;
@@ -474,7 +556,8 @@ class LinsoraStore {
         );
         if (!exists) {
           this.state.occurrences.push({
-            id: 'rbocc_' + Date.now() + '_' + added,
+            // ID UUID v4: compatível com recurring_bill_occurrences.id (UUID).
+            id: LinsoraUtils.generateUUID(),
             recurringBillId: g.recurring_bill_id,
             userId: uid,
             dueDate: g.due_date,
@@ -488,7 +571,10 @@ class LinsoraStore {
         }
       });
     });
-    if (added > 0 && options?.silent !== true) this.notify();
+    if (added + migrated > 0) {
+      if (options?.silent !== true) this.notify();
+      else if (options?.persist !== false) this.persistState();
+    }
     return added;
   }
 

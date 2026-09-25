@@ -47,7 +47,7 @@ test.describe('16. Motor de compromissos (Etapa 1)', () => {
   test('1: cria recurring_bill válida e rejeita inválidas', async ({ page }) => {
     const bill = await addBill(page);
     expect(bill).toBeTruthy();
-    expect(bill.id).toMatch(/^rb_/);
+    expect(bill.id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
     expect(bill.frequency).toBe('MONTHLY');
     const count = await page.evaluate(() => window.linsoraStore.state.recurringBills.length);
     expect(count).toBe(1);

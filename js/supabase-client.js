@@ -1018,15 +1018,28 @@ class SupabaseRepository {
         const { error } = await this.supabase.from('transactions').upsert(txs);
         if (error) errors.push(`transactions: ${error.message}`);
       }
+      // Recorrências: somente linhas com IDs UUID válidos sobem para o
+      // Supabase (colunas UUID). Registros legados locais ('rb_*'/'rbocc_*',
+      // criados por versões anteriores) permanecem no localStorage e no motor
+      // local — nunca são apagados nem enviados (evita derrubar o batch).
+      const isUuidRow = (v) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(v || ''));
       if (data.recurringBills?.length) {
-        const bills = data.recurringBills.map(b => ({ id: b.id, user_id: userId, title: b.title, amount: b.amount, category: b.category, frequency: b.frequency, due_day: b.dueDay, start_date: b.startDate, end_date: b.endDate, active: b.active !== false }));
-        const { error } = await this.supabase.from('recurring_bills').upsert(bills);
-        if (error) errors.push(`recurring_bills: ${error.message}`);
+        const bills = data.recurringBills
+          .filter(b => isUuidRow(b.id))
+          .map(b => ({ id: b.id, user_id: userId, title: b.title, amount: b.amount, category: b.category, frequency: b.frequency, due_day: b.dueDay, start_date: b.startDate, end_date: b.endDate, active: b.active !== false }));
+        if (bills.length) {
+          const { error } = await this.supabase.from('recurring_bills').upsert(bills);
+          if (error) errors.push(`recurring_bills: ${error.message}`);
+        }
       }
       if (data.occurrences?.length) {
-        const occs = data.occurrences.map(o => ({ id: o.id, recurring_bill_id: o.recurringBillId, user_id: userId, due_date: o.dueDate, expected_amount: o.expectedAmount, paid_amount: o.paidAmount, status: o.status, paid_at: o.paidAt, transaction_id: o.transactionId, skipped_reason: o.skippedReason || null }));
-        const { error } = await this.supabase.from('recurring_bill_occurrences').upsert(occs);
-        if (error) errors.push(`recurring_bill_occurrences: ${error.message}`);
+        const occs = data.occurrences
+          .filter(o => isUuidRow(o.id) && isUuidRow(o.recurringBillId))
+          .map(o => ({ id: o.id, recurring_bill_id: o.recurringBillId, user_id: userId, due_date: o.dueDate, expected_amount: o.expectedAmount, paid_amount: o.paidAmount, status: o.status, paid_at: o.paidAt, transaction_id: o.transactionId, skipped_reason: o.skippedReason || null }));
+        if (occs.length) {
+          const { error } = await this.supabase.from('recurring_bill_occurrences').upsert(occs);
+          if (error) errors.push(`recurring_bill_occurrences: ${error.message}`);
+        }
       }
       if (data.user) {
         const profile = {

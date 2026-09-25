@@ -154,6 +154,40 @@ const LinsoraUtils = {
   },
 
   /**
+   * Gera um UUID v4 (RFC 4122) compatível com colunas UUID do Supabase.
+   * Usa crypto.randomUUID quando disponível; senão crypto.getRandomValues;
+   * por último, fallback com Math.random (sem formato proprietário).
+   */
+  generateUUID() {
+    try {
+      if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+        return crypto.randomUUID();
+      }
+    } catch (e) { /* usa os fallbacks abaixo */ }
+    try {
+      if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
+        const b = crypto.getRandomValues(new Uint8Array(16));
+        b[6] = (b[6] & 0x0f) | 0x40;
+        b[8] = (b[8] & 0x3f) | 0x80;
+        const h = [...b].map((x) => x.toString(16).padStart(2, '0')).join('');
+        return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
+      }
+    } catch (e) { /* usa o fallback abaixo */ }
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+      const r = Math.floor(Math.random() * 16);
+      const v = c === 'x' ? r : ((r & 0x3) | 0x8);
+      return v.toString(16);
+    });
+  },
+
+  /**
+   * Verifica se o valor é um UUID válido (aceito pelas colunas UUID do Supabase).
+   */
+  isUUID(value) {
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(value || ''));
+  },
+
+  /**
    * Gera ocorrências mensais de uma regra recorrente dentro de uma janela
    * [windowStartKey, windowEndKey] (chaves YYYY-MM-DD, comparação por string,
    * sem UTC). Pura e determinística. Aceita campos snake_case (remoto) e
