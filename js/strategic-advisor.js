@@ -163,6 +163,7 @@ class StrategicAdvisorEngine {
       diagnosis: `Entendi que você deseja registrar ${isGoal ? 'um Aporte' : parsedData.type} de ${LinsoraUtils.formatBRL(amt)}.`,
       impact: `Destino/Categoria: ${catOrType}. ${!isGoal && parsedData.type === 'DESPESA' ? 'O saldo será reduzido após a confirmação.' : 'O saldo será movimentado após a confirmação.'}`,
       recommendation: 'Por favor, confirme a operação abaixo para gravar no banco de dados.',
+      technicalIndicators: this.buildTechnicalIndicators(metrics),
       action: {
         type: isGoal ? 'EXECUTE_GOAL' : 'EXECUTE_TRANSACTION',
         payload: parsedData,
@@ -186,6 +187,24 @@ class StrategicAdvisorEngine {
     const remainingCount = items.length - 2;
     const moreText = remainingCount > 0 ? ` e mais ${remainingCount} outro(s)` : '';
     return `${formattedTotal} em compromissos próximos (${details}${moreText})`;
+  }
+
+  /**
+   * Monta a lista vertical de indicadores da "Visão Consolidada" a partir
+   * das métricas já calculadas (sem alterar valores nem lógica financeira).
+   * Reutilizada por todas as respostas que possuem métricas, para que cada
+   * indicador tenha sua própria estrutura visual em vez de texto corrido.
+   */
+  buildTechnicalIndicators(metrics) {
+    const m = metrics || {};
+    return [
+      { label: 'Caixa Livre do Mês', value: LinsoraUtils.formatBRL(m.availableBalanceForMonth) },
+      { label: 'Saldo em Contas', value: LinsoraUtils.formatBRL(m.totalBalance) },
+      { label: 'Receitas do Mês', value: LinsoraUtils.formatBRL(m.monthIncome) },
+      { label: 'Despesas do Mês', value: LinsoraUtils.formatBRL(m.monthExpense) },
+      { label: 'Compromissos Próximos', value: LinsoraUtils.formatBRL(m.committedAmount) },
+      { label: 'Limite Diário', value: LinsoraUtils.formatBRL(m.currentDailyLimit) }
+    ];
   }
 
   handleViabilityQuestion(parsedData, metrics, rawText, intent) {
@@ -215,18 +234,12 @@ class StrategicAdvisorEngine {
           diagnosis: `Você mencionou destinar ${LinsoraUtils.formatBRL(amount)} para ${parsedData.title}.`,
           impact: goalImpact,
           recommendation: rec,
+          technicalIndicators: this.buildTechnicalIndicators(metrics),
           action: null
         };
     }
 
-    const technicalIndicators = [
-      { label: 'Caixa Livre do Mês', value: LinsoraUtils.formatBRL(metrics.availableBalanceForMonth) },
-      { label: 'Saldo em Contas', value: LinsoraUtils.formatBRL(metrics.totalBalance) },
-      { label: 'Receitas do Mês', value: LinsoraUtils.formatBRL(metrics.monthIncome) },
-      { label: 'Despesas do Mês', value: LinsoraUtils.formatBRL(metrics.monthExpense) },
-      { label: 'Compromissos Próximos', value: LinsoraUtils.formatBRL(metrics.committedAmount) },
-      { label: 'Limite Diário', value: LinsoraUtils.formatBRL(metrics.currentDailyLimit) }
-    ];
+    const technicalIndicators = this.buildTechnicalIndicators(metrics);
 
     if (!amount || amount === 0) {
       const commitNote = hasCommitments ? ` (já reservados ${LinsoraUtils.formatBRL(metrics.committedAmount)} em compromissos)` : '';
@@ -317,6 +330,7 @@ class StrategicAdvisorEngine {
       title: '📊 Diagnóstico Orçamentário',
       diagnosis: msg,
       impact: `Limite diário disponível para os próximos ${metrics.daysRemaining} dias: ${LinsoraUtils.formatBRL(metrics.currentDailyLimit)}.`,
+      technicalIndicators: this.buildTechnicalIndicators(metrics),
       recommendation: 'Use linguagem natural para perguntar: "Posso gastar 50 em pizza hoje?" ou comande "Registre 50 de pizza".'
     };
   }

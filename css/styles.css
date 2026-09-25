@@ -1719,7 +1719,7 @@ body.frame-mode .device-notch { display: block; }
 /* --------------------------------------------------------------------------
    9. CARTÕES & FATURAS (TAB 4)
    -------------------------------------------------------------------------- */
-.cards-carousel-container { display: flex; gap: 12px; overflow-x: auto; padding-bottom: 6px; scroll-snap-type: x mandatory; }
+.cards-carousel-container { display: flex; gap: 12px; overflow-x: auto; padding: 4px 0 6px 4px; scroll-snap-type: x mandatory; }
 .credit-card-physical { min-width: 260px; height: 150px; border-radius: var(--radius-lg); padding: 16px; display: flex; flex-direction: column; justify-content: space-between; color: #FFFFFF; cursor: pointer; scroll-snap-align: start; transition: var(--transition-fast); }
 .credit-card-physical.nubank { background: linear-gradient(135deg, #820AD1, #490C7B); }
 .credit-card-physical.inter { background: linear-gradient(135deg, #FF7A00, #E65100); }
