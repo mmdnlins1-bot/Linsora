@@ -73,12 +73,28 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // 5. Roteamento único e definitivo após a verificação.
   // Sessão válida entra direto no aplicativo (sem PIN/biometria).
+  // Sessão restaurada também oferece o claim guest com o MESMO consentimento
+  // explícito do login/registro: sem candidatos ou com recibo, segue sem UI
+  // extra; com candidatos pendentes, pergunta antes de aplicar a carga
+  // definitiva. Ordem proposital: render + grantAppAccess primeiro para que
+  // o modal (z-index 1000) não fique atrás da splash (z-index 9999); o
+  // reload com claim é idempotente (dedupe por ID + chave natural).
   if (sessionRes.success) {
-    // Carrega os dados do usuário e renderiza a UI com estado real
+    // Carga base (reaplica recibo 'imported' pré-existente, se houver).
     await window.linsoraStore.loadUserData(sessionRes.user);
     window.linsoraStore.ensureCurrentWindowOccurrences();
     renderAppUI(window.linsoraStore.state);
     grantAppAccess();
+    // Oportunidade de claim na sessão restaurada (mesmo mecanismo do login).
+    const priorReceipt = window.supabaseRepo?.getGuestClaimReceipt
+      ? window.supabaseRepo.getGuestClaimReceipt(sessionRes.user.id)
+      : null;
+    const claimConsent = await resolveGuestRecurringConsent(sessionRes.user);
+    if (claimConsent && !priorReceipt) {
+      await window.linsoraStore.loadUserData(sessionRes.user, { claimGuestRecurring: true });
+      window.linsoraStore.ensureCurrentWindowOccurrences();
+      renderAppUI(window.linsoraStore.state);
+    }
   } else {
     // Sem sessão: renderiza estado vazio e exibe tela de login
     window.linsoraStore.ensureCurrentWindowOccurrences();
