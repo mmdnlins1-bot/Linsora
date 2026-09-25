@@ -66,6 +66,11 @@ class StrategicAdvisorEngine {
     if (window.linsoraStore?.ensureCurrentWindowOccurrences) {
       window.linsoraStore.ensureCurrentWindowOccurrences({ silent: true });
     }
+    // Ciclo do Conselheiro: gerar ocorrências até o próximo recebimento
+    // ANTES do cálculo (ponto de entrada do fluxo; nunca dentro do cálculo).
+    if (window.linsoraStore?.ensureCycleOccurrences) {
+      window.linsoraStore.ensureCycleOccurrences();
+    }
     const metrics = this.calculateRealMetrics(state);
 
     if (intent === 'EXPLICIT_COMMAND' && amount > 0) {
@@ -150,6 +155,32 @@ class StrategicAdvisorEngine {
     } catch (e) { /* motor indisponível: segue com zero */ }
     const availableAfterCommitments = Math.max(0, availableBalanceForMonth - committedAmount);
 
+    // Ciclo financeiro do Conselheiro (V1): hoje até o próximo recebimento
+    // (ou fim do mês quando não houver recebimento futuro). As métricas
+    // mensais acima permanecem intactas para a Visão Consolidada.
+    let cycleStartDate = LinsoraUtils.toLocalDateKey(today);
+    let cycleEndDate = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${daysInMonth}`;
+    let cycleNextReceiptDate = null;
+    let cycleUsedFallback = true;
+    let cycleCommittedAmount = committedAmount;
+    let cycleCommittedItems = committedItems;
+    try {
+      const c = window.linsoraStore?.getCommitmentsUntilNextReceipt
+        ? window.linsoraStore.getCommitmentsUntilNextReceipt()
+        : null;
+      if (c && c.endDate) {
+        cycleStartDate = c.startDate || cycleStartDate;
+        cycleEndDate = c.endDate;
+        cycleNextReceiptDate = c.nextReceiptDate || null;
+        cycleUsedFallback = c.usedFallback !== false;
+        cycleCommittedAmount = Number(c.total) || 0;
+        cycleCommittedItems = Array.isArray(c.items) ? c.items : [];
+      }
+    } catch (e) { /* motor indisponível: ciclo espelha o mês */ }
+    const cycleDays = Math.max(1, StrategicAdvisorEngine.inclusiveDaysBetween(cycleStartDate, cycleEndDate));
+    const cycleAvailableAfterCommitments = Math.max(0, availableBalanceForMonth - cycleCommittedAmount);
+    const cycleDailyLimit = cycleAvailableAfterCommitments / cycleDays;
+
     return {
       monthIncome,
       monthExpense,
@@ -162,8 +193,29 @@ class StrategicAdvisorEngine {
       totalLiquidity,
       committedAmount,
       committedItems,
-      availableAfterCommitments
+      availableAfterCommitments,
+      cycleStartDate,
+      cycleEndDate,
+      cycleNextReceiptDate,
+      cycleUsedFallback,
+      cycleDays,
+      cycleCommittedAmount,
+      cycleCommittedItems,
+      cycleAvailableAfterCommitments,
+      cycleDailyLimit
     };
+  }
+
+  /**
+   * Dias inclusivos entre duas chaves YYYY-MM-DD (somente apresentação do
+   * ciclo; ex.: 25/09→05/10 = 11 dias). Puro, sem depender do relógio.
+   */
+  static inclusiveDaysBetween(startKey, endKey) {
+    const pa = String(startKey || '').split('-').map(Number);
+    const pb = String(endKey || '').split('-').map(Number);
+    if (pa.length < 3 || pb.length < 3 || pa.some(isNaN) || pb.some(isNaN)) return 1;
+    const diff = Math.round((Date.UTC(pb[0], pb[1] - 1, pb[2]) - Date.UTC(pa[0], pa[1] - 1, pa[2])) / 86400000);
+    return Math.max(1, diff + 1);
   }
 
   handleExplicitCommand(parsedData, metrics) {
@@ -216,7 +268,7 @@ class StrategicAdvisorEngine {
       { label: 'Saldo em Contas', value: LinsoraUtils.formatBRL(m.totalBalance) },
       { label: 'Receitas do Mês', value: LinsoraUtils.formatBRL(m.monthIncome) },
       { label: 'Despesas do Mês', value: LinsoraUtils.formatBRL(m.monthExpense) },
-      { label: 'Compromissos Próximos', value: LinsoraUtils.formatBRL(m.committedAmount) },
+      { label: 'Compromissos do mês', value: LinsoraUtils.formatBRL(m.committedAmount) },
       { label: 'Limite Diário', value: LinsoraUtils.formatBRL(m.currentDailyLimit) }
     ];
   }
@@ -250,6 +302,9 @@ class StrategicAdvisorEngine {
     };
     return {
       ...advice,
+      commitmentOptionsTitle: metrics.cycleUsedFallback !== false
+        ? 'Compromissos até o fim do mês'
+        : 'Compromissos até o próximo recebimento',
       commitmentOptions: options.map(o => ({
         n: o.n,
         title: o.title,
@@ -266,7 +321,11 @@ class StrategicAdvisorEngine {
    * fluxo existente). Faturas de cartão seguem só no cálculo da margem.
    */
   getPendingRecurringOptions(metrics) {
-    const items = (metrics && Array.isArray(metrics.committedItems)) ? metrics.committedItems : [];
+    // Conferência do Conselheiro usa o ciclo (hoje → próximo recebimento);
+    // fora do ciclo, espelha o mês (fallback já aplicado nas métricas).
+    const items = (metrics && Array.isArray(metrics.cycleCommittedItems))
+      ? metrics.cycleCommittedItems
+      : ((metrics && Array.isArray(metrics.committedItems)) ? metrics.committedItems : []);
     return items
       .filter(it => it && it.type === 'RECURRING_BILL' && it.originId)
       .map((it, idx) => ({
@@ -392,6 +451,9 @@ class StrategicAdvisorEngine {
     if (window.linsoraStore?.ensureCurrentWindowOccurrences) {
       window.linsoraStore.ensureCurrentWindowOccurrences({ silent: true });
     }
+    if (window.linsoraStore?.ensureCycleOccurrences) {
+      window.linsoraStore.ensureCycleOccurrences();
+    }
     return this.calculateRealMetrics(window.linsoraStore.state);
   }
 
@@ -502,16 +564,21 @@ class StrategicAdvisorEngine {
     });
     const metrics = this.freshMetrics();
     const core = this.answerViability(flow.originalParsed, metrics, flow.originalQuery, 'QUESTION');
-    // Apresentação (somente visual): os mesmos valores já calculados acima
-    // (totalBalance, applied, remaining, availableAfterCommitments, flow.amount)
-    // são reorganizados em blocos empilhados. Nenhuma fórmula, janela,
+    // Apresentação em blocos (somente visual): os mesmos valores já
+    // calculados acima, agora na base do ciclo financeiro (hoje → próximo
+    // recebimento, ou fim do mês no fallback). Nenhuma fórmula, janela,
     // regra de PAID ou confirmação é alterada aqui.
+    const cycleItems = Array.isArray(metrics.cycleCommittedItems) ? metrics.cycleCommittedItems : (metrics.committedItems || []);
+    const cycleMargin = Number(metrics.cycleAvailableAfterCommitments ?? metrics.availableAfterCommitments) || 0;
+    const cycleDaily = Number(metrics.cycleDailyLimit ?? metrics.currentDailyLimit) || 0;
+    const cycleFallback = metrics.cycleUsedFallback !== false;
+    const cycleDailyLabel = cycleFallback ? 'Limite diário até o fim do mês' : 'Limite diário até o próximo recebimento';
     const paidEntries = applied.map(a => ({
       title: a.title || 'Conta recorrente',
       amountText: LinsoraUtils.formatBRL(a.amount),
       dueDateText: a.dueDate ? LinsoraUtils.formatDateBR(a.dueDate) : ''
     }));
-    const remainingEntries = ((metrics.committedItems || []).filter(i => i.type === 'RECURRING_BILL'))
+    const remainingEntries = (cycleItems.filter(i => i.type === 'RECURRING_BILL'))
       .map(i => ({
         title: i.title || 'Conta recorrente',
         amountText: LinsoraUtils.formatBRL(i.amount),
@@ -549,25 +616,44 @@ class StrategicAdvisorEngine {
         emptyNote: 'nenhum compromisso pendente',
         valueTone: 'pending'
       },
-      { kind: 'margin', label: 'Margem após compromissos', value: LinsoraUtils.formatBRL(metrics.availableAfterCommitments), valueTone: 'positive' },
-      { kind: 'afterSpend', label: 'Margem após o gasto', value: LinsoraUtils.formatBRL(metrics.availableAfterCommitments - flow.amount), valueTone: 'positive' }
+      { kind: 'margin', label: 'Margem após compromissos', value: LinsoraUtils.formatBRL(cycleMargin), valueTone: 'positive' },
+      { kind: 'afterSpend', label: 'Margem após o gasto', value: LinsoraUtils.formatBRL(cycleMargin - flow.amount), valueTone: 'positive' },
+      { kind: 'daily', label: cycleDailyLabel, value: LinsoraUtils.formatBRL(cycleDaily), valueTone: 'default' }
     ];
+    // Conclusão curta (sem repetir os valores dos blocos): o diagnóstico
+    // e os detalhes técnicos do core são preservados; só a recomendação
+    // legada — que duplicava os números — é substituída.
+    let conclusion;
+    if (flow.amount > cycleMargin) {
+      conclusion = 'Esse gasto comprometeria sua margem do ciclo financeiro atual.';
+    } else if (flow.amount > cycleDaily) {
+      conclusion = 'É viável no ciclo, mas o gasto fica acima do limite diário planejado.';
+    } else {
+      conclusion = 'É viável dentro do ciclo financeiro atual.';
+    }
     return {
       ...core,
       settlementBlocks,
-      recommendation: core.recommendation
+      recommendation: conclusion
     };
   }
 
   answerViability(parsedData, metrics, rawText, intent) {
     const isGoal = parsedData.action === 'APORTE' || parsedData.type?.includes('Meta') || parsedData.type?.includes('Reserva');
     const amount = parsedData.amount || parsedData.target;
-    
-    const hasCommitments = (metrics.committedAmount > 0) && (Array.isArray(metrics.committedItems) && metrics.committedItems.length > 0);
-    const commitSummary = hasCommitments ? this.formatCommitmentsSummary(metrics.committedItems, metrics.committedAmount) : '';
-    // Base da decisão de viabilidade: margem após os compromissos futuros
-    // relevantes (reutiliza o valor já calculado, sem nova fonte de verdade).
-    const effectiveMargin = Number(metrics.availableAfterCommitments ?? metrics.availableBalanceForMonth) || 0;
+
+    // Decisão do Conselheiro usa o ciclo financeiro (hoje → próximo
+    // recebimento, ou fim do mês no fallback). As métricas mensais seguem
+    // apenas na Visão Consolidada.
+    const cycleItems = Array.isArray(metrics.cycleCommittedItems) ? metrics.cycleCommittedItems : (metrics.committedItems || []);
+    const cycleAmount = Number(metrics.cycleCommittedAmount ?? metrics.committedAmount) || 0;
+    const hasCommitments = cycleAmount > 0 && cycleItems.length > 0;
+    const commitSummary = hasCommitments ? this.formatCommitmentsSummary(cycleItems, cycleAmount) : '';
+    const effectiveMargin = Number(metrics.cycleAvailableAfterCommitments ?? metrics.availableAfterCommitments ?? metrics.availableBalanceForMonth) || 0;
+    const dailyLimit = Number(metrics.cycleDailyLimit ?? metrics.currentDailyLimit) || 0;
+    const usedFallback = metrics.cycleUsedFallback !== false;
+    const scopeText = usedFallback ? 'até o fim do mês' : 'até o próximo recebimento';
+    const dailyLabel = `Limite diário ${scopeText}`;
 
     if (isGoal) {
         let rec = amount <= effectiveMargin ? 'Aporte viável.' : 'Aporte compromete suas despesas livres mensais.';
@@ -578,7 +664,7 @@ class StrategicAdvisorEngine {
           rec = 'Não ficou claro se é um registro ou simulação. ' + rec + ' Por favor, diga "Registre..." ou "Simule...".';
         }
         const goalImpact = hasCommitments
-          ? `Livre no mês: ${LinsoraUtils.formatBRL(metrics.availableBalanceForMonth)} | Compromissos Próximos: ${LinsoraUtils.formatBRL(metrics.committedAmount)}.`
+          ? `Livre no mês: ${LinsoraUtils.formatBRL(metrics.availableBalanceForMonth)} | Compromissos do mês: ${LinsoraUtils.formatBRL(metrics.committedAmount)}.`
           : `Livre no mês: ${LinsoraUtils.formatBRL(metrics.availableBalanceForMonth)}.`;
         return {
           severity: 'info',
@@ -594,14 +680,14 @@ class StrategicAdvisorEngine {
     const technicalIndicators = this.buildTechnicalIndicators(metrics);
 
     if (!amount || amount === 0) {
-      const commitNote = hasCommitments ? ` (já reservados ${LinsoraUtils.formatBRL(metrics.committedAmount)} em compromissos)` : '';
+      const commitNote = hasCommitments ? ` (já reservados ${LinsoraUtils.formatBRL(cycleAmount)} em compromissos)` : '';
       return {
         severity: 'info',
         title: '💡 Limite Seguro',
         diagnosis: `Com base nas suas receitas, despesas, reservas e saldo, o seu caixa livre no momento é de ${LinsoraUtils.formatBRL(metrics.availableBalanceForMonth)}${commitNote}.`,
         impact: `Caixa Livre do Mês: ${LinsoraUtils.formatBRL(metrics.availableBalanceForMonth)} | Saldo em Contas: ${LinsoraUtils.formatBRL(metrics.totalBalance)} | Despesas: ${LinsoraUtils.formatBRL(metrics.monthExpense)}`,
         technicalIndicators,
-        recommendation: `Para não comprometer suas finanças, recomendo que seus gastos fiquem dentro de **${LinsoraUtils.formatBRL(metrics.currentDailyLimit)}** por dia até o próximo mês.`,
+        recommendation: `Para não comprometer suas finanças, recomendo que seus gastos fiquem dentro de **${LinsoraUtils.formatBRL(dailyLimit)}** por dia ${scopeText}.`,
         action: null
       };
     }
@@ -631,25 +717,25 @@ class StrategicAdvisorEngine {
           recommendation = `Você tem saldo nas contas para cobrir, mas esse gasto de ${LinsoraUtils.formatBRL(amount)} ultrapassa a sua renda livre do mês (${LinsoraUtils.formatBRL(metrics.availableBalanceForMonth)}). Você precisará entrar nas suas reservas acumuladas.`;
         }
       } else {
-        recommendation = `Esse gasto de ${LinsoraUtils.formatBRL(amount)} comprometeria sua margem disponível. Você precisa considerar ${commitSummary}, o que deixa aproximadamente ${LinsoraUtils.formatBRL(effectiveMargin)} disponíveis no mês.`;
+        recommendation = `Esse gasto de ${LinsoraUtils.formatBRL(amount)} comprometeria sua margem disponível. Você precisa considerar ${commitSummary}, o que deixa aproximadamente ${LinsoraUtils.formatBRL(effectiveMargin)} disponíveis no ciclo.`;
       }
-    } else if (amount <= metrics.currentDailyLimit) {
+    } else if (amount <= dailyLimit) {
       severity = 'success';
       if (hasCommitments) {
-        recommendation = `Perfeito! O valor de ${LinsoraUtils.formatBRL(amount)} cabe no seu limite diário atual de ${LinsoraUtils.formatBRL(metrics.currentDailyLimit)}. Lembre-se de que há ${commitSummary}, restando aproximadamente ${LinsoraUtils.formatBRL(effectiveMargin)} de margem disponível no mês.`;
+        recommendation = `Perfeito! O valor de ${LinsoraUtils.formatBRL(amount)} cabe no seu ${dailyLabel.toLowerCase()} de ${LinsoraUtils.formatBRL(dailyLimit)}. Lembre-se de que há ${commitSummary}, restando aproximadamente ${LinsoraUtils.formatBRL(effectiveMargin)} de margem disponível no ciclo.`;
       } else {
-        recommendation = `Perfeito! O valor cabe perfeitamente no seu limite diário atual de ${LinsoraUtils.formatBRL(metrics.currentDailyLimit)}.`;
+        recommendation = `Perfeito! O valor cabe perfeitamente no seu ${dailyLabel.toLowerCase()} de ${LinsoraUtils.formatBRL(dailyLimit)}.`;
       }
     } else {
       severity = 'warning';
       if (hasCommitments) {
-        recommendation = `É viável no mês considerando seus compromissos, mas passa do seu teto diário de ${LinsoraUtils.formatBRL(metrics.currentDailyLimit)}. Você precisa considerar ${commitSummary}. Sua margem livre restante após esse gasto será de ${LinsoraUtils.formatBRL(effectiveMargin - amount)}.`;
+        recommendation = `É viável no ciclo considerando seus compromissos, mas fica acima do seu ${dailyLabel.toLowerCase()} de ${LinsoraUtils.formatBRL(dailyLimit)}. Você precisa considerar ${commitSummary}. Sua margem livre restante após esse gasto será de ${LinsoraUtils.formatBRL(effectiveMargin - amount)}.`;
       } else {
-        recommendation = `É viável no mês, mas passa do seu teto diário de ${LinsoraUtils.formatBRL(metrics.currentDailyLimit)}. Se gastar isso hoje, vai precisar segurar a onda nos próximos dias.`;
+        recommendation = `É viável no ciclo, mas fica acima do seu ${dailyLabel.toLowerCase()} de ${LinsoraUtils.formatBRL(dailyLimit)}. Se gastar isso hoje, vai precisar segurar a onda nos próximos dias.`;
       }
     }
-    
-    const impactMath = `Caixa Livre do Mês: ${LinsoraUtils.formatBRL(metrics.availableBalanceForMonth)} | Saldo em Contas: ${LinsoraUtils.formatBRL(metrics.totalBalance)} | Receitas do Mês: ${LinsoraUtils.formatBRL(metrics.monthIncome)} | Despesas do Mês: ${LinsoraUtils.formatBRL(metrics.monthExpense)} | Compromissos Próximos: ${LinsoraUtils.formatBRL(metrics.committedAmount)} | Limite Diário: ${LinsoraUtils.formatBRL(metrics.currentDailyLimit)}`;
+
+    const impactMath = `Caixa Livre do Mês: ${LinsoraUtils.formatBRL(metrics.availableBalanceForMonth)} | Saldo em Contas: ${LinsoraUtils.formatBRL(metrics.totalBalance)} | Receitas do Mês: ${LinsoraUtils.formatBRL(metrics.monthIncome)} | Despesas do Mês: ${LinsoraUtils.formatBRL(metrics.monthExpense)} | Compromissos do mês: ${LinsoraUtils.formatBRL(metrics.committedAmount)} | Limite Diário: ${LinsoraUtils.formatBRL(metrics.currentDailyLimit)}`;
 
     if (intent === 'AMBIGUOUS') {
       recommendation = `Para me ajudar, por favor, seja mais direto: diga "Registre ${LinsoraUtils.formatBRL(amount)}${catText}" ou "Posso gastar ${LinsoraUtils.formatBRL(amount)}${catText}?".`;
@@ -967,7 +1053,7 @@ class StrategicAdvisorEngine {
 
           ${Array.isArray(advice.commitmentOptions) && advice.commitmentOptions.length > 0 ? `
             <div class="commitment-options-list" style="margin-top: 12px; display: flex; flex-direction: column; gap: 10px;">
-              <strong style="font-size: 0.9rem; color: var(--text-color);">Compromissos próximos</strong>
+              <strong style="font-size: 0.9rem; color: var(--text-color);">${LinsoraUtils.escapeHTML(advice.commitmentOptionsTitle || 'Compromissos próximos')}</strong>
               ${advice.commitmentOptions.map(opt => `
                 <div class="commitment-option-item" style="display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; background: var(--bg-color); border: 1px solid var(--border); border-radius: 8px;">
                   <span style="font-size: 0.9rem; font-weight: 700; color: var(--text-color);">${LinsoraUtils.escapeHTML(String(opt.n))}. ${LinsoraUtils.escapeHTML(opt.title)}</span>

@@ -269,7 +269,7 @@ test.describe('18. Integração Contas Recorrentes + Conselheiro', () => {
     await expect(techList).toContainText('Saldo em Contas');
     await expect(techList).toContainText('Receitas do Mês');
     await expect(techList).toContainText('Despesas do Mês');
-    await expect(techList).toContainText('Compromissos Próximos');
+    await expect(techList).toContainText('Compromissos do mês');
     await expect(techList).toContainText('Limite Diário');
 
     // Validar que cada item possui estrutura vertical (span de rótulo e strong de valor)

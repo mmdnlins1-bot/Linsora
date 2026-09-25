@@ -74,8 +74,8 @@ test.describe('20. Conselheiro: layout do resultado do fluxo', () => {
     await seedProductionLike(page);
     const result = await confirmAluguelPaid(page);
     const blocks = result.locator('.settlement-block');
-    await expect(blocks).toHaveCount(6);
-    for (const label of ['Gasto solicitado', 'Compromisso pago', 'Saldo em contas', 'Compromissos restantes', 'Margem após compromissos', 'Margem após o gasto']) {
+    await expect(blocks).toHaveCount(7);
+    for (const label of ['Gasto solicitado', 'Compromisso pago', 'Saldo em contas', 'Compromissos restantes', 'Margem após compromissos', 'Margem após o gasto', 'Limite diário até']) {
       await expect(result.locator('.settlement-blocks')).toContainText(label);
     }
   });

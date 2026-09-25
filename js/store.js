@@ -603,6 +603,100 @@ class LinsoraStore {
   }
 
   /* ------------------------------------------------------------------------
+     CICLO FINANCEIRO DO CONSELHEIRO (V1) — hoje até o próximo recebimento.
+     A Visão Consolidada continua mensal (getCurrentMonthCommitments);
+     o Conselheiro usa o ciclo (getCommitmentsUntilNextReceipt).
+     ------------------------------------------------------------------------ */
+
+  /**
+   * Próximo recebimento (V1): menor data futura entre transactions do tipo
+   * RECEITA com date > hoje (chave YYYY-MM-DD). Retorna a data (YYYY-MM-DD)
+   * ou null quando não há recebimento futuro cadastrado.
+   * LIMITAÇÃO V1: baseia-se apenas em recebimentos futuros já cadastrados
+   * como transação; não existe receita recorrente/salário modelado, e
+   * receitas passadas ou de hoje são ignoradas.
+   */
+  getNextReceiptDate(todayKey) {
+    const today = todayKey || LinsoraUtils.toLocalDateKey();
+    let next = null;
+    (this.state?.transactions || []).forEach((t) => {
+      if (!t || t.type !== 'RECEITA') return;
+      const d = String(t.date || '').slice(0, 10);
+      if (!/^\d{4}-\d{2}-\d{2}/.test(d) || d <= today) return;
+      if (!next || d < next) next = d;
+    });
+    return next;
+  }
+
+  /**
+   * Janela do ciclo: { startDate, endDate, nextReceiptDate, usedFallback }.
+   * startDate = hoje; endDate = próximo recebimento ou, na ausência dele,
+   * o último dia do mês atual (usedFallback = true).
+   */
+  getCommitmentWindow(todayKey) {
+    const today = todayKey || LinsoraUtils.toLocalDateKey();
+    const nextReceiptDate = this.getNextReceiptDate(today);
+    if (nextReceiptDate) {
+      return { startDate: today, endDate: nextReceiptDate, nextReceiptDate, usedFallback: false };
+    }
+    const p = (v) => String(v).padStart(2, '0');
+    const parts = String(today).split('-').map(Number);
+    const lastDay = new Date(parts[0], parts[1], 0).getDate();
+    return {
+      startDate: today,
+      endDate: `${parts[0]}-${p(parts[1])}-${p(lastDay)}`,
+      nextReceiptDate: null,
+      usedFallback: true
+    };
+  }
+
+  /**
+   * Compromissos do mês (Visão Consolidada): primeiro ao último dia do mês
+   * corrente. Reutiliza o motor existente; não usar o ciclo aqui.
+   */
+  getCurrentMonthCommitments() {
+    const today = new Date();
+    const p = (v) => String(v).padStart(2, '0');
+    const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
+    const monthEndKey = `${today.getFullYear()}-${p(today.getMonth() + 1)}-${p(lastDay)}`;
+    return this.getCommittedAmountUntil(monthEndKey);
+  }
+
+  /**
+   * Garante ocorrências recorrentes até o fim do ciclo (idempotente, sem
+   * criar transações nem alterar saldos). Deve ser chamado nos pontos de
+   * entrada do fluxo (antes do cálculo), nunca dentro de cálculo/render.
+   * Retorna a janela utilizada.
+   */
+  ensureCycleOccurrences() {
+    const win = this.getCommitmentWindow();
+    try {
+      if (typeof this.ensureRecurringOccurrences === 'function') {
+        this.ensureRecurringOccurrences(win.startDate, win.endDate, { silent: true });
+      }
+    } catch (e) { /* mantém cálculo com ocorrências já existentes */ }
+    return win;
+  }
+
+  /**
+   * Compromissos do Conselheiro: leitura pura sobre o estado (não gera
+   * ocorrências — use ensureCycleOccurrences() antes). Reutiliza
+   * getCommittedAmountUntil(endDate). Retorna a janela + total/items.
+   */
+  getCommitmentsUntilNextReceipt() {
+    const win = this.getCommitmentWindow();
+    const committed = this.getCommittedAmountUntil(win.endDate);
+    return {
+      startDate: win.startDate,
+      endDate: win.endDate,
+      nextReceiptDate: win.nextReceiptDate,
+      usedFallback: win.usedFallback,
+      total: committed.total,
+      items: committed.items
+    };
+  }
+
+  /* ------------------------------------------------------------------------
      OPERAÇÕES DE METAS
      ------------------------------------------------------------------------ */
   async addGoal(goalData) {
