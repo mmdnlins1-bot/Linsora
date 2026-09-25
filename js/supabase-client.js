@@ -859,7 +859,10 @@ class SupabaseRepository {
       if (guestStored) {
         try {
           const guestCache = JSON.parse(guestStored);
-          if (guestCache && (guestCache.transactions?.length || guestCache.accounts?.length || guestCache.goals?.length)) {
+          // Inclui recurringBills/occurrences no gatilho: visitante que criou
+          // SOMENTE contas recorrentes também deve ter tudo adotado no login,
+          // com a mesma reescrita de userId das demais entidades.
+          if (guestCache && (guestCache.transactions?.length || guestCache.accounts?.length || guestCache.goals?.length || guestCache.recurringBills?.length || guestCache.occurrences?.length)) {
             console.log('🔄 Migrando dados locais de visitante para o usuário:', activeId);
             localCache = {
               user: {

@@ -476,44 +476,61 @@ class LinsoraStore {
   }
 
   /**
-   * Migração local, idempotente e NÃO destrutiva de IDs legados das
-   * recorrências ('rb_*' nas regras, 'rbocc_*' nas ocorrências) para UUID v4
-   * (formato exigido pelas colunas UUID do Supabase). Só toca registros do
-   * usuário corrente com ID fora do padrão UUID; reescreve as referências
-   * (occurrence.recurringBillId) e remove duplicatas resultantes da mesma
-   * chave (userId + recurringBillId + dueDate), preferindo PENDING.
-   * Nenhum registro é apagado por conteúdo: só IDs são reemitidos.
-   * Retorna a quantidade de campos reemitidos.
+   * Normalização de titularidade + IDs legados das recorrências (local,
+   * idempotente e NÃO destrutiva). Duas frentes, sem misturar usuários:
+   * 1) Titularidade: linhas cuja titularidade é apenas um placeholder
+   *    pré-autenticação ('guest'/'usr_guest'/vazia) são atribuídas ao usuário
+   *    corrente SOMENTE quando ele é autenticado (id real, não placeholder).
+   *    Placeholder jamais pertence a outro usuário autenticado, então não há
+   *    risco de apropriação indevida. Linhas de outro usuário CONCRETO
+   *    (UUID ou usr_<hash> diferente) NUNCA são tocadas nem reatribuídas.
+   * 2) IDs legados ('rb_*'/'rbocc_*') viram UUID v4, reescrevendo as
+   *    referências (occurrence.recurringBillId) e removendo duplicatas da
+   *    chave (userId + recurringBillId + dueDate), preferindo PENDING.
+   * Preserva todos os demais campos (título, valor, datas, status,
+   * transactionId, paidAmount/paidAt, etc.). Retorna a qtde de ajustes.
    */
   normalizeLegacyRecurringIds() {
     const uid = this.state?.user?.id;
     if (!uid || !Array.isArray(this.state?.recurringBills) || !Array.isArray(this.state?.occurrences)) return 0;
+    const isPlaceholder = (v) => v === 'guest' || v === 'usr_guest' || v === '' || v == null;
+    const currentIsAuthenticated = !isPlaceholder(uid);
     const isUUID = (v) => (window.LinsoraUtils?.isUUID
       ? window.LinsoraUtils.isUUID(v)
       : /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(v || '')));
-    let remapped = 0;
+    let changed = 0;
     const billIdMap = new Map();
     this.state.recurringBills.forEach((b) => {
-      if ((b.userId || b.user_id) !== uid) return;
+      const owner = b.userId ?? b.user_id;
+      if (owner !== uid) {
+        // Só adota placeholder pré-autenticação; outro usuário concreto: intocável.
+        if (!currentIsAuthenticated || !isPlaceholder(owner)) return;
+        b.userId = uid;
+        changed += 1;
+      }
       if (!isUUID(b.id)) {
         const nu = LinsoraUtils.generateUUID();
         billIdMap.set(b.id, nu);
         b.id = nu;
-        remapped += 1;
+        changed += 1;
       }
     });
     this.state.occurrences.forEach((o) => {
-      if (o.userId !== uid) return;
+      if (o.userId !== uid) {
+        if (!currentIsAuthenticated || !isPlaceholder(o.userId)) return;
+        o.userId = uid;
+        changed += 1;
+      }
       if (billIdMap.has(o.recurringBillId)) {
         o.recurringBillId = billIdMap.get(o.recurringBillId);
-        remapped += 1;
+        changed += 1;
       }
       if (!isUUID(o.id)) {
         o.id = LinsoraUtils.generateUUID();
-        remapped += 1;
+        changed += 1;
       }
     });
-    if (remapped > 0) {
+    if (changed > 0) {
       const rank = { PENDING: 0, PAID: 1, SKIPPED: 2 };
       const best = new Map();
       this.state.occurrences.forEach((o) => {
@@ -527,7 +544,7 @@ class LinsoraStore {
         );
       }
     }
-    return remapped;
+    return changed;
   }
 
   /**
