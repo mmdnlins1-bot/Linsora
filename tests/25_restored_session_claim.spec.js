@@ -100,7 +100,8 @@ test.describe('25. Claim na sessao restaurada', () => {
     expect(st.receipt?.result).toBe('imported');
 
     const advice = await page.evaluate(() => {
-      const a = window.LinsoraStrategicAdvisor.processQuery('Posso gastar 2000 reais hoje?');
+      // Zona de proximidade: margem 7700, gasto 5000 -> restante 2700 <= 2x2300.
+      const a = window.LinsoraStrategicAdvisor.processQuery('Posso gastar 5000 reais hoje?');
       return { titles: (a.commitmentOptions || []).map((o) => o.title).sort(), rec: a.recommendation };
     });
     expect(advice.titles).toEqual(['Aluguel', 'Energia']);

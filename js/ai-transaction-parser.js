@@ -60,6 +60,7 @@ class TransactionAIParser {
     const categoryResult = this.detectCategory(lowerText, type, customCategories);
     const category = categoryResult.name;
     const description = this.extractDescription(cleanText, amount, category, type);
+    const cardUsage = this.detectCardUsage(lowerText);
 
     const confidence = (amount > 0 ? 0.4 : 0) + (categoryResult.matched ? 0.3 : 0) + (type ? 0.2 : 0) + 0.1;
 
@@ -72,8 +73,40 @@ class TransactionAIParser {
       description: description || 'Lançamento por Voz',
       date: date || LinsoraUtils.toLocalDateKey(),
       rawText: cleanText,
-      confidence: Math.min(confidence, 1.0)
+      confidence: Math.min(confidence, 1.0),
+      paymentMethod: cardUsage.paymentMethod,
+      cardHint: cardUsage.cardHint,
+      isCardPayment: cardUsage.isCardPayment
     };
+  }
+
+  /**
+   * Meio de pagamento e cartão mencionado (compra no crédito / pagamento
+   * de fatura). Aditivo: não altera type/amount/category/description.
+   * - paymentMethod 'credit' quando há menção a cartão de crédito/fatura;
+   * - cardHint com a palavra após "cartão" (ex.: "cartão nubank" -> "nubank");
+   * - isCardPayment quando há intenção de PAGAR fatura + menção a cartão.
+   * Nunca inventa cartão: sem menção, hint é null.
+   */
+  detectCardUsage(lowerText) {
+    const norm = String(lowerText || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    // "fatura" só existe no contexto de cartão de crédito neste app.
+    const hasCard = norm.includes('cartao') || norm.includes('fatura');
+    const creditCues = ['cartao de credito', 'no credito', 'no cartao', 'no meu cartao', 'na fatura', 'fatura do cartao', 'credito'];
+    const paymentMethod = creditCues.some((c) => norm.includes(c)) ? 'credit' : null;
+    let cardHint = null;
+    const stop = ['de', 'do', 'da', 'no', 'na', 'em', 'com', 'por', 'para', 'meu', 'minha', 'esse', 'essa', 'este', 'esta', 'credito'];
+    const m = norm.match(/cartao\s+(?:de\s+credito\s+)?([a-z]{2,})/);
+    if (m && m[1] && !stop.includes(m[1])) {
+      cardHint = m[1];
+    } else {
+      // "fatura do nubank": dica após "fatura".
+      const f = norm.match(/fatura\s+(?:do\s+|da\s+|de\s+)?([a-z]{2,})/);
+      if (f && f[1] && !stop.includes(f[1])) cardHint = f[1];
+    }
+    const paymentCues = ['paguei', 'pagamento', 'pagar', 'quitei', 'quitacao', 'fatura'];
+    const mentionsPayment = paymentCues.some((c) => norm.includes(c));
+    return { paymentMethod, cardHint, isCardPayment: Boolean(hasCard && mentionsPayment) };
   }
 
   detectPix(lowerText, cleanText) {

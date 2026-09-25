@@ -283,6 +283,10 @@ class StrategicAdvisorEngine {
    * GASTO (perguntas "posso gastar X?"): mantém a conclusão calculada pela
    * lógica existente e acrescenta a lista numerada + pergunta contextual,
    * abrindo o fluxo de confirmação. Não altera valores nem decisões.
+   * Relevância (não perguntar quando desnecessário):
+   * - gasto inviável (amount > margem efetiva do ciclo): sem conferência;
+   * - gasto distante dos compromissos (margem restante após o gasto maior
+   *   que 2x os compromissos PENDING do ciclo): sem conferência.
    */
   maybeAttachCommitmentCheck(advice, parsedData, metrics, rawText, intent) {
     if (!advice || intent !== 'QUESTION' || this.commitmentFlow) return advice;
@@ -292,6 +296,15 @@ class StrategicAdvisorEngine {
     if (isGoal) return advice;
     const options = this.getPendingRecurringOptions(metrics);
     if (options.length === 0) return advice;
+    // Mesma margem efetiva usada por answerViability (ciclo financeiro).
+    const effectiveMargin = Number(metrics.cycleAvailableAfterCommitments ?? metrics.availableAfterCommitments ?? metrics.availableBalanceForMonth) || 0;
+    // Gasto inviável: responde a inviabilidade, sem perguntar por pagos.
+    if (amount > effectiveMargin) return advice;
+    // Proximidade: só pergunta quando o restante após o gasto fica próximo
+    // dos compromissos PENDING do ciclo (soma das opções apresentadas).
+    const pendingTotal = options.reduce((acc, o) => acc + (Number(o.amount) || 0), 0);
+    const remainingAfterSpend = effectiveMargin - amount;
+    if (remainingAfterSpend > pendingTotal * 2) return advice;
     this.commitmentFlow = {
       stage: 'awaiting_selection',
       originalQuery: typeof rawText === 'string' ? rawText : '',
@@ -833,6 +846,19 @@ class StrategicAdvisorEngine {
       if (inputEl) {
         inputEl.addEventListener('keypress', (e) => {
           if (e.key === 'Enter') this.submitAdvisorQuery();
+        });
+      }
+      // Mobile/PWA: teclados virtuais (ex.: Gboard) nem sempre emitem
+      // 'keypress'; o botão "Ir/Enviar" dispara o submit do form. Sem este
+      // listener o envio era silenciosamente ignorado no mobile. O primeiro
+      // envio limpa o input de forma síncrona, então um Enter físico (que
+      // dispara keypress + submit) não duplica a pergunta.
+      const advisorForm = document.getElementById('advisorForm');
+      if (advisorForm && !advisorForm.dataset.bound) {
+        advisorForm.dataset.bound = 'true';
+        advisorForm.addEventListener('submit', (e) => {
+          if (e) e.preventDefault();
+          this.submitAdvisorQuery();
         });
       }
     }

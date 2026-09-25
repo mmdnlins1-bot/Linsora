@@ -285,6 +285,45 @@ class VoiceAssistantUIController {
 
     const accounts = (window.linsoraStore && window.linsoraStore.state && window.linsoraStore.state.accounts) || [];
     const defaultAccount = accounts.length > 0 ? accounts[0].name : 'Carteira Principal';
+    const cardHint = this.currentParsedTx.cardHint || null;
+
+    // Pagamento de fatura ("paguei X do cartão [Nome]"): reduz limitUsed do
+    // cartão identificado + debita a conta, sem recriar a despesa original.
+    // Cartão ambíguo/não identificado: cai no fluxo normal abaixo (despesa
+    // bancária), sem escolher silenciosamente um cartão errado.
+    if (this.currentParsedTx.isCardPayment && window.linsoraStore?.resolvePurchaseCard) {
+      const payCard = window.linsoraStore.resolvePurchaseCard(cardHint);
+      if (payCard) {
+        try {
+          const res = await window.linsoraStore.payCardAmount(payCard.id, parsedAmount);
+          LinsoraUI.closeModal('modalVoiceConfirmation');
+          if (res) {
+            LinsoraUI.showToast(`Pagamento de ${LinsoraUtils.formatBRL(res.paid)} registrado no cartão ${payCard.name}! 🎙️`);
+          } else {
+            LinsoraUI.showToast('Cartão sem valor em aberto para este pagamento.', 'info');
+          }
+        } catch (err) {
+          console.error('[LINSORA Voice] Erro ao pagar fatura:', err);
+          LinsoraUI.closeModal('modalVoiceConfirmation');
+          LinsoraUI.showToast('Pagamento salvo localmente!');
+        }
+        this.currentParsedTx = null;
+        return;
+      }
+    }
+
+    // Compra no crédito ("comprei X no cartão [Nome]"): vincula ao cartão
+    // (limitUsed), sem reduzir a conta bancária. Sem cartão identificável,
+    // mantém o comportamento atual (despesa na conta padrão).
+    let txAccount = defaultAccount;
+    let txCardId = null;
+    if (this.currentParsedTx.paymentMethod === 'credit' && window.linsoraStore?.resolvePurchaseCard) {
+      const purchaseCard = window.linsoraStore.resolvePurchaseCard(cardHint);
+      if (purchaseCard) {
+        txAccount = `Cartão ${purchaseCard.name}`;
+        txCardId = purchaseCard.id;
+      }
+    }
 
     const txPayload = {
       type: this.currentParsedTx.type,
@@ -292,10 +331,14 @@ class VoiceAssistantUIController {
       description: this.currentParsedTx.description,
       category: this.currentParsedTx.category,
       date: this.currentParsedTx.date,
-      account: defaultAccount,
+      account: txAccount,
       repetition: 'SINGLE',
       notes: `Voz: "${this.currentParsedTx.rawText}"`
     };
+    if (txCardId) {
+      txPayload.cardId = txCardId;
+      txPayload.paymentMethod = 'credit';
+    }
 
     try {
       await window.linsoraStore.saveTransaction(txPayload);

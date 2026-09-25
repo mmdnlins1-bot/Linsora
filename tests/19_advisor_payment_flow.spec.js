@@ -120,9 +120,11 @@ test.describe('19. Conselheiro: conferencia de compromissos pagos', () => {
 
   test('Teste 6: resposta ambigua pede esclarecimento', async ({ page }) => {
     await page.evaluate(async () => {
-      window.linsoraStore.state.accounts = [{ id: 'acc1', balance: 5000, name: 'Conta Principal' }];
+      // Margem 250 (500 - 100 - 150); gasto 100 -> restante 150 <= 2x250:
+      // a conferência abre para testar a ambiguidade dos dois "internet".
+      window.linsoraStore.state.accounts = [{ id: 'acc1', balance: 500, name: 'Conta Principal' }];
       window.linsoraStore.state.transactions = [
-        { id: 'tx_seed', userId: window.linsoraStore.state.user.id, type: 'RECEITA', amount: 5000, description: 'Salario', category: 'Salário', date: new Date().toISOString(), account: 'Conta Principal', status: 'CONCLUIDO' }
+        { id: 'tx_seed', userId: window.linsoraStore.state.user.id, type: 'RECEITA', amount: 500, description: 'Salario', category: 'Salário', date: new Date().toISOString(), account: 'Conta Principal', status: 'CONCLUIDO' }
       ];
       await window.linsoraStore.addRecurringBill({
         title: 'Internet Casa', amount: 100, category: 'Moradia',

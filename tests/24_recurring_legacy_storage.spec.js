@@ -89,7 +89,7 @@ test.describe('24. Claim consentido de recorrências guest', () => {
     expect(st.receipt?.result).toBe('imported');
 
     const advice = await page.evaluate(() => {
-      const a = window.LinsoraStrategicAdvisor.processQuery('Posso gastar 2000 reais hoje?');
+      const a = window.LinsoraStrategicAdvisor.processQuery('Posso gastar 5000 reais hoje?');
       return {
         options: a.commitmentOptions || [],
         titles: (a.commitmentOptions || []).map((o) => o.title).sort(),

@@ -282,6 +282,18 @@ test.describe('22. Compromissos recorrentes persistentes', () => {
 
   test('Conselheiro: pergunta de gasto lista Energia+Aluguel e o fluxo de confirmação quita', async ({ page }) => {
     await seedEnergiaAluguel(page);
+    // Margem para a regra de proximidade: receita 5000 -> margem 2700,
+    // gasto 100 -> restante 2600 <= 2x2300 (pergunta); sem isso o gasto
+    // seria inviável (saldo 0) e a conferência não abriria.
+    await page.evaluate(() => {
+      const uid = window.linsoraStore.state.user.id;
+      window.linsoraStore.state.accounts = [{ id: 'acc1', userId: uid, balance: 0, name: 'Conta Principal' }];
+      window.linsoraStore.state.transactions.push({
+        id: window.LinsoraUtils.generateUUID(), userId: uid, type: 'RECEITA',
+        description: 'Salario', amount: 5000, category: 'Salário',
+        date: '2026-09-25T12:00:00', account: 'Conta Principal', status: 'CONCLUIDO',
+      });
+    });
     const first = await page.evaluate(() => {
       const advice = window.LinsoraStrategicAdvisor.processQuery('Posso gastar 100 reais hoje?');
       return {

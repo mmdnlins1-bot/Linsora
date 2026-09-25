@@ -340,6 +340,74 @@ class LinsoraStore {
   }
 
   /* ------------------------------------------------------------------------
+     COMPRAS E PAGAMENTOS NO CARTÃO DE CRÉDITO (vínculo transação↔cartão).
+     - COMPRA: gera dívida no cartão (limitUsed += valor) via saveTransaction
+       com account `Cartão <nome>`; a conta bancária NÃO é tocada
+       (applyTransactionImpact já separa os dois caminhos). Guarda cardId na
+       transação para identificação exata, sem confundir com pagamento.
+     - PAGAMENTO (parcial ou total): reduz limitUsed e debita a conta
+       bancária UMA vez cada; registra UMA transação marcada isCardPayment,
+       sem recriar a despesa original. Nunca duplica financeiro.
+     - Identificação: um único cartão vincula automaticamente; com vários,
+       só vincula quando o nome/marca é mencionado; ambíguo = null (nunca
+       escolhe silenciosamente um cartão errado).
+     ------------------------------------------------------------------------ */
+  findCardByHint(hint) {
+    const cards = this.state?.cards || [];
+    const h = String(hint || '').toLowerCase().trim();
+    if (!h) return null;
+    const norm = (v) => String(v || '').toLowerCase();
+    return cards.find((c) => norm(c.name).includes(h) || norm(c.brand).includes(h) || h.includes(norm(c.name))) || null;
+  }
+
+  resolvePurchaseCard(hint) {
+    const cards = this.state?.cards || [];
+    if (hint) return this.findCardByHint(hint);
+    if (cards.length === 1) return cards[0];
+    return null;
+  }
+
+  async addCardPurchase({ amount, description, category, date, card, notes } = {}) {
+    if (!card || !(Number(amount) > 0)) return null;
+    await this.saveTransaction({
+      type: 'DESPESA',
+      amount: Number(amount),
+      description: description || `Compra no cartão ${card.name}`,
+      category: category || 'Outros',
+      date: date || LinsoraUtils.toLocalDateKey(),
+      account: `Cartão ${card.name}`,
+      cardId: card.id,
+      paymentMethod: 'credit',
+      notes: notes || ''
+    });
+    return true;
+  }
+
+  async payCardAmount(cardId, amount, accountName = null) {
+    const card = (this.state?.cards || []).find((c) => c.id === cardId);
+    const value = Number(amount);
+    if (!card || !(value > 0)) return null;
+    const used = Number(card.limitUsed) || 0;
+    const payValue = Math.min(value, used);
+    if (!(payValue > 0)) return null;
+    const account = accountName || (this.state.accounts[0] ? this.state.accounts[0].name : 'Conta Principal');
+    card.limitUsed = Math.max(0, used - payValue);
+    await this.saveTransaction({
+      type: 'DESPESA',
+      amount: payValue,
+      description: `Pagamento da Fatura ${card.name}`,
+      category: 'Outros',
+      date: LinsoraUtils.toLocalDateKey(),
+      account,
+      cardId: card.id,
+      isCardPayment: true,
+      notes: payValue >= used ? 'Quitação integral da fatura' : 'Pagamento parcial da fatura'
+    });
+    if (window.LinsoraLogger) window.LinsoraLogger.write('Pagamento Fatura Cartão', { cardName: card.name, amount: payValue }, this.state?.user?.id);
+    return { paid: payValue, remaining: Number(card.limitUsed) || 0, cardId: card.id };
+  }
+
+  /* ------------------------------------------------------------------------
      COMPROMISSOS FINANCEIROS (ETAPA 1) — recorrências + motor puro.
      Sem UI: estado via API do store; sem novas consultas (usa dados em memória).
      ------------------------------------------------------------------------ */
