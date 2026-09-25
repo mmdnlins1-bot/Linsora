@@ -502,23 +502,60 @@ class StrategicAdvisorEngine {
     });
     const metrics = this.freshMetrics();
     const core = this.answerViability(flow.originalParsed, metrics, flow.originalQuery, 'QUESTION');
-    const bal = LinsoraUtils.formatBRL(metrics.totalBalance);
-    const paidTxt = applied.length === 1
-      ? `${applied[0].title} de ${LinsoraUtils.formatBRL(applied[0].amount)} foi marcado como pago`
-      : `${applied.map(a => `${a.title} de ${LinsoraUtils.formatBRL(a.amount)}`).join('; ')} foram marcados como pagos`;
-    const remaining = (metrics.committedItems || []).filter(i => i.type === 'RECURRING_BILL');
-    const remainingTxt = remaining.length === 0
-      ? 'nenhum compromisso pendente'
-      : remaining.map(i => `${i.title} de ${LinsoraUtils.formatBRL(i.amount)}`).join('; ');
-    const marginTxt = LinsoraUtils.formatBRL(metrics.availableAfterCommitments);
-    const spendTxt = LinsoraUtils.formatBRL(flow.amount);
-    const afterTxt = LinsoraUtils.formatBRL(metrics.availableAfterCommitments - flow.amount);
-    const settlement = applied.length === 0
-      ? `Não foi possível marcar o pagamento (registro não encontrado ou já pago). Você tem ${bal} em contas. Restam ${remainingTxt} como compromissos. Sua margem após os compromissos é de ${marginTxt}.`
-      : `Você tem ${bal} em contas. O ${paidTxt}. Restam ${remainingTxt} como compromissos. Sua margem após os compromissos é de ${marginTxt}. Considerando o gasto de ${spendTxt}, sua margem ficaria em ${afterTxt}.`;
+    // Apresentação (somente visual): os mesmos valores já calculados acima
+    // (totalBalance, applied, remaining, availableAfterCommitments, flow.amount)
+    // são reorganizados em blocos empilhados. Nenhuma fórmula, janela,
+    // regra de PAID ou confirmação é alterada aqui.
+    const paidEntries = applied.map(a => ({
+      title: a.title || 'Conta recorrente',
+      amountText: LinsoraUtils.formatBRL(a.amount),
+      dueDateText: a.dueDate ? LinsoraUtils.formatDateBR(a.dueDate) : ''
+    }));
+    const remainingEntries = ((metrics.committedItems || []).filter(i => i.type === 'RECURRING_BILL'))
+      .map(i => ({
+        title: i.title || 'Conta recorrente',
+        amountText: LinsoraUtils.formatBRL(i.amount),
+        dueDateText: i.dueDate ? LinsoraUtils.formatDateBR(i.dueDate) : ''
+      }));
+    const settlementBlocks = [
+      { kind: 'spend', label: 'Gasto solicitado', value: LinsoraUtils.formatBRL(flow.amount), valueTone: 'default' },
+      ...(applied.length === 0
+        ? [{ kind: 'notice', label: 'Pagamento não confirmado', note: 'Não foi possível marcar o pagamento (registro não encontrado ou já pago).', valueTone: 'default' }]
+        : [
+          ...paidEntries.map(p => ({
+            kind: 'paid',
+            label: paidEntries.length === 1 ? 'Compromisso pago' : 'Compromissos pagos',
+            title: p.title,
+            value: `- ${p.amountText}`,
+            valueTone: 'expense',
+            ...(paidEntries.length === 1
+              ? { note: `${p.title} de ${p.amountText} foi marcado como pago.` }
+              : {})
+          })),
+          ...(paidEntries.length === 1
+            ? []
+            : [{
+              kind: 'paid',
+              label: 'Confirmação',
+              note: `${paidEntries.map(p => `${p.title} de ${p.amountText}`).join('; ')} foram marcados como pagos.`,
+              valueTone: 'default'
+            }])
+        ]),
+      { kind: 'balance', label: 'Saldo em contas', value: LinsoraUtils.formatBRL(metrics.totalBalance), valueTone: 'default' },
+      {
+        kind: 'remaining',
+        label: 'Compromissos restantes',
+        items: remainingEntries,
+        emptyNote: 'nenhum compromisso pendente',
+        valueTone: 'pending'
+      },
+      { kind: 'margin', label: 'Margem após compromissos', value: LinsoraUtils.formatBRL(metrics.availableAfterCommitments), valueTone: 'positive' },
+      { kind: 'afterSpend', label: 'Margem após o gasto', value: LinsoraUtils.formatBRL(metrics.availableAfterCommitments - flow.amount), valueTone: 'positive' }
+    ];
     return {
       ...core,
-      recommendation: `${settlement} ${core.recommendation}`
+      settlementBlocks,
+      recommendation: core.recommendation
     };
   }
 
@@ -758,6 +795,39 @@ class StrategicAdvisorEngine {
     chatContainer.scrollTop = chatContainer.scrollHeight;
   }
 
+  /**
+   * Renderiza o resultado do fluxo de compromissos em blocos empilhados
+   * (somente apresentação; reutiliza as classes `.settlement-*` do CSS e
+   * os tokens de cor já existentes no sistema). Todo conteúdo dinâmico é
+   * escapado (padrão S8B). Sem blocos, retorna string vazia.
+   */
+  renderSettlementBlocks(blocks) {
+    if (!Array.isArray(blocks) || blocks.length === 0) return '';
+    const esc = (v) => LinsoraUtils.escapeHTML(v ?? '');
+    const toneClass = (tone) => tone === 'expense' || tone === 'positive' || tone === 'pending'
+      ? `settlement-value ${tone}` : 'settlement-value';
+    const html = blocks.map((b) => {
+      if (!b || typeof b !== 'object') return '';
+      const label = `<span class="settlement-label">${esc(b.label)}</span>`;
+      const title = b.title ? `<span class="settlement-title">${esc(b.title)}</span>` : '';
+      const value = b.value ? `<strong class="${toneClass(b.valueTone)}">${esc(b.value)}</strong>` : '';
+      const note = b.note ? `<span class="settlement-note">${esc(b.note)}</span>` : '';
+      let rows = '';
+      if (Array.isArray(b.items)) {
+        rows = b.items.length === 0
+          ? `<span class="settlement-note">${esc(b.emptyNote || 'nenhum compromisso pendente')}</span>`
+          : b.items.map((it) => `
+            <div class="settlement-row">
+              <span class="settlement-title">${esc(it.title)}</span>
+              <strong class="${toneClass(b.valueTone)}">${esc(it.amountText)}</strong>
+              ${it.dueDateText ? `<span class="settlement-sub">Vencimento: ${esc(it.dueDateText)}</span>` : ''}
+            </div>`).join('');
+      }
+      return `<div class="settlement-block">${label}${title}${value}${rows}${note}</div>`;
+    }).join('');
+    return `<div class="settlement-blocks">${html}</div>`;
+  }
+
   appendAdvisorResponse(advice) {
     const chatContainer = document.getElementById('advisorChatHistory');
     if (!chatContainer) return;
@@ -879,6 +949,7 @@ class StrategicAdvisorEngine {
     const safeDiagnosis = LinsoraUtils.escapeHTML(advice.diagnosis);
     const safeImpact = LinsoraUtils.escapeHTML(advice.impact);
     const safeRecommendation = LinsoraUtils.escapeHTML(advice.recommendation);
+    const settlementHtml = this.renderSettlementBlocks(advice.settlementBlocks);
 
     resEl.innerHTML = `
       <div class="bot-msg-bubble" style="background: var(--card-bg); padding: 0; border-radius: 4px 18px 18px 18px; max-width: 90%; font-size: 0.95rem; box-shadow: 0 4px 12px rgba(0,0,0,0.06); border: 1px solid var(--border); overflow: hidden;">
@@ -888,6 +959,8 @@ class StrategicAdvisorEngine {
         </div>
         
         <div style="padding: 16px;">
+          ${settlementHtml}
+
           <div style="color: var(--text-color); line-height: 1.5; margin-bottom: 4px;">
             ${safeRecommendation}
           </div>

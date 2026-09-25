@@ -4301,6 +4301,76 @@ body.frame-mode .device-notch { display: block; }
   border-radius: var(--radius-sm);
 }
 
+/* Resultado estruturado do fluxo de compromissos (somente apresentação).
+   Blocos empilhados, sem scroll horizontal; cores reutilizam os tokens
+   já existentes: despesa (--accent-red), positivo (--accent-green-neon),
+   pendência (--accent-amber). */
+.settlement-blocks {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 12px 0 4px;
+  max-width: 100%;
+}
+
+.settlement-block {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.settlement-label {
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--text-secondary);
+}
+
+.settlement-title {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.settlement-value {
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: var(--text-primary);
+}
+
+.settlement-value.expense {
+  color: var(--accent-red);
+}
+
+.settlement-value.positive {
+  color: var(--accent-green-neon);
+}
+
+.settlement-value.pending {
+  color: var(--accent-amber);
+}
+
+.settlement-note,
+.settlement-sub {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.settlement-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-top: 6px;
+  margin-top: 6px;
+  border-top: 1px dashed var(--border-color);
+}
+
 .advisor-input-form .input-icon-wrapper {
   display: flex;
   gap: 8px;
