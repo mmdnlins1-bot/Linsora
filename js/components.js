@@ -1047,7 +1047,7 @@ class LinsoraUIComponentEngine {
    * Exibe o modal nativo de confirmação de exclusão do Linsora.
    * Substitui o window.confirm() padrão do navegador.
    * @param {string} itemName - Nome do item a ser excluído
-   * @param {object} [options] - Sobrescritas opcionais {title, message, confirmLabel}
+   * @param {object} [options] - Sobrescritas opcionais {title, message, confirmLabel, cancelLabel}
    * @returns {Promise<boolean>} - true se o usuário confirmou, false se cancelou
    */
   showConfirmModal(itemName, options = {}) {
@@ -1067,6 +1067,7 @@ class LinsoraUIComponentEngine {
       if (titleEl) titleEl.textContent = options.title || 'Confirmar exclusão';
       msgEl.textContent = options.message || `Tem certeza que deseja excluir "${itemName}"? Esta ação não pode ser desfeita.`;
       btnOk.textContent = options.confirmLabel ? `🗑️ ${options.confirmLabel}` : '🗑️ Excluir';
+      btnCancel.textContent = options.cancelLabel || 'Cancelar';
 
       const cleanup = () => {
         modal.classList.add('hidden');

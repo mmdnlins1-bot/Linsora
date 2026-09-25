@@ -285,6 +285,11 @@ test.describe('17. Contas Recorrentes (área própria)', () => {
     await page.fill('#authPassword', 'senha456');
     await page.fill('#authConfirmPassword', 'senha456');
     await page.click('#btnSubmitAuth');
+    // O registro de B encontra a recorrência guest de A: o consentimento
+    // explícito aparece e B escolhe "Começar do zero" (isolamento).
+    await expect(page.locator('#modalConfirmDelete:not(.hidden)')).toBeVisible({ timeout: 8000 });
+    await expect(page.locator('#confirmDeleteTitle')).toHaveText('Importar compromissos?');
+    await page.click('#btnConfirmDeleteCancel');
     await expect(page.locator('#appMain')).toBeVisible();
 
     expect(await page.evaluate(

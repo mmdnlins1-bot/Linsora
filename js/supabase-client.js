@@ -843,7 +843,180 @@ class SupabaseRepository {
     };
   }
 
-  async getDbData(userId, userObj = null) {
+  /**
+   * REIVINDICAÇÃO CONSENTIDA DE RECORRÊNCIAS GUEST (isolamento multiusuário).
+   * Regra dura: recorrências `usr_guest` NUNCA migram sozinhas — somente
+   * mediante consentimento explícito do usuário que acabou de autenticar
+   * (modal "Importar" / "Começar do zero" no fluxo de signUp/signIn).
+   * Escopo estrito: SOMENTE recurringBills + occurrences. Nunca
+   * transactions/accounts/goals/cards/profiles. Nunca UUID ou usr_<hash>
+   * concreto de outro usuário. Na dúvida, não importa. Nunca lança.
+   */
+  guestClaimsKey() { return 'LINSORA_GUEST_CLAIMS'; }
+
+  isPlaceholderRecurringOwner(v) {
+    return v === 'guest' || v === 'usr_guest' || v === '' || v == null;
+  }
+
+  readGuestClaims() {
+    try {
+      const raw = localStorage.getItem(this.guestClaimsKey());
+      const parsed = raw ? JSON.parse(raw) : null;
+      if (parsed && typeof parsed === 'object' && parsed.claims && typeof parsed.claims === 'object') return parsed;
+    } catch (e) { /* recibo ilegível: trata como ausente */ }
+    return { version: 1, claims: {} };
+  }
+
+  writeGuestClaims(doc) {
+    try { localStorage.setItem(this.guestClaimsKey(), JSON.stringify(doc)); } catch (e) { /* recibo best-effort */ }
+  }
+
+  getGuestClaimReceipt(uid) {
+    if (!uid) return null;
+    const doc = this.readGuestClaims();
+    return doc.claims[uid] || null;
+  }
+
+  recordGuestClaim(uid, result, billIds = [], occIds = [], guestKeys = []) {
+    if (!uid || (result !== 'imported' && result !== 'declined')) return null;
+    const doc = this.readGuestClaims();
+    doc.claims[uid] = {
+      result,
+      bills: [...new Set(billIds)],
+      occs: [...new Set(occIds)],
+      guestKeys: [...new Set(guestKeys)],
+      ts: new Date().toISOString()
+    };
+    this.writeGuestClaims(doc);
+    return doc.claims[uid];
+  }
+
+  recordGuestClaimDeclined(uid, candidateIds = {}) {
+    return this.recordGuestClaim(
+      uid, 'declined',
+      candidateIds.bills || [], candidateIds.occs || [], candidateIds.guestKeys || []
+    );
+  }
+
+  /**
+   * Varredura SOMENTE-LEITURA de recorrências guest elegíveis para claim:
+   * varre `LINSORA_DB_CACHE_*` exceto a chave do usuário, coleta apenas
+   * linhas placeholder e exclui IDs já reivindicados por QUALQUER conta
+   * (impede reivindicação dupla entre usuários). Não transfere nada.
+   */
+  findGuestRecurringCandidates(uid) {
+    const out = { bills: [], occs: [], guestKeys: [] };
+    try {
+      if (!uid || uid === 'guest' || uid === 'usr_guest' || uid === '') return out;
+      const doc = this.readGuestClaims();
+      const claimed = new Set();
+      Object.values(doc.claims).forEach((r) => {
+        (r?.bills || []).forEach((id) => claimed.add(id));
+        (r?.occs || []).forEach((id) => claimed.add(id));
+      });
+      const ownKey = `LINSORA_DB_CACHE_${uid}`;
+      let keys = [];
+      try {
+        keys = Object.keys(localStorage).filter((k) => k.indexOf('LINSORA_DB_CACHE_') === 0 && k !== ownKey);
+      } catch (e) { return out; }
+      const billIds = new Set();
+      keys.forEach((k) => {
+        let blob = null;
+        try { blob = JSON.parse(localStorage.getItem(k)); } catch (e) { blob = null; }
+        if (!blob) return;
+        let found = false;
+        (Array.isArray(blob.recurringBills) ? blob.recurringBills : []).forEach((b) => {
+          if (!b || claimed.has(b.id) || billIds.has(b.id)) return;
+          if (!this.isPlaceholderRecurringOwner(b.userId ?? b.user_id)) return;
+          billIds.add(b.id);
+          out.bills.push({ id: b.id, title: b.title, amount: b.amount, dueDay: b.dueDay ?? b.due_day });
+          found = true;
+        });
+        (Array.isArray(blob.occurrences) ? blob.occurrences : []).forEach((o) => {
+          if (!o || claimed.has(o.id)) return;
+          if (!this.isPlaceholderRecurringOwner(o.userId ?? o.user_id)) return;
+          if (!billIds.has(o.recurringBillId)) return; // sem órfãs
+          out.occs.push({ id: o.id, recurringBillId: o.recurringBillId, dueDate: o.dueDate, expectedAmount: o.expectedAmount, status: o.status });
+          found = true;
+        });
+        if (found) out.guestKeys.push(k);
+      });
+    } catch (e) { /* varredura best-effort */ }
+    return out;
+  }
+
+  /**
+   * Aplica ao `data` uma reivindicação JÁ REGISTRADA (result 'imported'):
+   * transfere os IDs do recibo, reverificando a titularidade no momento da
+   * aplicação (placeholder ou já-próprio; concreto-alheio = pula). Deduplica
+   * por ID e por chave natural (título+valor+dia+frequência+início) para não
+   * duplicar após normalizações de ID. Retorna {bills, occs} transferidos.
+   */
+  applyRecordedGuestClaim(data, activeId) {
+    const moved = { bills: 0, occs: 0 };
+    try {
+      if (!data || !activeId) return moved;
+      const receipt = this.getGuestClaimReceipt(activeId);
+      if (!receipt || receipt.result !== 'imported') return moved;
+      if (!Array.isArray(data.recurringBills)) data.recurringBills = [];
+      if (!Array.isArray(data.occurrences)) data.occurrences = [];
+      const billKey = (b) => [
+        String(b?.title || ''), Number(b?.amount) || 0,
+        parseInt(b?.dueDay ?? b?.due_day, 10) || 0,
+        String(b?.frequency || 'MONTHLY').toUpperCase(),
+        String(b?.startDate ?? b?.start_date ?? '').slice(0, 10),
+        String(b?.endDate ?? b?.end_date ?? '')
+      ].join('|');
+      const destBillKeys = new Map();
+      data.recurringBills.forEach((b) => { if (b && !destBillKeys.has(billKey(b))) destBillKeys.set(billKey(b), b.id); });
+      const billIds = new Set(data.recurringBills.map((b) => b && b.id));
+      const occKeys = new Set(data.occurrences.map((o) => o && `${o.recurringBillId}|${o.dueDate}`));
+      const occIds = new Set(data.occurrences.map((o) => o && o.id));
+      const receiptBillIds = new Set(receipt.bills || []);
+      const receiptOccIds = new Set(receipt.occs || []);
+      const ownKey = `LINSORA_DB_CACHE_${activeId}`;
+      let keys = [];
+      try {
+        keys = Object.keys(localStorage).filter((k) => k.indexOf('LINSORA_DB_CACHE_') === 0 && k !== ownKey);
+      } catch (e) { return moved; }
+      keys.forEach((k) => {
+        let blob = null;
+        try { blob = JSON.parse(localStorage.getItem(k)); } catch (e) { blob = null; }
+        if (!blob) return;
+        const billIdMap = new Map();
+        (Array.isArray(blob.recurringBills) ? blob.recurringBills : []).forEach((b) => {
+          if (!b || !receiptBillIds.has(b.id)) return;
+          const owner = b.userId ?? b.user_id;
+          // Na dúvida, não importa: só placeholder ou já-próprio.
+          if (owner !== activeId && !this.isPlaceholderRecurringOwner(owner)) return;
+          if (billIds.has(b.id)) { billIdMap.set(b.id, b.id); return; }
+          if (destBillKeys.has(billKey(b))) { billIdMap.set(b.id, destBillKeys.get(billKey(b))); return; }
+          data.recurringBills.push({ ...b, userId: activeId });
+          billIds.add(b.id);
+          destBillKeys.set(billKey(b), b.id);
+          billIdMap.set(b.id, b.id);
+          moved.bills += 1;
+        });
+        (Array.isArray(blob.occurrences) ? blob.occurrences : []).forEach((o) => {
+          if (!o || !receiptOccIds.has(o.id)) return;
+          const owner = o.userId ?? o.user_id;
+          if (owner !== activeId && !this.isPlaceholderRecurringOwner(owner)) return;
+          const destBillId = billIdMap.has(o.recurringBillId)
+            ? billIdMap.get(o.recurringBillId)
+            : (billIds.has(o.recurringBillId) ? o.recurringBillId : null);
+          if (!destBillId) return;
+          if (occIds.has(o.id) || occKeys.has(`${destBillId}|${o.dueDate}`)) return;
+          data.occurrences.push({ ...o, userId: activeId, recurringBillId: destBillId });
+          occIds.add(o.id);
+          occKeys.add(`${destBillId}|${o.dueDate}`);
+          moved.occs += 1;
+        });
+      });
+    } catch (e) { /* aplicação best-effort */ }
+    return moved;
+  }
+
+  async getDbData(userId, userObj = null, options = {}) {
     const activeId = userId || this.currentUserId || 'guest';
     const key = `LINSORA_DB_CACHE_${activeId}`;
     const stored = localStorage.getItem(key);
@@ -859,10 +1032,7 @@ class SupabaseRepository {
       if (guestStored) {
         try {
           const guestCache = JSON.parse(guestStored);
-          // Inclui recurringBills/occurrences no gatilho: visitante que criou
-          // SOMENTE contas recorrentes também deve ter tudo adotado no login,
-          // com a mesma reescrita de userId das demais entidades.
-          if (guestCache && (guestCache.transactions?.length || guestCache.accounts?.length || guestCache.goals?.length || guestCache.recurringBills?.length || guestCache.occurrences?.length)) {
+          if (guestCache && (guestCache.transactions?.length || guestCache.accounts?.length || guestCache.goals?.length)) {
             console.log('🔄 Migrando dados locais de visitante para o usuário:', activeId);
             localCache = {
               user: {
@@ -876,8 +1046,11 @@ class SupabaseRepository {
               transactions: (guestCache.transactions || []).map(t => ({ ...t, userId: activeId })),
               goals: (guestCache.goals || []).map(g => ({ ...g, userId: activeId })),
               pixKeys: (guestCache.pixKeys || []).map(p => ({ ...p, userId: activeId })),
-              recurringBills: (guestCache.recurringBills || []).map(b => ({ ...b, userId: activeId })),
-              occurrences: (guestCache.occurrences || []).map(o => ({ ...o, userId: activeId })),
+              // Recorrências NUNCA migram automaticamente: somente mediante
+              // consentimento explícito (claim guest). Sem aceite, a nova
+              // conta começa sem elas (isolamento multiusuário).
+              recurringBills: [],
+              occurrences: [],
               fixedBills: (guestCache.fixedBills || []).map(f => ({ ...f, userId: activeId }))
             };
             localStorage.setItem(key, JSON.stringify(localCache));
@@ -972,6 +1145,21 @@ class SupabaseRepository {
           };
         }
 
+        // Reivindicação consentida (recibo 'imported'): reaplica de forma
+        // idempotente. Novo consentimento (options.claimGuestRecurring) é
+        // registrado aqui a partir dos candidatos atuais e aplicado em seguida.
+        try {
+          if (options?.claimGuestRecurring && !this.getGuestClaimReceipt(activeId)) {
+            const cands = this.findGuestRecurringCandidates(activeId);
+            if (cands.bills.length > 0 || cands.occs.length > 0) {
+              this.recordGuestClaim(
+                activeId, 'imported',
+                cands.bills.map((b) => b.id), cands.occs.map((o) => o.id), cands.guestKeys
+              );
+            }
+          }
+          this.applyRecordedGuestClaim(mergedData, activeId);
+        } catch (e) { /* sem claim */ }
         localStorage.setItem(key, JSON.stringify(mergedData));
         if (window.LinsoraLogger) window.LinsoraLogger.read('Supabase Database & Local Cache', { accounts: mergedData.accounts.length, transactions: mergedData.transactions.length }, activeId);
         return mergedData;
@@ -987,11 +1175,43 @@ class SupabaseRepository {
         if (userObj.email) localCache.user.email = String(userObj.email).toLowerCase().trim();
         if (userObj.avatar) localCache.user.avatar = userObj.avatar;
       }
+      // Reivindicação consentida previamente registrada: reaplica de forma
+      // idempotente (nunca transfere sem recibo 'imported').
+      try {
+        const reapplied = this.applyRecordedGuestClaim(localCache, activeId);
+        if (reapplied.bills + reapplied.occs > 0) {
+          localStorage.setItem(key, JSON.stringify(localCache));
+        } else if (options?.claimGuestRecurring && !this.getGuestClaimReceipt(activeId)) {
+          const cands = this.findGuestRecurringCandidates(activeId);
+          if (cands.bills.length > 0 || cands.occs.length > 0) {
+            this.recordGuestClaim(
+              activeId, 'imported',
+              cands.bills.map((b) => b.id), cands.occs.map((o) => o.id), cands.guestKeys
+            );
+            this.applyRecordedGuestClaim(localCache, activeId);
+            localStorage.setItem(key, JSON.stringify(localCache));
+          }
+        }
+      } catch (e) { /* sem claim */ }
       if (window.LinsoraLogger) window.LinsoraLogger.read('Local Cache DB', { accounts: (localCache.accounts || []).length, transactions: (localCache.transactions || []).length }, activeId);
       return localCache;
     }
 
     const emptyState = this.getEmptyUserData(userObj);
+    // Claim consentido também vale para conta nova sem cache: registra a
+    // partir dos candidatos atuais e aplica antes de persistir.
+    try {
+      if (options?.claimGuestRecurring && !this.getGuestClaimReceipt(emptyState.user.id)) {
+        const cands = this.findGuestRecurringCandidates(emptyState.user.id);
+        if (cands.bills.length > 0 || cands.occs.length > 0) {
+          this.recordGuestClaim(
+            emptyState.user.id, 'imported',
+            cands.bills.map((b) => b.id), cands.occs.map((o) => o.id), cands.guestKeys
+          );
+        }
+      }
+      this.applyRecordedGuestClaim(emptyState, emptyState.user.id);
+    } catch (e) { /* sem claim */ }
     localStorage.setItem(key, JSON.stringify(emptyState));
     if (window.LinsoraLogger) window.LinsoraLogger.read('Estado Inicial Zerado por Usuário', { userId: activeId }, activeId);
     return emptyState;

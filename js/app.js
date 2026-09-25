@@ -144,6 +144,42 @@ function grantAppAccess() {
 // a entrada no app sem passar pelo formulário. Sem efeito no fluxo real.
 window.grantAppAccess = grantAppAccess;
 
+/**
+ * Consentimento explícito para reivindicar recorrências guest.
+ * Chamado após autenticação bem-sucedida e ANTES da carga definitiva da
+ * conta (loadUserData). Sem recibo anterior e com candidatos placeholder,
+ * pergunta ao usuário; sem candidatos, segue sem UI extra. Nunca usa
+ * grantAppAccess/SIGNED_IN como prova — só a resposta a este prompt.
+ * @returns {Promise<boolean>} true = Importar, false = Começar do zero.
+ */
+async function resolveGuestRecurringConsent(user) {
+  try {
+    const repo = window.supabaseRepo;
+    if (!repo || !user?.id) return false;
+    if (repo.getGuestClaimReceipt && repo.getGuestClaimReceipt(user.id)) {
+      return repo.getGuestClaimReceipt(user.id).result === 'imported';
+    }
+    const cands = repo.findGuestRecurringCandidates
+      ? repo.findGuestRecurringCandidates(user.id)
+      : { bills: [], occs: [] };
+    if ((cands.bills?.length || 0) === 0 && (cands.occs?.length || 0) === 0) return false;
+    const accepted = await window.LinsoraUI.showConfirmModal('compromissos', {
+      title: 'Importar compromissos?',
+      message: 'Encontramos compromissos criados anteriormente neste aparelho. Deseja importar esses compromissos para sua conta?',
+      confirmLabel: 'Importar',
+      cancelLabel: 'Começar do zero'
+    });
+    if (!accepted && repo.recordGuestClaimDeclined) {
+      repo.recordGuestClaimDeclined(user.id, {
+        bills: (cands.bills || []).map((b) => b.id),
+        occs: (cands.occs || []).map((o) => o.id),
+        guestKeys: cands.guestKeys || []
+      });
+    }
+    return accepted === true;
+  } catch (e) { return false; }
+}
+
 function renderAppUI(state) {
   if (!state) return;
 
@@ -744,7 +780,8 @@ function setupEventListeners() {
           LinsoraUI.showToast(res.message, 'error');
           return;
         }
-        await window.linsoraStore.loadUserData(res.user);
+        const claimConsent = await resolveGuestRecurringConsent(res.user);
+        await window.linsoraStore.loadUserData(res.user, { claimGuestRecurring: claimConsent });
         // O loadUserData já garante as ocorrências; reforço idempotente do
         // fluxo real de registro (não duplica, não altera o motor).
         window.linsoraStore.ensureCurrentWindowOccurrences?.({ silent: true });
@@ -754,7 +791,8 @@ function setupEventListeners() {
           LinsoraUI.showToast(res.message, 'error');
           return;
         }
-        await window.linsoraStore.loadUserData(res.user);
+        const claimConsent = await resolveGuestRecurringConsent(res.user);
+        await window.linsoraStore.loadUserData(res.user, { claimGuestRecurring: claimConsent });
         // O loadUserData já garante as ocorrências; reforço idempotente do
         // fluxo real de login (não duplica, não altera o motor).
         window.linsoraStore.ensureCurrentWindowOccurrences?.({ silent: true });
