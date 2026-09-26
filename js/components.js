@@ -1166,6 +1166,7 @@ class LinsoraUIComponentEngine {
       if (closingDateEl) closingDateEl.innerText = '--';
       if (dueDateEl) dueDateEl.innerText = '--';
       if (bestDayEl) bestDayEl.innerText = '--';
+      this.renderFaturaItems(null);
       return;
     }
 
@@ -1198,6 +1199,62 @@ class LinsoraUIComponentEngine {
     if (closingDateEl) closingDateEl.innerText = `Dia ${closingDay}`;
     if (dueDateEl) dueDateEl.innerText = `Dia ${dueDay}`;
     if (bestDayEl) bestDayEl.innerText = `Dia ${bestDay}`;
+    this.renderFaturaItems(card);
+  }
+
+  /**
+   * Bloco D2-C: preenche "Lançamentos nesta Fatura" (#faturaItemsList) com
+   * os lançamentos do cartão selecionado (via getCardTransactions, já com
+   * vínculo cardId + fallback account + isolamento por usuário).
+   * Limitação documentada: sem competência real de fatura; exibe os
+   * lançamentos atuais do cartão. Reutiliza o visual .transaction-card e
+   * o detalhe existente (openTxDetails).
+   */
+  renderFaturaItems(card) {
+    const container = document.getElementById('faturaItemsList');
+    if (!container) return;
+    if (!card) {
+      container.innerHTML = `
+        <div class="empty-state-card">
+          <div class="empty-icon">💳</div>
+          <p>Nenhum cartão selecionado</p>
+          <span class="empty-sub">Selecione um cartão para ver os lançamentos.</span>
+        </div>
+      `;
+      return;
+    }
+    const store = window.linsoraStore;
+    const txs = store?.getCardTransactions ? store.getCardTransactions(card.id) : [];
+    if (!txs || txs.length === 0) {
+      container.innerHTML = `
+        <div class="empty-state-card">
+          <div class="empty-icon">🧾</div>
+          <p>Nenhum lançamento neste cartão</p>
+          <span class="empty-sub">As compras feitas com ${LinsoraUtils.escapeHTML(card.name)} aparecerão aqui.</span>
+        </div>
+      `;
+      return;
+    }
+    const hideValues = store ? store.isHideValues : false;
+    container.innerHTML = txs.map((tx) => {
+      const icon = LinsoraUtils.getCategoryIcon(tx.category);
+      const dateFormatted = LinsoraUtils.formatDateBR(tx.date);
+      return `
+        <div class="transaction-card expense-card" role="button" tabindex="0" onclick="LinsoraUI.openTxDetails('${tx.id}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();LinsoraUI.openTxDetails('${tx.id}')}">
+          <div class="tx-left">
+            <div class="tx-icon-wrapper expense-glow">${icon}</div>
+            <div class="tx-info">
+              <span class="tx-title">${LinsoraUtils.escapeHTML(tx.description)}</span>
+              <span class="tx-meta">${LinsoraUtils.escapeHTML(tx.category)} • ${LinsoraUtils.escapeHTML(tx.account)} • ${dateFormatted}</span>
+            </div>
+          </div>
+          <div class="tx-right">
+            <span class="tx-amount expense">- ${LinsoraUtils.formatBRL(tx.amount, hideValues)}</span>
+            <span class="badge-status-chip danger">${LinsoraUtils.escapeHTML(tx.status) || 'Concluído'}</span>
+          </div>
+        </div>
+      `;
+    }).join('');
   }
 
   showToast(message, type = 'success') {

@@ -1344,6 +1344,15 @@ function setupEventListeners() {
     }
   });
 
+  // Bloco D2-B: extrato individual do cartão selecionado (somente leitura).
+  document.getElementById('btnViewCardStatement')?.addEventListener('click', () => {
+    if (window.selectedCardId && window.LinsoraCardStatement) {
+      window.LinsoraCardStatement.open(window.selectedCardId);
+    } else {
+      LinsoraUI.showToast('Selecione um cartão para ver o extrato.', 'info');
+    }
+  });
+
   // FLUXO COMPLETO DE UPLOAD DE FOTO DE PERFIL
   const processAndUploadAvatarDataUrl = async (dataUrl) => {
     const spinner = document.getElementById('avatarUploadSpinner');

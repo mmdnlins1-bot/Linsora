@@ -73,14 +73,18 @@
         item.className = 'card-picker-item' + (eligible ? '' : ' disabled');
         item.setAttribute('data-card-id', card.id);
 
-        const name = document.createElement('strong');
-        name.className = 'card-picker-name';
-        name.textContent = card.name || 'Cartão';
-        item.appendChild(name);
+        // Bloco D2-A: apresentação "Disponível / R$ X / [Nome]".
+        // O nome do cartão é o elemento de ação (sem texto genérico
+        // "Selecionar"). Regras de elegibilidade intactas: inelegível não
+        // recebe botão e exibe o motivo. Formatação via formatBRL.
+        const availLabel = document.createElement('span');
+        availLabel.className = 'card-picker-avail-label';
+        availLabel.textContent = 'Disponível';
+        item.appendChild(availLabel);
 
-        const avail = document.createElement('span');
+        const avail = document.createElement('strong');
         avail.className = 'card-picker-avail';
-        avail.textContent = `Disponível: ${fmtBRL(available)}`;
+        avail.textContent = fmtBRL(available);
         item.appendChild(avail);
 
         if (eligible) {
@@ -88,7 +92,8 @@
           btn.type = 'button';
           btn.className = 'linsora-btn primary block card-picker-select';
           btn.setAttribute('data-card-id', card.id);
-          btn.textContent = 'Selecionar';
+          btn.setAttribute('aria-label', `Usar cartão ${card.name || 'Cartão'}`);
+          btn.textContent = card.name || 'Cartão';
           btn.addEventListener('click', () => {
             const cb = pending?.onSelect;
             const id = card.id;
@@ -97,6 +102,11 @@
           });
           item.appendChild(btn);
         } else {
+          const name = document.createElement('span');
+          name.className = 'card-picker-name disabled';
+          name.textContent = card.name || 'Cartão';
+          item.appendChild(name);
+
           const warn = document.createElement('span');
           warn.className = 'card-picker-no-limit';
           warn.textContent = 'Sem limite suficiente';

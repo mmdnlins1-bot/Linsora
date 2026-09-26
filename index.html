@@ -484,6 +484,7 @@
               <div class="fatura-amount-row">
                 <div class="fatura-main-val" id="faturaTotalValue">R$ 0,00</div>
                 <div style="display: flex; gap: 8px;">
+                  <button type="button" class="linsora-btn secondary sm" id="btnViewCardStatement">🧾 Ver extrato</button>
                   <button type="button" class="linsora-btn primary sm" id="btnPayInvoice">Pagar Fatura</button>
                   <button type="button" class="linsora-btn danger sm" id="btnDeleteCard">🗑️ Excluir</button>
                 </div>
@@ -1438,6 +1439,21 @@
         </div>
       </div>
 
+      <!-- MODAL DE EXTRATO DO CARTÃO (Bloco D2-B) -->
+      <div class="linsora-modal-overlay hidden" id="modalCardStatement">
+        <div class="linsora-modal-content floating-center-card" style="max-width: 480px; width: 95%;" role="dialog" aria-modal="true" aria-labelledby="cardStatementTitle">
+          <div class="modal-header">
+            <h3 id="cardStatementTitle">Extrato do cartão 🧾</h3>
+            <button type="button" class="modal-close" id="btnCardStatementClose" data-close-modal="modalCardStatement">✕</button>
+          </div>
+          <div style="padding: 4px 2px 12px; font-size: 0.9rem; color: var(--text-muted);" id="cardStatementTotal">—</div>
+          <div id="cardStatementList" style="display: flex; flex-direction: column; gap: 10px; max-height: 55vh; overflow-y: auto;"></div>
+          <div class="voice-conf-actions">
+            <button type="button" class="linsora-btn outline block" id="btnCardStatementOk">Fechar</button>
+          </div>
+        </div>
+      </div>
+
       <!-- TOAST NOTIFICATION FLOATING BANNER (POSICIONAMENTO PERFEITO NO TOPO) -->
       <div class="toast-container" id="toastContainer"></div>
 
@@ -1454,6 +1470,7 @@
   <script defer src="js/store.js"></script>
   <script defer src="js/ai-transaction-parser.js"></script>
   <script defer src="js/card-picker.js"></script>
+  <script defer src="js/card-statement.js"></script>
   <script defer src="js/strategic-advisor.js"></script>
   <script defer src="js/voice-recognition.js"></script>
   <script defer src="js/voice-assistant-ui.js"></script>

@@ -478,6 +478,31 @@ class LinsoraStore {
     return (this.state?.cards || []).filter((c) => this.getCardAvailableLimit(c) >= value);
   }
 
+  /**
+   * Bloco D2: lançamentos do cartão (leitura pura, sem escrita).
+   * Regras obrigatórias:
+   * 1) vínculo primário por `cardId`;
+   * 2) fallback por `account === 'Cartão <nome>'` (cardId não sobrevive ao
+   *    mapeamento remoto atual do Supabase);
+   * 3) isolamento por usuário (aceita `userId` local e `user_id` remoto);
+   * 4) pagamentos de fatura (`isCardPayment`) não entram como compra.
+   * Limitação documentada: sem competência real de fatura (limitUsed é o
+   * total utilizado); a lista reflete os lançamentos atuais do cartão.
+   */
+  getCardTransactions(cardId) {
+    const cards = this.state?.cards || [];
+    const uid = this.state?.user?.id;
+    const card = cards.find((c) => c.id === cardId);
+    if (!card || !uid) return [];
+    const expectedAccount = `Cartão ${card.name}`;
+    return (this.state?.transactions || []).filter((t) => {
+      const owner = t.userId ?? t.user_id;
+      if (owner !== uid) return false;
+      if (t.isCardPayment === true) return false;
+      return t.cardId === cardId || t.account === expectedAccount;
+    });
+  }
+
   async payCardAmount(cardId, amount, accountName = null) {
     const card = (this.state?.cards || []).find((c) => c.id === cardId);
     const value = Number(amount);
