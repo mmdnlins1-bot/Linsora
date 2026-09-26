@@ -93,9 +93,11 @@ class TransactionAIParser {
     // "fatura" só existe no contexto de cartão de crédito neste app.
     const hasCard = norm.includes('cartao') || norm.includes('fatura');
     const creditCues = ['cartao de credito', 'no credito', 'no cartao', 'no meu cartao', 'na fatura', 'fatura do cartao', 'credito'];
-    const paymentMethod = creditCues.some((c) => norm.includes(c)) ? 'credit' : null;
+    let paymentMethod = creditCues.some((c) => norm.includes(c)) ? 'credit' : null;
     let cardHint = null;
-    const stop = ['de', 'do', 'da', 'no', 'na', 'em', 'com', 'por', 'para', 'meu', 'minha', 'esse', 'essa', 'este', 'esta', 'credito'];
+    // Palavras genéricas que NUNCA são nome de cartão: a expressão "cartão
+    // de crédito" / "fatura" / "rotativo" não identifica nenhum cartão.
+    const stop = ['de', 'do', 'da', 'no', 'na', 'em', 'com', 'por', 'para', 'meu', 'minha', 'esse', 'essa', 'este', 'esta', 'credito', 'cartao', 'fatura', 'rotativo', 'pagamento', 'pagar', 'paguei'];
     const m = norm.match(/cartao\s+(?:de\s+credito\s+)?([a-z]{2,})/);
     if (m && m[1] && !stop.includes(m[1])) {
       cardHint = m[1];
@@ -106,7 +108,11 @@ class TransactionAIParser {
     }
     const paymentCues = ['paguei', 'pagamento', 'pagar', 'quitei', 'quitacao', 'fatura'];
     const mentionsPayment = paymentCues.some((c) => norm.includes(c));
-    return { paymentMethod, cardHint, isCardPayment: Boolean(hasCard && mentionsPayment) };
+    const isCardPayment = Boolean(hasCard && mentionsPayment);
+    // "fatura" só existe no contexto de cartão neste app: intenção de pagar
+    // fatura é sempre do crédito, mesmo sem a expressão "cartão de crédito".
+    if (isCardPayment && !paymentMethod && hasCard) paymentMethod = 'credit';
+    return { paymentMethod, cardHint, isCardPayment };
   }
 
   detectPix(lowerText, cleanText) {

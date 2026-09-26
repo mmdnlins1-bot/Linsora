@@ -1168,6 +1168,25 @@ class StrategicAdvisorEngine {
           });
           return;
         }
+        // Pagamento de fatura: usa o fluxo real de pagamento do cartão
+        // (payCardAmount), nunca despesa bancária genérica. Cartão único
+        // resolve automaticamente; identificado usa o indicado; ambíguo
+        // (vários sem nome) ou nome inexistente: erro controlado, sem
+        // lançar despesa e sem tocar saldo/limite.
+        if (p.isCardPayment && p.type === 'DESPESA' && window.linsoraStore?.resolvePurchaseCard) {
+          const card = window.linsoraStore.resolvePurchaseCard(p.cardHint || null);
+          if (!card) {
+            const count = (window.linsoraStore.state?.cards || []).length;
+            if (count > 1) {
+              throw new Error('Há mais de um cartão e não identifiquei qual você mencionou. Diga o nome do cartão (ex.: "paguei 300 da fatura do Nubank").');
+            }
+            throw new Error(p.cardHint
+              ? `Não identifiquei o cartão "${p.cardHint}". Verifique o nome do cartão.`
+              : 'Nenhum cartão identificado para este pagamento.');
+          }
+          window.linsoraStore.payCardAmount(card.id, p.amount);
+          return;
+        }
         if (window.linsoraStore) {
           window.linsoraStore.saveTransaction({
             type: p.type,

@@ -287,15 +287,17 @@ class VoiceAssistantUIController {
     const defaultAccount = accounts.length > 0 ? accounts[0].name : 'Carteira Principal';
     const cardHint = this.currentParsedTx.cardHint || null;
 
-    // Pagamento de fatura ("paguei X do cartão [Nome]"): reduz limitUsed do
-    // cartão identificado + debita a conta, sem recriar a despesa original.
-    // Cartão ambíguo/não identificado: cai no fluxo normal abaixo (despesa
-    // bancária), sem escolher silenciosamente um cartão errado.
-    if (this.currentParsedTx.isCardPayment && window.linsoraStore?.resolvePurchaseCard) {
-      const payCard = window.linsoraStore.resolvePurchaseCard(cardHint);
+    // Pagamento de fatura ("paguei X da fatura [do Nome]"): reduz limitUsed
+    // do cartão identificado + debita a conta, sem recriar a despesa
+    // original. Pagamento NUNCA cai silenciosamente no fluxo bancário:
+    // cartão ambíguo/não identificado pede escolha explícita (mesma
+    // filosofia da compra ambígua), sem tocar saldo ou limitUsed.
+    if (this.currentParsedTx.isCardPayment) {
+      const store = window.linsoraStore;
+      const payCard = store?.resolvePurchaseCard ? store.resolvePurchaseCard(cardHint) : null;
       if (payCard) {
         try {
-          const res = await window.linsoraStore.payCardAmount(payCard.id, parsedAmount);
+          const res = await store.payCardAmount(payCard.id, parsedAmount);
           LinsoraUI.closeModal('modalVoiceConfirmation');
           if (res) {
             LinsoraUI.showToast(`Pagamento de ${LinsoraUtils.formatBRL(res.paid)} registrado no cartão ${payCard.name}! 🎙️`);
@@ -310,6 +312,19 @@ class VoiceAssistantUIController {
         this.currentParsedTx = null;
         return;
       }
+      const cards = (store && store.state && store.state.cards) || [];
+      LinsoraUI.closeModal('modalVoiceConfirmation');
+      if (cardHint) {
+        LinsoraUI.showToast(`Cartão "${cardHint}" não identificado. Selecione o cartão no formulário para concluir.`, 'error');
+      } else if (cards.length > 1) {
+        LinsoraUI.showToast('Qual cartão? Selecione o cartão no formulário para concluir.', 'info');
+      } else if (cards.length === 0) {
+        LinsoraUI.showToast('Nenhum cartão cadastrado para este pagamento.', 'error');
+      } else {
+        LinsoraUI.showToast('Não foi possível identificar o cartão.', 'error');
+      }
+      this.openFormToEdit();
+      return;
     }
 
     // Compra no crédito com cartão ambíguo (vários cartões, sem menção):

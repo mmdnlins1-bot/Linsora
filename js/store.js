@@ -390,13 +390,21 @@ class LinsoraStore {
     const cards = this.state?.cards || [];
     const h = String(hint || '').toLowerCase().trim();
     if (!h) return null;
+    // Hint genérico ("cartao", "cartão de crédito", "fatura", "rotativo")
+    // nunca é nome de cartão: não pode casar com nenhum cartão real.
+    if (['cartao', 'credito', 'fatura', 'rotativo', 'cartao de credito'].includes(h)) return null;
     const norm = (v) => String(v || '').toLowerCase();
     return cards.find((c) => norm(c.name).includes(h) || norm(c.brand).includes(h) || h.includes(norm(c.name))) || null;
   }
 
   resolvePurchaseCard(hint) {
     const cards = this.state?.cards || [];
-    if (hint) return this.findCardByHint(hint);
+    const h = String(hint || '').toLowerCase().trim();
+    // Hint genérico ou ausente não identifica cartão: com exatamente um
+    // cartão, usa-o automaticamente; com vários, retorna null (ambíguo).
+    const generic = ['cartao', 'credito', 'fatura', 'rotativo', 'cartao de credito'];
+    const cleanHint = (!h || generic.includes(h)) ? null : hint;
+    if (cleanHint) return this.findCardByHint(cleanHint);
     if (cards.length === 1) return cards[0];
     return null;
   }
