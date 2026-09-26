@@ -97,14 +97,41 @@ class TransactionAIParser {
     let cardHint = null;
     // Palavras genéricas que NUNCA são nome de cartão: a expressão "cartão
     // de crédito" / "fatura" / "rotativo" não identifica nenhum cartão.
-    const stop = ['de', 'do', 'da', 'no', 'na', 'em', 'com', 'por', 'para', 'meu', 'minha', 'esse', 'essa', 'este', 'esta', 'credito', 'cartao', 'fatura', 'rotativo', 'pagamento', 'pagar', 'paguei'];
-    const m = norm.match(/cartao\s+(?:de\s+credito\s+)?([a-z]{2,})/);
-    if (m && m[1] && !stop.includes(m[1])) {
-      cardHint = m[1];
-    } else {
-      // "fatura do nubank": dica após "fatura".
-      const f = norm.match(/fatura\s+(?:do\s+|da\s+|de\s+)?([a-z]{2,})/);
-      if (f && f[1] && !stop.includes(f[1])) cardHint = f[1];
+    // Bloco C: preposições/artigos são apenas conectivos e devem ser pulados
+    // para alcançar nomes compostos ("cartão ... do banco inter" -> "banco inter").
+    const stop = ['de', 'do', 'da', 'dos', 'das', 'no', 'na', 'nos', 'nas', 'em', 'com', 'por', 'para', 'meu', 'minha', 'esse', 'essa', 'este', 'esta', 'o', 'a', 'os', 'as', 'um', 'uma', 'credito', 'cartao', 'fatura', 'rotativo', 'pagamento', 'pagar', 'paguei'];
+    // Tokens que encerram o nome do cartão (valor da transação).
+    const amountStop = ['reais', 'real', 'mil', 'milhao', 'milhoes', 'centavos', 'centavo'];
+    const isAmountToken = (t) => amountStop.includes(t) || /^\d+([.,]\d+)?$/.test(t);
+    // Extrai até 3 palavras relevantes após um marcador ("cartao..."/"fatura...").
+    const extractCompoundHint = (afterText) => {
+      const tokens = String(afterText || '').split(/[^a-z]+/).filter(Boolean);
+      const picked = [];
+      for (const tok of tokens) {
+        if (stop.includes(tok)) continue;
+        if (isAmountToken(tok)) break;
+        if (tok.length < 2) continue;
+        picked.push(tok);
+        if (picked.length >= 3) break;
+      }
+      if (picked.length === 0) return null;
+      return picked.join(' ');
+    };
+    const cartaoIdx = norm.indexOf('cartao');
+    if (cartaoIdx !== -1) {
+      let after = norm.slice(cartaoIdx + 'cartao'.length);
+      // Remove o bloco "de credito" quando presente ("cartão de crédito do ...").
+      after = after.replace(/^\s*de\s+credito\s*/, ' ');
+      const hint = extractCompoundHint(after);
+      if (hint) cardHint = hint;
+    }
+    if (!cardHint) {
+      // "fatura do nubank" / "fatura do banco inter": dica após "fatura".
+      const faturaIdx = norm.indexOf('fatura');
+      if (faturaIdx !== -1) {
+        const hint = extractCompoundHint(norm.slice(faturaIdx + 'fatura'.length));
+        if (hint) cardHint = hint;
+      }
     }
     const paymentCues = ['paguei', 'pagamento', 'pagar', 'quitei', 'quitacao', 'fatura'];
     const mentionsPayment = paymentCues.some((c) => norm.includes(c));

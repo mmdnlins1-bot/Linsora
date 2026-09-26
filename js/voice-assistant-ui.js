@@ -158,7 +158,7 @@ class VoiceAssistantUIController {
     // Intercept: se for uma pergunta, redireciona para o Consultor (Strategic Advisor)
     if (window.LinsoraStrategicAdvisor) {
       const intent = window.LinsoraStrategicAdvisor.detectIntent(lowerText);
-      if (intent === 'QUESTION') {
+      if (intent === 'QUESTION' || intent === 'WITHDRAW_QUESTION') {
         window.LinsoraStrategicAdvisor.openAdvisorModal(rawText);
         this.isProcessing = false;
         return;
@@ -327,33 +327,136 @@ class VoiceAssistantUIController {
       return;
     }
 
-    // Compra no crédito com cartão ambíguo (vários cartões, sem menção):
-    // NÃO salva despesa bancária silenciosamente. Pede a escolha explícita
-    // abrindo o formulário pré-preenchido (com o seletor Conta/Cartão).
+    // Compra no crédito (Bloco C):
+    // - Cartão explícito: resolve exclusivamente o indicado, valida limite
+    //   disponível (limitTotal - limitUsed) e salva somente nele. Sem limite
+    //   ou sem identificação: erro controlado, sem fallback para outro
+    //   cartão, sem despesa bancária e sem abrir o formulário.
+    // - Cartão genérico: usa getEligibleCards(amount): 0 = erro; 1 = auto;
+    //   2+ = modal modalCardPicker (nunca toast + formulário silencioso).
+    // O ramo isCardPayment acima (pagamento de fatura, Bloco A) segue intacto.
     if (this.currentParsedTx.paymentMethod === 'credit'
         && this.currentParsedTx.type === 'DESPESA'
         && !this.currentParsedTx.isCardPayment
-        && window.linsoraStore?.resolvePurchaseCard
-        && !window.linsoraStore.resolvePurchaseCard(cardHint)
-        && (window.linsoraStore.state?.cards || []).length > 1) {
+        && window.linsoraStore) {
+      const store = window.linsoraStore;
+      const hasExplicitHint = Boolean(String(cardHint || '').trim());
+      if (hasExplicitHint) {
+        const purchaseCard = store.resolvePurchaseCard ? store.resolvePurchaseCard(cardHint) : null;
+        if (!purchaseCard) {
+          LinsoraUI.closeModal('modalVoiceConfirmation');
+          LinsoraUI.showToast(`Cartão "${cardHint}" não identificado. Verifique o nome do cartão.`, 'error');
+          this.currentParsedTx = null;
+          return;
+        }
+        const available = store.getCardAvailableLimit
+          ? store.getCardAvailableLimit(purchaseCard)
+          : Math.max(0, (Number(purchaseCard.limitTotal) || 0) - (Number(purchaseCard.limitUsed) || 0));
+        if (parsedAmount > available) {
+          LinsoraUI.closeModal('modalVoiceConfirmation');
+          LinsoraUI.showToast(`${purchaseCard.name} não possui limite suficiente para essa compra. Limite disponível: ${LinsoraUtils.formatBRL(available)}.`, 'error');
+          this.currentParsedTx = null;
+          return;
+        }
+        try {
+          await store.addCardPurchase({
+            amount: parsedAmount,
+            description: this.currentParsedTx.description,
+            category: this.currentParsedTx.category,
+            date: this.currentParsedTx.date,
+            card: purchaseCard,
+            notes: `Voz: "${this.currentParsedTx.rawText}"`
+          });
+          LinsoraUI.closeModal('modalVoiceConfirmation');
+          LinsoraUI.showToast(`Compra de ${LinsoraUtils.formatBRL(parsedAmount)} lançada no cartão ${purchaseCard.name}! 🎙️`);
+        } catch (err) {
+          console.error('[LINSORA Voice] Erro ao salvar compra no cartão:', err);
+          LinsoraUI.closeModal('modalVoiceConfirmation');
+          LinsoraUI.showToast(err?.message || 'Cartão sem limite suficiente para essa compra.', 'error');
+        }
+        this.currentParsedTx = null;
+        return;
+      }
+      const eligible = store.getEligibleCards ? store.getEligibleCards(parsedAmount) : [];
+      if (eligible.length === 0) {
+        LinsoraUI.closeModal('modalVoiceConfirmation');
+        const total = (store.state?.cards || []).length;
+        LinsoraUI.showToast(total === 0
+          ? 'Nenhum cartão cadastrado para essa compra.'
+          : 'Nenhum cartão possui limite suficiente para essa compra.', 'error');
+        this.currentParsedTx = null;
+        return;
+      }
+      if (eligible.length === 1) {
+        const only = eligible[0];
+        try {
+          await store.addCardPurchase({
+            amount: parsedAmount,
+            description: this.currentParsedTx.description,
+            category: this.currentParsedTx.category,
+            date: this.currentParsedTx.date,
+            card: only,
+            notes: `Voz: "${this.currentParsedTx.rawText}"`
+          });
+          LinsoraUI.closeModal('modalVoiceConfirmation');
+          LinsoraUI.showToast(`Compra de ${LinsoraUtils.formatBRL(parsedAmount)} lançada no cartão ${only.name}! 🎙️`);
+        } catch (err) {
+          console.error('[LINSORA Voice] Erro ao salvar compra no cartão:', err);
+          LinsoraUI.closeModal('modalVoiceConfirmation');
+          LinsoraUI.showToast(err?.message || 'Cartão sem limite suficiente para essa compra.', 'error');
+        }
+        this.currentParsedTx = null;
+        return;
+      }
+      // 2+ elegíveis: modal de seleção por cardId (sem auto-escolha).
+      const pendingTx = {
+        amount: parsedAmount,
+        description: this.currentParsedTx.description,
+        category: this.currentParsedTx.category,
+        date: this.currentParsedTx.date,
+        rawText: this.currentParsedTx.rawText
+      };
       LinsoraUI.closeModal('modalVoiceConfirmation');
-      LinsoraUI.showToast('Qual cartão? Selecione o cartão no formulário para concluir.', 'info');
-      this.openFormToEdit();
+      this.currentParsedTx = null;
+      if (window.LinsoraCardPicker?.open) {
+        window.LinsoraCardPicker.open({
+          amount: pendingTx.amount,
+          onSelect: async (cardId) => {
+            try {
+              const chosen = (store.state?.cards || []).find((c) => c.id === cardId);
+              if (!chosen) {
+                LinsoraUI.showToast('Cartão selecionado inválido.', 'error');
+                return;
+              }
+              await store.addCardPurchase({
+                amount: pendingTx.amount,
+                description: pendingTx.description,
+                category: pendingTx.category,
+                date: pendingTx.date,
+                card: chosen,
+                notes: `Voz: "${pendingTx.rawText}"`
+              });
+              LinsoraUI.showToast(`Compra de ${LinsoraUtils.formatBRL(pendingTx.amount)} lançada no cartão ${chosen.name}! 🎙️`);
+            } catch (err) {
+              console.error('[LINSORA Voice] Erro ao salvar compra escolhida:', err);
+              LinsoraUI.showToast(err?.message || 'Cartão sem limite suficiente para essa compra.', 'error');
+            }
+          },
+          onCancel: () => {}
+        });
+      } else {
+        LinsoraUI.showToast('Há mais de um cartão elegível. Selecione o cartão no formulário.', 'info');
+        this.currentParsedTx = { ...pendingTx, paymentMethod: 'credit', type: 'DESPESA', cardHint: null, isCardPayment: false, amount: pendingTx.amount };
+        this.openFormToEdit();
+        return;
+      }
       return;
     }
 
-    // Compra no crédito ("comprei X no cartão [Nome]"): vincula ao cartão
-    // (limitUsed), sem reduzir a conta bancária. Sem cartão identificável,
-    // mantém o comportamento atual (despesa na conta padrão).
+    // Demais lançamentos (bancários): mantém o comportamento atual
+    // (despesa na conta padrão).
     let txAccount = defaultAccount;
     let txCardId = null;
-    if (this.currentParsedTx.paymentMethod === 'credit' && window.linsoraStore?.resolvePurchaseCard) {
-      const purchaseCard = window.linsoraStore.resolvePurchaseCard(cardHint);
-      if (purchaseCard) {
-        txAccount = `Cartão ${purchaseCard.name}`;
-        txCardId = purchaseCard.id;
-      }
-    }
 
     const txPayload = {
       type: this.currentParsedTx.type,
@@ -495,6 +598,8 @@ class VoiceAssistantUIController {
     const waveEl = document.getElementById('voiceWaveAnimation');
     if (statusEl) statusEl.innerText = 'Ouvindo áudio em tempo real...';
     if (waveEl) waveEl.classList.remove('active');
+    if (window.LinsoraCardPicker?.close) window.LinsoraCardPicker.close();
+    LinsoraUI.closeModal('modalCardPicker');
     LinsoraUI.closeModal('modalVoiceConfirmation');
     LinsoraUI.closeModal('modalGoalVoiceConfirmation');
     LinsoraUI.closeModal('modalVoiceListening');

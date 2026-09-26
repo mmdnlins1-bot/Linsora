@@ -126,7 +126,7 @@ test.describe('30. Cartao: contabilizacao sem fallback silencioso', () => {
     expect(st.txs[0].account).toBe('Cartão Nubank');
   });
 
-  test('F. Voz ambigua: pede escolha, nada muda, form pre-preenchido', async ({ page }) => {
+  test('F. Voz ambigua: modal de selecao, nada muda, sem auto-escolha', async ({ page }) => {
     await setup(page, 3600, [{ name: 'Nubank', limit: 5000 }, { name: 'Inter', limit: 2000 }]);
     await page.evaluate(async () => {
       window.VoiceAssistantUI.currentParsedTx = window.TransactionAIParser.parseText('Fiz uma compra de 300 reais no cartão');
@@ -136,13 +136,11 @@ test.describe('30. Cartao: contabilizacao sem fallback silencioso', () => {
     expect(st.cards.every((c) => c.limitUsed === 0)).toBe(true);
     expect(st.bank).toBe(3600);
     expect(st.txs).toHaveLength(0);
-    await expect(page.locator('#modalTransactionForm')).not.toHaveClass(/hidden/);
-    const form = await page.evaluate(() => ({
-      desc: document.getElementById('txDescription').value,
-      hasCardOptions: Array.from(document.getElementById('txAccount').options).some((o) => o.value.startsWith('Cartão ')),
-    }));
-    expect(form.hasCardOptions).toBe(true);
-    expect(form.desc.length).toBeGreaterThan(0);
+    // Bloco C: 2 cartões elegíveis abrem o modalCardPicker (nunca o
+    // formulário e nunca auto-escolha do primeiro cartão).
+    await expect(page.locator('#modalCardPicker')).not.toHaveClass(/hidden/);
+    await expect(page.locator('#modalTransactionForm')).toHaveClass(/hidden/);
+    await expect(page.locator('#cardPickerList .card-picker-select')).toHaveCount(2);
   });
 
   test('G. Voz nomeada com dois cartoes: somente Nubank +300', async ({ page }) => {

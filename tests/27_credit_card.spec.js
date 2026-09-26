@@ -144,8 +144,9 @@ test.describe('27. Cartao de credito: compra e pagamento', () => {
     await addCard(page, 'Inter', 2000, 'Inter');
     const resolved = await page.evaluate(() => window.linsoraStore.resolvePurchaseCard(null));
     expect(resolved).toBe(null);
-    // Rota da voz sem dica: NÃO salva despesa bancária silenciosa; pede a
-    // escolha abrindo o formulário pré-preenchido. Nada muda no financeiro.
+    // Rota da voz sem dica (Bloco C): NENHUMA despesa bancária silenciosa;
+    // com 2 cartões elegíveis abre o modal modalCardPicker (substitui o
+    // fluxo antigo toast + formulário). Nada muda no financeiro.
     await page.evaluate(async () => {
       window.VoiceAssistantUI.currentParsedTx = window.TransactionAIParser.parseText('Fiz uma compra de 500 reais no cartão');
       await window.VoiceAssistantUI.confirmAndSave();
@@ -154,7 +155,8 @@ test.describe('27. Cartao de credito: compra e pagamento', () => {
     expect(st.cards.every((c) => c.limitUsed === 0)).toBe(true);
     expect(st.txs).toHaveLength(0);
     expect(st.bank).toBe(2000);
-    await expect(page.locator('#modalTransactionForm')).not.toHaveClass(/hidden/);
+    await expect(page.locator('#modalCardPicker')).not.toHaveClass(/hidden/);
+    await expect(page.locator('#modalTransactionForm')).toHaveClass(/hidden/);
   });
 
   test('15. Reload/reabertura: utilizado permanece correto', async ({ page }) => {

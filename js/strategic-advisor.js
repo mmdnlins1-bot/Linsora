@@ -75,6 +75,8 @@ class StrategicAdvisorEngine {
 
     if (intent === 'EXPLICIT_COMMAND' && amount > 0) {
       return this.handleExplicitCommand(parsedData, metrics);
+    } else if (intent === 'WITHDRAW_QUESTION') {
+      return this.answerWithdraw(amount, metrics, parsedData);
     } else if (intent === 'QUESTION' || (intent === 'AMBIGUOUS' && amount > 0)) {
       return this.handleViabilityQuestion(parsedData, metrics, lowerText, intent);
     } else {
@@ -85,10 +87,15 @@ class StrategicAdvisorEngine {
   detectIntent(lowerText) {
     const questionKeywords = ['posso', 'devo', 'vale a pena', 'é viável', 'consigo', 'da pra', 'dá pra', 'o que acha', 'simule', 'simulacao', 'qual', 'quanto', 'sera que'];
     const commandKeywords = ['registre', 'adicione', 'comprei', 'gastei', 'paguei', 'lance', 'anote', 'debite', 'recebi', 'ganhei', 'pix de', 'pix para', 'transferi'];
+    // Bloco C: saque/retirada é uma pergunta sobre saldo bancário, nunca
+    // sobre margem do ciclo. "posso gastar" segue em QUESTION.
+    const withdrawKeywords = ['sacar', 'saque', 'retirar', 'retirada', 'retirado'];
 
     const isQuestion = questionKeywords.some(kw => lowerText.includes(kw));
     const isCommand = commandKeywords.some(kw => lowerText.includes(kw));
+    const isWithdraw = withdrawKeywords.some(kw => lowerText.includes(kw));
 
+    if (isWithdraw && !isCommand) return 'WITHDRAW_QUESTION';
     if (isQuestion && !isCommand) return 'QUESTION';
     if (isCommand && !isQuestion) return 'EXPLICIT_COMMAND';
     if (isCommand && isQuestion) return 'QUESTION'; // Em caso de dúvida, trate como simulação
@@ -651,6 +658,53 @@ class StrategicAdvisorEngine {
     };
   }
 
+  /**
+   * Bloco C: resposta específica para saque/retirada ("posso sacar R$ X?").
+   * A decisão usa o SALDO BANCÁRIO disponível (totalBalance). A margem do
+   * ciclo e os compromissos aparecem apenas como contexto, nunca como veto
+   * quando há saldo suficiente. Não altera answerViability ("posso gastar").
+   */
+  answerWithdraw(amount, metrics, parsedData) {
+    const m = metrics || {};
+    const bankBalance = Number(m.totalBalance) || 0;
+    const technicalIndicators = this.buildTechnicalIndicators(m);
+    if (!(amount > 0)) {
+      return {
+        severity: 'info',
+        title: '💸 Saque / Retirada',
+        diagnosis: `Seu saldo disponível nas contas é de ${LinsoraUtils.formatBRL(bankBalance)}.`,
+        impact: `Saldo em Contas: ${LinsoraUtils.formatBRL(bankBalance)}`,
+        technicalIndicators,
+        recommendation: 'Me diga o valor que deseja sacar (ex.: "posso sacar 100 reais?").',
+        action: null
+      };
+    }
+    const cycleAmount = Number(m.cycleCommittedAmount ?? m.committedAmount) || 0;
+    const contextNote = cycleAmount > 0
+      ? ` Para contexto, há ${LinsoraUtils.formatBRL(cycleAmount)} em compromissos no ciclo, mas isso não bloqueia o saque com saldo suficiente.`
+      : '';
+    if (amount <= bankBalance) {
+      return {
+        severity: 'success',
+        title: '💸 Saque viável',
+        diagnosis: `Você pode sacar ${LinsoraUtils.formatBRL(amount)}. Saldo disponível nas contas: ${LinsoraUtils.formatBRL(bankBalance)}.`,
+        impact: `Saldo em Contas: ${LinsoraUtils.formatBRL(bankBalance)} | Saque solicitado: ${LinsoraUtils.formatBRL(amount)} | Saldo após o saque: ${LinsoraUtils.formatBRL(bankBalance - amount)}`,
+        technicalIndicators,
+        recommendation: `Sim, há saldo suficiente para sacar ${LinsoraUtils.formatBRL(amount)}.${contextNote}`,
+        action: null
+      };
+    }
+    return {
+      severity: 'danger',
+      title: '💸 Saque inviável',
+      diagnosis: `Você pediu ${LinsoraUtils.formatBRL(amount)}, mas o saldo disponível nas contas é de ${LinsoraUtils.formatBRL(bankBalance)}.`,
+      impact: `Saldo em Contas: ${LinsoraUtils.formatBRL(bankBalance)} | Saque solicitado: ${LinsoraUtils.formatBRL(amount)} | Faltam ${LinsoraUtils.formatBRL(amount - bankBalance)}.`,
+      technicalIndicators,
+      recommendation: `Não há saldo bancário suficiente para esse saque. Faltam ${LinsoraUtils.formatBRL(amount - bankBalance)}.`,
+      action: null
+    };
+  }
+
   answerViability(parsedData, metrics, rawText, intent) {
     const isGoal = parsedData.action === 'APORTE' || parsedData.type?.includes('Meta') || parsedData.type?.includes('Reserva');
     const amount = parsedData.amount || parsedData.target;
@@ -1150,23 +1204,71 @@ class StrategicAdvisorEngine {
     const p = action.payload;
 
      if (action.type === 'EXECUTE_TRANSACTION' || action.type === 'PROPOSE_TRANSACTION') {
-        // Intenção de cartão: vincula ao cartão correto, sem debitar banco.
+        // Compra no cartão (Bloco C): cartão explícito resolve exclusivamente
+        // o indicado com validação de limite; genérico usa elegibilidade
+        // (0 = erro, 1 = automático, 2+ = modal). Nunca fallback silencioso,
+        // nunca despesa bancária para intenção de crédito.
         // Ambíguo (vários cartões, sem menção): erro controlado, sem
         // despesa bancária silenciosa. Intenção bancária: caminho atual.
         if (p.paymentMethod === 'credit' && p.type === 'DESPESA' && !p.isCardPayment && window.linsoraStore?.resolvePurchaseCard) {
-          const card = window.linsoraStore.resolvePurchaseCard(p.cardHint || null);
-          if (!card) {
-            throw new Error('Há mais de um cartão e não identifiquei qual você mencionou. Diga o nome do cartão (ex.: "no cartão Nubank").');
+          const store = window.linsoraStore;
+          const hint = String(p.cardHint || '').trim();
+          const availOf = (card) => store.getCardAvailableLimit
+            ? store.getCardAvailableLimit(card)
+            : Math.max(0, (Number(card.limitTotal) || 0) - (Number(card.limitUsed) || 0));
+          if (hint) {
+            const card = store.resolvePurchaseCard(hint);
+            if (!card) {
+              throw new Error(`Não identifiquei o cartão "${p.cardHint}". Verifique o nome do cartão.`);
+            }
+            if (Number(p.amount) > availOf(card)) {
+              throw new Error(`${card.name} não possui limite suficiente para essa compra. Limite disponível: ${LinsoraUtils.formatBRL(availOf(card))}.`);
+            }
+            store.addCardPurchase({
+              amount: p.amount,
+              description: p.description,
+              category: p.category,
+              date: p.date,
+              card,
+              notes: p.rawText ? `Conselheiro: "${p.rawText}"` : ''
+            });
+            return;
           }
-          window.linsoraStore.addCardPurchase({
-            amount: p.amount,
-            description: p.description,
-            category: p.category,
-            date: p.date,
-            card,
-            notes: p.rawText ? `Conselheiro: "${p.rawText}"` : ''
-          });
-          return;
+          const eligible = store.getEligibleCards ? store.getEligibleCards(p.amount) : [];
+          if (eligible.length === 0) {
+            throw new Error('Nenhum cartão possui limite suficiente para essa compra.');
+          }
+          if (eligible.length === 1) {
+            store.addCardPurchase({
+              amount: p.amount,
+              description: p.description,
+              category: p.category,
+              date: p.date,
+              card: eligible[0],
+              notes: p.rawText ? `Conselheiro: "${p.rawText}"` : ''
+            });
+            return;
+          }
+          if (window.LinsoraCardPicker?.open) {
+            const payload = { ...p };
+            window.LinsoraCardPicker.open({
+              amount: Number(payload.amount),
+              onSelect: (cardId) => {
+                const chosen = (store.state?.cards || []).find((c) => c.id === cardId);
+                if (!chosen) return;
+                store.addCardPurchase({
+                  amount: payload.amount,
+                  description: payload.description,
+                  category: payload.category,
+                  date: payload.date,
+                  card: chosen,
+                  notes: payload.rawText ? `Conselheiro: "${payload.rawText}"` : ''
+                });
+              },
+              onCancel: () => {}
+            });
+          }
+          throw new Error('Há mais de um cartão elegível para essa compra. Selecione o cartão desejado.');
         }
         // Pagamento de fatura: usa o fluxo real de pagamento do cartão
         // (payCardAmount), nunca despesa bancária genérica. Cartão único

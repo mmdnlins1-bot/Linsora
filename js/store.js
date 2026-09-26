@@ -394,7 +394,30 @@ class LinsoraStore {
     // nunca é nome de cartão: não pode casar com nenhum cartão real.
     if (['cartao', 'credito', 'fatura', 'rotativo', 'cartao de credito'].includes(h)) return null;
     const norm = (v) => String(v || '').toLowerCase();
-    return cards.find((c) => norm(c.name).includes(h) || norm(c.brand).includes(h) || h.includes(norm(c.name))) || null;
+    const tokensOf = (v) => norm(v).split(/[^a-z0-9]+/).filter((t) => t && t.length >= 2);
+    const hintTokens = tokensOf(h);
+    // 1. Compatibilidade legada por substring (ex.: "nubank").
+    const direct = cards.find((c) => norm(c.name).includes(h) || norm(c.brand).includes(h) || h.includes(norm(c.name)));
+    if (direct) return direct;
+    // 2. Bloco C: nome composto por tokens ("banco inter", "banco brasil"
+    // para "Banco do Brasil"). Todos os tokens do hint precisam existir nos
+    // tokens do nome/marca do cartão; genérico de 1 token nunca casa sozinho
+    // com conectivo (já filtrado acima).
+    if (hintTokens.length > 0) {
+      const scored = cards.map((c) => {
+        const cardTokens = new Set([...tokensOf(c.name), ...tokensOf(c.brand)]);
+        const hits = hintTokens.filter((t) => cardTokens.has(t)).length;
+        return { card: c, hits };
+      }).filter((s) => s.hits === hintTokens.length && s.hits > 0);
+      if (scored.length === 1) return scored[0].card;
+      if (scored.length > 1) {
+        // Desempate: prefere o cartão cujo nome contém mais tokens do hint
+        // em sequência; senão, mantém o primeiro (ordem de cadastro).
+        scored.sort((a, b) => tokensOf(b.card.name).length - tokensOf(a.card.name).length);
+        return scored[0].card;
+      }
+    }
+    return null;
   }
 
   resolvePurchaseCard(hint) {
@@ -411,9 +434,19 @@ class LinsoraStore {
 
   async addCardPurchase({ amount, description, category, date, card, notes } = {}) {
     if (!card || !(Number(amount) > 0)) return null;
+    // Bloco C (caminho real de gravação): compra nunca pode estourar o
+    // limite disponível do cartão resolvido. Sem fallback para outro cartão
+    // ou conta bancária — o chamador decide o que fazer com o erro.
+    const value = Number(amount);
+    const total = Number(card.limitTotal) || 0;
+    const used = Number(card.limitUsed) || 0;
+    const available = Math.max(0, total - used);
+    if (value > available) {
+      throw new Error(`${card.name} não possui limite suficiente para essa compra. Limite disponível: ${LinsoraUtils.formatBRL(available)}.`);
+    }
     await this.saveTransaction({
       type: 'DESPESA',
-      amount: Number(amount),
+      amount: value,
       description: description || `Compra no cartão ${card.name}`,
       category: category || 'Outros',
       date: date || LinsoraUtils.toLocalDateKey(),
@@ -423,6 +456,26 @@ class LinsoraStore {
       notes: notes || ''
     });
     return true;
+  }
+
+  /**
+   * Bloco C: limite disponível de um cartão (limitTotal - limitUsed).
+   */
+  getCardAvailableLimit(card) {
+    if (!card) return 0;
+    const total = Number(card.limitTotal) || 0;
+    const used = Number(card.limitUsed) || 0;
+    return Math.max(0, total - used);
+  }
+
+  /**
+   * Bloco C: cartões que comportam a compra (disponível >= amount).
+   * Reutilizável por Voz e Conselheiro. Nunca escolhe sozinho: apenas lista.
+   */
+  getEligibleCards(amount) {
+    const value = Number(amount);
+    if (!(value > 0)) return [];
+    return (this.state?.cards || []).filter((c) => this.getCardAvailableLimit(c) >= value);
   }
 
   async payCardAmount(cardId, amount, accountName = null) {

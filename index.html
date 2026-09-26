@@ -1374,6 +1374,26 @@
         </div>
       </div>
 
+      <!-- MODAL DE SELEÇÃO DE CARTÃO (Bloco C: compra genérica com 2+ elegíveis) -->
+      <div class="linsora-modal-overlay hidden" id="modalCardPicker">
+        <div class="linsora-modal-content floating-center-card" style="max-width: 400px;" role="dialog" aria-modal="true" aria-labelledby="cardPickerTitle">
+          <div class="modal-header">
+            <h3 id="cardPickerTitle">Selecionar cartão 💳</h3>
+            <button type="button" class="modal-close" id="btnCardPickerClose" data-close-modal="modalCardPicker">✕</button>
+          </div>
+          <div class="voice-conf-card">
+            <div class="voice-conf-amount-display">
+              <span style="font-size: 11px; color: var(--text-secondary); text-transform: uppercase; font-weight: 600;">Valor da compra</span>
+              <div class="voice-conf-amount-val expense" id="cardPickerAmount">—</div>
+            </div>
+            <div id="cardPickerList" style="display: flex; flex-direction: column; gap: 10px; margin-top: 12px;"></div>
+            <div class="voice-conf-actions">
+              <button type="button" class="linsora-btn outline block" id="btnCardPickerCancel">Cancelar</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- TOAST NOTIFICATION FLOATING BANNER (POSICIONAMENTO PERFEITO NO TOPO) -->
       <div class="toast-container" id="toastContainer"></div>
 
@@ -1389,6 +1409,7 @@
   <script defer src="js/utils.js"></script>
   <script defer src="js/store.js"></script>
   <script defer src="js/ai-transaction-parser.js"></script>
+  <script defer src="js/card-picker.js"></script>
   <script defer src="js/strategic-advisor.js"></script>
   <script defer src="js/voice-recognition.js"></script>
   <script defer src="js/voice-assistant-ui.js"></script>
