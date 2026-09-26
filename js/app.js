@@ -872,10 +872,43 @@ function setupEventListeners() {
     document.getElementById('txAmount').value = '';
     document.getElementById('txDescription').value = '';
     document.getElementById('txDate').value = LinsoraUtils.toLocalDateKey();
-    
+
     setTxFormType(type);
+    if (typeof window.refreshTxAccountOptions === 'function') window.refreshTxAccountOptions(false);
     LinsoraUI.openModal('modalTransactionForm');
   }
+
+  /**
+   * Popula o seletor Conta/Cartão do formulário manual com as contas
+   * bancárias e os cartões (`Cartão <nome>`) do usuário corrente.
+   * Mantém o valor atual se ainda válido; senão pré-seleciona a primeira
+   * conta (escolha explícita e visível — nunca fallback silencioso).
+   */
+  function refreshTxAccountOptions(keepValue = true) {
+    const sel = document.getElementById('txAccount');
+    if (!sel) return;
+    const state = window.linsoraStore?.state;
+    const accounts = state?.accounts || [];
+    const cards = state?.cards || [];
+    const prev = keepValue ? sel.value : '';
+    sel.innerHTML = '';
+    accounts.forEach((a) => {
+      const o = document.createElement('option');
+      o.value = a.name;
+      o.textContent = `${a.name} (Conta)`;
+      sel.appendChild(o);
+    });
+    cards.forEach((c) => {
+      const o = document.createElement('option');
+      o.value = `Cartão ${c.name}`;
+      o.textContent = `Cartão ${c.name} (Crédito)`;
+      sel.appendChild(o);
+    });
+    const values = Array.from(sel.options).map((o) => o.value);
+    if (prev && values.includes(prev)) sel.value = prev;
+    else if (values.length > 0) sel.value = values[0];
+  }
+  window.refreshTxAccountOptions = refreshTxAccountOptions;
 
   const txForm = document.getElementById('txForm');
   if (txForm) {
@@ -896,6 +929,17 @@ function setupEventListeners() {
 
       if (!amount || amount <= 0 || !description) {
         LinsoraUI.showToast('Preencha o valor e a descrição corretamente.', 'error');
+        return;
+      }
+
+      // Validação de conta/cartão: compra no cartão exige cartão válido
+      // (banco jamais debitado); conta inexistente bloqueia o lançamento
+      // em vez de cair em fallback silencioso.
+      const resolution = window.linsoraStore.resolveTxAccount
+        ? window.linsoraStore.resolveTxAccount(account, isIncome ? 'RECEITA' : 'DESPESA')
+        : { ok: true, kind: 'bank' };
+      if (!resolution.ok) {
+        LinsoraUI.showToast(resolution.reason || 'Selecione uma conta ou cartão válido.', 'error');
         return;
       }
 
@@ -933,6 +977,7 @@ function setupEventListeners() {
 
     await window.linsoraStore.addAccount({ name, type, balance });
     LinsoraUI.closeModal('modalAccountForm');
+    if (typeof window.refreshTxAccountOptions === 'function') window.refreshTxAccountOptions(true);
     LinsoraUI.showToast('Conta bancária adicionada com sucesso!');
   });
 
@@ -948,6 +993,7 @@ function setupEventListeners() {
 
     await window.linsoraStore.addCard({ name, brand, limitTotal, closingDay, dueDay });
     LinsoraUI.closeModal('modalCardForm');
+    if (typeof window.refreshTxAccountOptions === 'function') window.refreshTxAccountOptions(true);
     LinsoraUI.showToast('Cartão de crédito adicionado!');
   });
 
@@ -1135,6 +1181,7 @@ function setupEventListeners() {
       const tx = window.linsoraStore.state.transactions.find(t => t.id === window.selectedTxId);
       if (tx) {
         LinsoraUI.closeModal('modalTransactionDetails');
+        if (typeof window.refreshTxAccountOptions === 'function') window.refreshTxAccountOptions(false);
         document.getElementById('txId').value = tx.id;
         document.getElementById('txAmount').value = LinsoraUtils.formatCurrencyInput((tx.amount * 100).toString());
         document.getElementById('txDescription').value = tx.description;

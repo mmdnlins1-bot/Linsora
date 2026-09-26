@@ -138,22 +138,23 @@ test.describe('27. Cartao de credito: compra e pagamento', () => {
     expect(st.bank).toBe(2000);
   });
 
-  test('14. Dois cartoes sem identificacao: nao escolhe silenciosamente', async ({ page }) => {
+  test('14. Dois cartoes sem identificacao: pergunta, nada muda', async ({ page }) => {
     await setupBank(page, 2000);
     await addCard(page, 'Nubank', 1000, 'Nubank');
     await addCard(page, 'Inter', 2000, 'Inter');
     const resolved = await page.evaluate(() => window.linsoraStore.resolvePurchaseCard(null));
     expect(resolved).toBe(null);
-    // Rota da voz sem dica: despesa bancária normal, nenhum cartão tocado.
+    // Rota da voz sem dica: NÃO salva despesa bancária silenciosa; pede a
+    // escolha abrindo o formulário pré-preenchido. Nada muda no financeiro.
     await page.evaluate(async () => {
       window.VoiceAssistantUI.currentParsedTx = window.TransactionAIParser.parseText('Fiz uma compra de 500 reais no cartão');
       await window.VoiceAssistantUI.confirmAndSave();
     });
     const st = await cardState(page);
     expect(st.cards.every((c) => c.limitUsed === 0)).toBe(true);
-    expect(st.txs).toHaveLength(1);
-    expect(st.txs[0].account).toBe('Conta Principal');
-    expect(st.bank).toBe(1500);
+    expect(st.txs).toHaveLength(0);
+    expect(st.bank).toBe(2000);
+    await expect(page.locator('#modalTransactionForm')).not.toHaveClass(/hidden/);
   });
 
   test('15. Reload/reabertura: utilizado permanece correto', async ({ page }) => {

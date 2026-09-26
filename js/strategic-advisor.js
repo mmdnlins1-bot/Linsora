@@ -667,6 +667,18 @@ class StrategicAdvisorEngine {
     const usedFallback = metrics.cycleUsedFallback !== false;
     const scopeText = usedFallback ? 'até o fim do mês' : 'até o próximo recebimento';
     const dailyLabel = `Limite diário ${scopeText}`;
+    // Data do próximo recebimento (fonte: getNextReceiptDate via métricas;
+    // fallback existente: fim do mês). Somente exibição, sem nova fórmula.
+    const nextReceiptDateText = metrics.cycleNextReceiptDate
+      ? LinsoraUtils.formatDateBR(metrics.cycleNextReceiptDate)
+      : '';
+    const receiptRefText = nextReceiptDateText
+      ? `próximo recebimento em ${nextReceiptDateText}`
+      : 'fim do mês';
+    // Frase factual de insuficiência (margem X, pedido Y, falta Z).
+    const shortfallText = `Margem disponível no ciclo: ${LinsoraUtils.formatBRL(effectiveMargin)}. Para gastar ${LinsoraUtils.formatBRL(amount)}, faltariam ${LinsoraUtils.formatBRL(amount - effectiveMargin)}.`;
+    // Contexto factual pós-gasto (saldos e recebimento já calculados).
+    const afterSpendText = `Saldo atual nas contas: ${LinsoraUtils.formatBRL(metrics.totalBalance)}. Após esse gasto, o restante da margem no ciclo será ${LinsoraUtils.formatBRL(effectiveMargin - amount)}. Próximo recebimento: ${nextReceiptDateText || 'fim do mês'}.`;
 
     if (isGoal) {
         let rec = amount <= effectiveMargin ? 'Aporte viável.' : 'Aporte compromete suas despesas livres mensais.';
@@ -718,33 +730,45 @@ class StrategicAdvisorEngine {
       diagnosis = `Análise de viabilidade: Gasto de ${LinsoraUtils.formatBRL(amount)}${catText}.`;
     }
 
-    if (amount > metrics.totalLiquidity) {
+    if (Math.abs(amount - effectiveMargin) < 0.005) {
+      // Gasto igual à margem (tolerância de centavos): declara os fatos —
+      // saldo atual, pedido, restante zerado, pendentes, recebimento — sem
+      // frase genérica. A conferência de compromissos segue a regra vigente.
+      severity = 'warning';
+      const commitPart = hasCommitments
+        ? `Compromissos pendentes no ciclo: ${commitSummary}.`
+        : 'Não há compromissos pendentes no ciclo.';
+      const receiptPart = nextReceiptDateText
+        ? `Próximo recebimento em ${nextReceiptDateText}.`
+        : 'Sem próximo recebimento cadastrado; referência: fim do mês.';
+      recommendation = `Saldo atual nas contas: ${LinsoraUtils.formatBRL(metrics.totalBalance)}. Gasto solicitado: ${LinsoraUtils.formatBRL(amount)}. Após esse gasto, o restante da margem no ciclo será ${LinsoraUtils.formatBRL(effectiveMargin - amount)}. ${commitPart} ${receiptPart} Com a margem zerada, não haverá cobertura para outros gastos até lá.`;
+    } else if (amount > metrics.totalLiquidity) {
       severity = 'danger';
-      recommendation = `Faltam fundos! Esse gasto de ${LinsoraUtils.formatBRL(amount)} é maior do que o seu saldo consolidado e renda livre.`;
+      recommendation = `Faltam fundos! Esse gasto de ${LinsoraUtils.formatBRL(amount)} é maior do que o seu saldo consolidado e renda livre. ${shortfallText}`;
     } else if (amount > effectiveMargin) {
       severity = 'warning';
       if (amount > metrics.availableBalanceForMonth) {
         if (hasCommitments) {
-          recommendation = `Você tem saldo nas contas para cobrir, mas esse gasto de ${LinsoraUtils.formatBRL(amount)} ultrapassa a sua renda livre do mês (${LinsoraUtils.formatBRL(metrics.availableBalanceForMonth)}). Além disso, há ${commitSummary} já previsto, deixando sua margem em ${LinsoraUtils.formatBRL(effectiveMargin)}. Você precisará entrar nas suas reservas acumuladas.`;
+          recommendation = `Você tem saldo nas contas para cobrir, mas esse gasto de ${LinsoraUtils.formatBRL(amount)} ultrapassa a sua renda livre do mês (${LinsoraUtils.formatBRL(metrics.availableBalanceForMonth)}). Além disso, há ${commitSummary} já previsto, deixando sua margem em ${LinsoraUtils.formatBRL(effectiveMargin)}. Você precisará entrar nas suas reservas acumuladas. ${shortfallText}`;
         } else {
-          recommendation = `Você tem saldo nas contas para cobrir, mas esse gasto de ${LinsoraUtils.formatBRL(amount)} ultrapassa a sua renda livre do mês (${LinsoraUtils.formatBRL(metrics.availableBalanceForMonth)}). Você precisará entrar nas suas reservas acumuladas.`;
+          recommendation = `Você tem saldo nas contas para cobrir, mas esse gasto de ${LinsoraUtils.formatBRL(amount)} ultrapassa a sua renda livre do mês (${LinsoraUtils.formatBRL(metrics.availableBalanceForMonth)}). Você precisará entrar nas suas reservas acumuladas. ${shortfallText}`;
         }
       } else {
-        recommendation = `Esse gasto de ${LinsoraUtils.formatBRL(amount)} comprometeria sua margem disponível. Você precisa considerar ${commitSummary}, o que deixa aproximadamente ${LinsoraUtils.formatBRL(effectiveMargin)} disponíveis no ciclo.`;
+        recommendation = `Esse gasto de ${LinsoraUtils.formatBRL(amount)} comprometeria sua margem disponível. Você precisa considerar ${commitSummary}, o que deixa aproximadamente ${LinsoraUtils.formatBRL(effectiveMargin)} disponíveis no ciclo. ${shortfallText}`;
       }
     } else if (amount <= dailyLimit) {
       severity = 'success';
       if (hasCommitments) {
-        recommendation = `Perfeito! O valor de ${LinsoraUtils.formatBRL(amount)} cabe no seu ${dailyLabel.toLowerCase()} de ${LinsoraUtils.formatBRL(dailyLimit)}. Lembre-se de que há ${commitSummary}, restando aproximadamente ${LinsoraUtils.formatBRL(effectiveMargin)} de margem disponível no ciclo.`;
+        recommendation = `Perfeito! O valor de ${LinsoraUtils.formatBRL(amount)} cabe no seu ${dailyLabel.toLowerCase()} de ${LinsoraUtils.formatBRL(dailyLimit)}. Lembre-se de que há ${commitSummary}, restando aproximadamente ${LinsoraUtils.formatBRL(effectiveMargin)} de margem disponível no ciclo. ${afterSpendText}`;
       } else {
-        recommendation = `Perfeito! O valor cabe perfeitamente no seu ${dailyLabel.toLowerCase()} de ${LinsoraUtils.formatBRL(dailyLimit)}.`;
+        recommendation = `Perfeito! O valor cabe perfeitamente no seu ${dailyLabel.toLowerCase()} de ${LinsoraUtils.formatBRL(dailyLimit)}. ${afterSpendText}`;
       }
     } else {
       severity = 'warning';
       if (hasCommitments) {
-        recommendation = `É viável no ciclo considerando seus compromissos, mas fica acima do seu ${dailyLabel.toLowerCase()} de ${LinsoraUtils.formatBRL(dailyLimit)}. Você precisa considerar ${commitSummary}. Sua margem livre restante após esse gasto será de ${LinsoraUtils.formatBRL(effectiveMargin - amount)}.`;
+        recommendation = `É viável no ciclo considerando seus compromissos, mas fica acima do seu ${dailyLabel.toLowerCase()} de ${LinsoraUtils.formatBRL(dailyLimit)}. Você precisa considerar ${commitSummary}. Sua margem livre restante após esse gasto será de ${LinsoraUtils.formatBRL(effectiveMargin - amount)}. ${afterSpendText}`;
       } else {
-        recommendation = `É viável no ciclo, mas fica acima do seu ${dailyLabel.toLowerCase()} de ${LinsoraUtils.formatBRL(dailyLimit)}. Se gastar isso hoje, vai precisar segurar a onda nos próximos dias.`;
+        recommendation = `É viável no ciclo, mas fica acima do seu ${dailyLabel.toLowerCase()} de ${LinsoraUtils.formatBRL(dailyLimit)}. Se gastar isso hoje, vai precisar segurar a onda nos próximos dias. ${afterSpendText}`;
       }
     }
 
@@ -1125,9 +1149,27 @@ class StrategicAdvisorEngine {
     if (!action || !action.payload) return;
     const p = action.payload;
 
-    if (action.type === 'EXECUTE_TRANSACTION' || action.type === 'PROPOSE_TRANSACTION') {
-       if (window.linsoraStore) {
-         window.linsoraStore.saveTransaction({
+     if (action.type === 'EXECUTE_TRANSACTION' || action.type === 'PROPOSE_TRANSACTION') {
+        // Intenção de cartão: vincula ao cartão correto, sem debitar banco.
+        // Ambíguo (vários cartões, sem menção): erro controlado, sem
+        // despesa bancária silenciosa. Intenção bancária: caminho atual.
+        if (p.paymentMethod === 'credit' && p.type === 'DESPESA' && !p.isCardPayment && window.linsoraStore?.resolvePurchaseCard) {
+          const card = window.linsoraStore.resolvePurchaseCard(p.cardHint || null);
+          if (!card) {
+            throw new Error('Há mais de um cartão e não identifiquei qual você mencionou. Diga o nome do cartão (ex.: "no cartão Nubank").');
+          }
+          window.linsoraStore.addCardPurchase({
+            amount: p.amount,
+            description: p.description,
+            category: p.category,
+            date: p.date,
+            card,
+            notes: p.rawText ? `Conselheiro: "${p.rawText}"` : ''
+          });
+          return;
+        }
+        if (window.linsoraStore) {
+          window.linsoraStore.saveTransaction({
             type: p.type,
             amount: p.amount,
             category: p.category,

@@ -27,7 +27,9 @@ test.describe('20. Conselheiro: layout do resultado do fluxo', () => {
   async function seedProductionLike(page) {
     await page.evaluate(async () => {
       window.linsoraStore.state.accounts = [{ id: 'acc1', balance: 0, name: 'Conta Principal' }];
-      const now = new Date().toISOString();
+      // Data local de hoje ao meio-dia (evita flake de fuso: toISOString
+      // após 21h locais já cai no dia seguinte em UTC e viraria receita futura).
+      const now = `${window.LinsoraUtils.toLocalDateKey()}T12:00:00`;
       window.linsoraStore.state.transactions = [
         { id: 'tx_r', userId: window.linsoraStore.state.user.id, type: 'RECEITA', amount: 5000, description: 'Salario', category: 'Salário', date: now, account: 'Conta Principal', status: 'CONCLUIDO' },
         { id: 'tx_d', userId: window.linsoraStore.state.user.id, type: 'DESPESA', amount: 940, description: 'Mercado', category: 'Alimentação', date: now, account: 'Conta Principal', status: 'CONCLUIDO' }

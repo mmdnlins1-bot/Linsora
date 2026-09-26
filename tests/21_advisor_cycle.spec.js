@@ -40,7 +40,9 @@ test.describe('21. Conselheiro: ciclo até o próximo recebimento', () => {
     const internetDueDay = new Date(new Date().setDate(new Date().getDate() + 12)).getDate();
     return page.evaluate(async ({ today, aluguelDueDay, internetDueDay, receiptOffsets }) => {
       const uid = window.linsoraStore.state.user.id;
-      const now = new Date().toISOString();
+      // Salário de hoje em horário local (toISOString após 21h locais cai no
+      // dia seguinte em UTC e seria lido como recebimento futuro).
+      const now = `${window.LinsoraUtils.toLocalDateKey()}T12:00:00`;
       window.linsoraStore.state.accounts = [{ id: 'acc1', balance: 0, name: 'Conta Principal' }];
       window.linsoraStore.state.goals = [];
       window.linsoraStore.state.transactions = [

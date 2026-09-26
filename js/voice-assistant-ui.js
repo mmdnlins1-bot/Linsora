@@ -312,6 +312,21 @@ class VoiceAssistantUIController {
       }
     }
 
+    // Compra no crédito com cartão ambíguo (vários cartões, sem menção):
+    // NÃO salva despesa bancária silenciosamente. Pede a escolha explícita
+    // abrindo o formulário pré-preenchido (com o seletor Conta/Cartão).
+    if (this.currentParsedTx.paymentMethod === 'credit'
+        && this.currentParsedTx.type === 'DESPESA'
+        && !this.currentParsedTx.isCardPayment
+        && window.linsoraStore?.resolvePurchaseCard
+        && !window.linsoraStore.resolvePurchaseCard(cardHint)
+        && (window.linsoraStore.state?.cards || []).length > 1) {
+      LinsoraUI.closeModal('modalVoiceConfirmation');
+      LinsoraUI.showToast('Qual cartão? Selecione o cartão no formulário para concluir.', 'info');
+      this.openFormToEdit();
+      return;
+    }
+
     // Compra no crédito ("comprei X no cartão [Nome]"): vincula ao cartão
     // (limitUsed), sem reduzir a conta bancária. Sem cartão identificável,
     // mantém o comportamento atual (despesa na conta padrão).
@@ -394,6 +409,7 @@ class VoiceAssistantUIController {
     if (!this.currentParsedTx) return;
 
     LinsoraUI.closeModal('modalVoiceConfirmation');
+    if (typeof window.refreshTxAccountOptions === 'function') window.refreshTxAccountOptions(false);
 
     document.getElementById('txId').value = '';
     const centsStr = Math.round(this.currentParsedTx.amount * 100).toString();

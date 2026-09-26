@@ -235,8 +235,10 @@ const LinsoraUtils = {
   /**
    * Próximo vencimento relevante de uma regra recorrente (puro, sem persistir).
    * Ordem: menor due_date PENDING >= hoje; senão a PENDING vencida mais
-   * recente; senão (regra ativa) o próximo vencimento derivado da regra;
-   * regra inativa sem PENDING retorna null (nada é inventado).
+   * recente; senão (regra ativa) o próximo vencimento derivado da regra,
+   * pulando datas que já possuem ocorrência (PENDING/PAID/SKIPPED) para não
+   * reanunciar uma conta paga como pendente; regra inativa sem PENDING
+   * retorna null (nada é inventado).
    * Retorna { dueDate, overdue, source } ou null.
    */
   nextBillDue(bill, occurrences = [], todayKey) {
@@ -259,6 +261,14 @@ const LinsoraUtils = {
     if (bill.active === false) return null;
     const dueDay = parseInt(bill.dueDay ?? bill.due_day, 10);
     if (!dueDay || dueDay < 1 || dueDay > 31) return null;
+    // Datas que já possuem ocorrência (PENDING, PAID ou SKIPPED) nunca são
+    // re-derivadas: uma conta paga/ignorada não volta como "próximo
+    // compromisso" na mesma data. Somente leitura — nenhum status é tocado.
+    const settledDates = new Set(
+      (Array.isArray(occurrences) ? occurrences : [])
+        .filter((o) => o && o.recurringBillId === bill.id && o.dueDate)
+        .map((o) => String(o.dueDate).slice(0, 10))
+    );
     const [ty, tm0] = today.split('-').map(Number);
     for (let step = 0; step < 36; step++) {
       const total = (tm0 - 1) + step;
@@ -267,6 +277,7 @@ const LinsoraUtils = {
       const d = this.clampDayOfMonth(y, m, dueDay);
       const due = `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
       if (due < today) continue;
+      if (settledDates.has(due)) continue;
       const start = String(bill.startDate ?? bill.start_date ?? '').slice(0, 10);
       const endRaw = bill.endDate ?? bill.end_date ?? null;
       const end = endRaw ? String(endRaw).slice(0, 10) : null;

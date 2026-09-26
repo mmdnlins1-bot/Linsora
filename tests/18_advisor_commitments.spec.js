@@ -108,7 +108,7 @@ test.describe('18. Integração Contas Recorrentes + Conselheiro', () => {
     const metrics = await page.evaluate(async () => {
       window.linsoraStore.state.accounts = [{ id: 'acc1', balance: 2000, name: 'Conta Principal' }];
       window.linsoraStore.state.transactions = [
-        { type: 'RECEITA', amount: 2000, date: new Date().toISOString(), account: 'Conta Principal' }
+        { type: 'RECEITA', amount: 2000, date: window.LinsoraUtils.toLocalDateKey() + 'T12:00:00', account: 'Conta Principal' }
       ];
       await window.linsoraStore.addRecurringBill({
         title: 'Internet',
@@ -134,7 +134,7 @@ test.describe('18. Integração Contas Recorrentes + Conselheiro', () => {
     await page.evaluate(async () => {
       window.linsoraStore.state.accounts = [{ id: 'acc1', balance: 1000, name: 'Conta Principal' }];
       window.linsoraStore.state.transactions = [
-        { type: 'RECEITA', amount: 1000, date: new Date().toISOString(), account: 'Conta Principal' }
+        { type: 'RECEITA', amount: 1000, date: window.LinsoraUtils.toLocalDateKey() + 'T12:00:00', account: 'Conta Principal' }
       ];
       await window.linsoraStore.addRecurringBill({
         title: 'Internet',
@@ -169,7 +169,7 @@ test.describe('18. Integração Contas Recorrentes + Conselheiro', () => {
     await page.evaluate(async () => {
       window.linsoraStore.state.accounts = [{ id: 'acc1', balance: 5000, name: 'Conta Principal' }];
       window.linsoraStore.state.transactions = [
-        { type: 'RECEITA', amount: 5000, date: new Date().toISOString(), account: 'Conta Principal' }
+        { type: 'RECEITA', amount: 5000, date: window.LinsoraUtils.toLocalDateKey() + 'T12:00:00', account: 'Conta Principal' }
       ];
       await window.linsoraStore.addRecurringBill({
         title: 'Internet Fibra',
@@ -202,7 +202,7 @@ test.describe('18. Integração Contas Recorrentes + Conselheiro', () => {
     await page.evaluate(() => {
       window.linsoraStore.state.accounts = [{ id: 'acc1', balance: 5000, name: 'Conta Principal' }];
       window.linsoraStore.state.transactions = [
-        { type: 'RECEITA', amount: 5000, date: new Date().toISOString(), account: 'Conta Principal' }
+        { type: 'RECEITA', amount: 5000, date: window.LinsoraUtils.toLocalDateKey() + 'T12:00:00', account: 'Conta Principal' }
       ];
       window.linsoraStore.state.recurringBills = [];
       window.linsoraStore.state.occurrences = [];
@@ -228,7 +228,7 @@ test.describe('18. Integração Contas Recorrentes + Conselheiro', () => {
     await page.evaluate(async () => {
       window.linsoraStore.state.accounts = [{ id: 'acc1', balance: 3000, name: 'Conta Principal' }];
       window.linsoraStore.state.transactions = [
-        { type: 'RECEITA', amount: 3000, date: new Date().toISOString(), account: 'Conta Principal' }
+        { type: 'RECEITA', amount: 3000, date: window.LinsoraUtils.toLocalDateKey() + 'T12:00:00', account: 'Conta Principal' }
       ];
       await window.linsoraStore.addRecurringBill({
         title: 'Internet',

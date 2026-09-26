@@ -191,14 +191,48 @@ class LinsoraStore {
      OPERAÇÕES DE CONTAS & PIX
      ------------------------------------------------------------------------ */
   adjustAccountBalance(accountName, deltaAmount) {
-    if (!accountName) return;
-    let acc = this.state.accounts.find(a => a.name.toLowerCase().includes(accountName.toLowerCase()));
-    if (!acc && this.state.accounts.length > 0) {
-      acc = this.state.accounts[0];
+    if (!accountName) return false;
+    const acc = this.state.accounts.find(a => a.name.toLowerCase().includes(accountName.toLowerCase()));
+    // Sem fallback silencioso para accounts[0]: conta não encontrada =
+    // nenhum débito/crédito em outra conta. Retorna se aplicou.
+    if (!acc) return false;
+    acc.balance += deltaAmount;
+    return true;
+  }
+
+  /**
+   * Resolve a conta/cartão informado no lançamento (formulário manual).
+   * Retorna {ok:true, kind:'bank'|'card'|'none', account?, card?} ou
+   * {ok:false, reason}. Nunca escolhe outra conta silenciosamente:
+   * - 'Cartão <nome>' exige cartão correspondente (DESPESA);
+   * - nome bancário exige conta correspondente;
+   * - vazio só passa quando não existe nenhuma conta/cartão (legado
+   *   sem impacto possível); com opções existentes, exige escolha.
+   */
+  resolveTxAccount(accountValue, type) {
+    const accounts = this.state?.accounts || [];
+    const cards = this.state?.cards || [];
+    const raw = String(accountValue || '').trim();
+    if (!raw) {
+      if (accounts.length === 0 && cards.length === 0) return { ok: true, kind: 'none' };
+      return { ok: false, reason: 'Selecione uma conta ou um cartão para lançar.' };
     }
-    if (acc) {
-      acc.balance += deltaAmount;
+    if (raw.includes('Cartão')) {
+      if (type && type !== 'DESPESA') {
+        return { ok: false, reason: 'Receitas devem ser lançadas em conta bancária, não em cartão.' };
+      }
+      const card = cards.find((c) => raw === `Cartão ${c.name}` || raw.includes(c.name));
+      if (!card) {
+        return { ok: false, reason: 'Selecione um cartão válido. Nenhum cartão correspondente foi encontrado.' };
+      }
+      return { ok: true, kind: 'card', card, account: `Cartão ${card.name}` };
     }
+    const acc = accounts.find((a) => a.name.toLowerCase() === raw.toLowerCase())
+      || accounts.find((a) => a.name.toLowerCase().includes(raw.toLowerCase()));
+    if (!acc) {
+      return { ok: false, reason: 'Conta não encontrada. Selecione uma conta válida.' };
+    }
+    return { ok: true, kind: 'bank', account: acc };
   }
 
   async addAccount(accData) {
@@ -976,8 +1010,27 @@ class LinsoraStore {
 
   getCurrentMonthExpense() {
     return this.getCurrentMonthTransactions()
-      .filter(t => t.type === 'DESPESA')
+      .filter(t => t.type === 'DESPESA' && !this.isCardPurchaseLeg(t))
       .reduce((acc, t) => acc + (Number(t.amount) || 0), 0);
+  }
+
+  /**
+   * Perna da COMPRA no cartão (dívida em limitUsed, sem saída bancária).
+   * Regra de caixa (anti-dupla-contagem): a compra NÃO entra na despesa do
+   * mês; só o PAGAMENTO da fatura (isCardPayment, conta bancária) conta
+   * como saída. Histórico de ambos preservado; só a métrica exclui a
+   * compra: modelo novo (paymentMethod 'credit') ou conta 'Cartão <nome>'
+   * com cartão correspondente existente.
+   */
+  isCardPurchaseLeg(t) {
+    if (!t || t.type !== 'DESPESA' || t.isCardPayment) return false;
+    if (t.paymentMethod === 'credit') return true;
+    const acc = String(t.account || '');
+    if (acc.includes('Cartão')) {
+      const cards = this.state?.cards || [];
+      return cards.some((c) => acc.includes(c.name));
+    }
+    return false;
   }
 
   getCurrentMonthBalance() {
