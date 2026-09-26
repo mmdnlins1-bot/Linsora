@@ -8,7 +8,7 @@
 class TransactionAIParser {
   constructor() {
     this.defaultCategories = [
-      { name: 'Alimentação', targetType: 'DESPESA', keywords: ['almoço', 'almoco', 'jantar', 'janta', 'restaurante', 'ifood', 'padaria', 'mercado', 'supermercado', 'comida', 'lanche', 'cafe', 'café', 'pizza', 'feira', 'acougue', 'açougue', 'lanchonete', 'hamburguer', 'pastel'] },
+      { name: 'Alimentação', targetType: 'DESPESA', keywords: ['almoço', 'almoco', 'jantar', 'janta', 'restaurante', 'ifood', 'padaria', 'mercado', 'supermercado', 'comida', 'lanche', 'merenda', 'cafe', 'café', 'pizza', 'feira', 'acougue', 'açougue', 'lanchonete', 'hamburguer', 'pastel'] },
       { name: 'Transporte', targetType: 'DESPESA', keywords: ['uber', '99', 'taxi', 'táxi', 'gasolina', 'combustivel', 'combustível', 'estacionamento', 'pedagio', 'pedágio', 'metro', 'metrô', 'onibus', 'ônibus', 'passagem', 'oficina', 'mecanico', 'mecânico', 'posto'] },
       { name: 'Moradia', targetType: 'DESPESA', keywords: ['aluguel', 'apartamento', 'apê', 'ape', 'condominio', 'condomínio', 'luz', 'energia', 'agua', 'água', 'gas', 'gás', 'iptu', 'reforma', 'casa', 'energia elétrica', 'luz elétrica'] },
       { name: 'Saúde', targetType: 'DESPESA', keywords: ['farmacia', 'farmácia', 'remedio', 'remédio', 'consulta', 'medico', 'médico', 'dentista', 'exame', 'hospital', 'plano de saude', 'drogaria'] },
@@ -408,14 +408,32 @@ class TransactionAIParser {
 
   /**
    * Extrai e limpa a descrição da transação.
+   * Bloco D1: filtragem por token com comparação normalizada (minúscula,
+   * sem acento), preservando o token original acentuado. O `\b` ASCII do
+   * regex anterior comia o "o"/"a" final de palavras acentuadas
+   * ("cartão" -> "cartã"); aqui fronteiras são espaços, sem perda de letra.
+   * O conjunto de palavras descartadas é o mesmo de antes (verbos de
+   * comando, preposições, marcadores temporais e de valor).
    */
   extractDescription(rawText, amount, category, type) {
-    let clean = rawText
+    const drop = new Set([
+      'gastei', 'comprei', 'paguei', 'recebi', 'ganhei', 'salario',
+      'no', 'valor', 'de', 'com', 'na', 'em', 'para', 'um', 'uma', 'o', 'a',
+      'hoje', 'ontem', 'anteontem', 'amanha', 'dia', 'reais', 'real'
+    ]);
+    const normTok = (t) => String(t || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
+    let clean = String(rawText || '')
       .replace(/r\$\s*\d+(?:[.,]\d+)?/gi, '')
-      .replace(/\b\d+(?:[.,]\d+)?\s*(?:reais|real)?\b/gi, '')
-      .replace(/\b(?:gastei|comprei|paguei|recebi|ganhei|salário|salario|no valor de|valor de|com|no|na|em|para|de|um|uma|o|a|hoje|ontem|anteontem|amanhã|amanha|dia|reais|real)\b/gi, '')
-      .replace(/\s+/g, ' ')
-      .trim();
+      .replace(/\b\d+(?:[.,]\d+)?\s*(?:reais|real)?\b/gi, '');
+    const kept = clean.split(/\s+/)
+      .map((t) => String(t || '').replace(/^[,.;:!?()"'«»–—-]+|[,.;:!?()"'«»–—-]+$/g, ''))
+      .filter((t) => t.length > 0)
+      .filter((t) => {
+        const n = normTok(t);
+        if (!n || /^\d/.test(n)) return false;
+        return !drop.has(n);
+      });
+    clean = kept.join(' ').replace(/\s+/g, ' ').trim();
 
     if (clean.length > 2) {
       return clean.charAt(0).toUpperCase() + clean.slice(1);

@@ -1394,6 +1394,50 @@
         </div>
       </div>
 
+      <!-- MODAL DE CONFIRMAÇÃO COMPACTA DE COMPRA NO CARTÃO (Bloco D1) -->
+      <div class="linsora-modal-overlay hidden" id="modalCreditConfirm">
+        <div class="linsora-modal-content floating-center-card" style="max-width: 400px;" role="dialog" aria-modal="true" aria-labelledby="creditConfTitle">
+          <div class="modal-header">
+            <h3 id="creditConfTitle">Compra no cartão 💳</h3>
+            <button type="button" class="modal-close" id="btnCreditConfClose" data-close-modal="modalCreditConfirm">✕</button>
+          </div>
+          <div class="voice-conf-card">
+            <div class="voice-conf-amount-display">
+              <span style="font-size: 11px; color: var(--text-secondary); text-transform: uppercase; font-weight: 600;">Valor</span>
+              <div class="voice-conf-amount-val expense" id="creditConfAmount">- R$ 0,00</div>
+            </div>
+
+            <div class="voice-conf-details-grid">
+              <div class="voice-detail-box">
+                <span class="voice-detail-label">Cartão</span>
+                <span class="voice-detail-val" id="creditConfCard">—</span>
+              </div>
+              <div class="voice-detail-box">
+                <span class="voice-detail-label">Categoria</span>
+                <span class="voice-detail-val" id="creditConfCategory">—</span>
+              </div>
+            </div>
+
+            <div class="voice-conf-details-grid">
+              <div class="voice-detail-box" style="grid-column: span 2;">
+                <span class="voice-detail-label">Descrição</span>
+                <span class="voice-detail-val" id="creditConfDescription">—</span>
+              </div>
+            </div>
+
+            <div class="voice-raw-box">
+              <span style="font-size: 10.5px; font-weight: 600; display: block; margin-bottom: 2px;">Voz Original:</span>
+              <span id="creditConfRawText">""</span>
+            </div>
+
+            <div class="voice-conf-actions">
+              <button type="button" class="linsora-btn primary block" id="btnCreditConfConfirm">💳 Confirmar compra</button>
+              <button type="button" class="linsora-btn outline block" id="btnCreditConfCancel">Cancelar</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- TOAST NOTIFICATION FLOATING BANNER (POSICIONAMENTO PERFEITO NO TOPO) -->
       <div class="toast-container" id="toastContainer"></div>
 

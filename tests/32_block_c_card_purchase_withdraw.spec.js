@@ -92,11 +92,16 @@ test.describe('32. Bloco C - compra por cartao e saque', () => {
     expect(parsed[1]).toEqual({ method: 'credit', hint: null, pay: true });
   });
 
-  test('A. Compra explicita no Inter: Inter +1000, Nubank e banco intactos', async ({ page }) => {
+  test('A. Compra explicita no Inter: confirmação compacta e Inter +1000, Nubank e banco intactos', async ({ page }) => {
     await setupBank(page, 3100);
     await addCard(page, 'Nubank', 5000, 4000, 'Nubank');
     await addCard(page, 'Banco Inter', 5000, 0, 'Inter');
     await voiceBuy(page, 'compra no cartão de crédito do banco Inter de mil reais');
+    // Bloco D1: confirmação compacta (sem modal genérico) antes de salvar.
+    await expect(page.locator('#modalCreditConfirm')).not.toHaveClass(/hidden/);
+    await expect(page.locator('#creditConfCard')).toContainText('Banco Inter');
+    await page.locator('#btnCreditConfConfirm').click();
+    await page.waitForTimeout(150);
     const st = await cardState(page);
     expect(st.bank).toBe(3100);
     expect(st.cards.find((c) => c.name === 'Banco Inter').limitUsed).toBe(1000);
@@ -120,11 +125,16 @@ test.describe('32. Bloco C - compra por cartao e saque', () => {
     await expect(page.locator('#modalCardPicker')).toHaveClass(/hidden/);
   });
 
-  test('C. Generica com 1 elegivel: auto no Inter', async ({ page }) => {
+  test('C. Generica com 1 elegivel: confirmação compacta e auto no Inter', async ({ page }) => {
     await setupBank(page, 3100);
     await addCard(page, 'Nubank', 1000, 1000, 'Nubank');
     await addCard(page, 'Banco Inter', 5000, 0, 'Inter');
     await voiceBuy(page, 'compra no cartão de crédito de 1000 reais');
+    // Bloco D1: confirmação compacta identifica o Inter antes de salvar.
+    await expect(page.locator('#modalCreditConfirm')).not.toHaveClass(/hidden/);
+    await expect(page.locator('#creditConfCard')).toContainText('Banco Inter');
+    await page.locator('#btnCreditConfConfirm').click();
+    await page.waitForTimeout(150);
     const st = await cardState(page);
     expect(st.txs).toHaveLength(1);
     expect(st.txs[0].account).toBe('Cartão Banco Inter');
@@ -146,6 +156,11 @@ test.describe('32. Bloco C - compra por cartao e saque', () => {
     // Seleciona o Inter pelo modal: identidade preservada por cardId.
     const interId = st.cards.find((c) => c.name === 'Banco Inter').id;
     await page.locator(`#cardPickerList .card-picker-select[data-card-id="${interId}"]`).click();
+    await page.waitForTimeout(150);
+    // Bloco D1: após a escolha, confirmação compacta antes de salvar.
+    await expect(page.locator('#modalCreditConfirm')).not.toHaveClass(/hidden/);
+    await expect(page.locator('#creditConfCard')).toContainText('Banco Inter');
+    await page.locator('#btnCreditConfConfirm').click();
     await page.waitForTimeout(150);
     st = await cardState(page);
     expect(st.txs).toHaveLength(1);
@@ -181,13 +196,17 @@ test.describe('32. Bloco C - compra por cartao e saque', () => {
     await expect(page.locator('#modalCardPicker')).toHaveClass(/hidden/);
   });
 
-  test('G. Compra normal 1 cartao continua funcionando', async ({ page }) => {
+  test('G. Compra normal 1 cartao: confirmação compacta e continua funcionando', async ({ page }) => {
     await setupBank(page, 3600);
     await addCard(page, 'Nubank', 1000, 0);
     await page.evaluate(async () => {
       window.VoiceAssistantUI.currentParsedTx = window.TransactionAIParser.parseText('compra de 500 reais no cartão de crédito');
       await window.VoiceAssistantUI.confirmAndSave();
     });
+    // Bloco D1: confirmação compacta (sem modal genérico) antes de salvar.
+    await expect(page.locator('#modalCreditConfirm')).not.toHaveClass(/hidden/);
+    await page.locator('#btnCreditConfConfirm').click();
+    await page.waitForTimeout(150);
     const st = await cardState(page);
     expect(st.cards[0].limitUsed).toBe(500);
     expect(st.bank).toBe(3600);

@@ -113,12 +113,17 @@ test.describe('30. Cartao: contabilizacao sem fallback silencioso', () => {
     expect(st.txs).toHaveLength(4);
   });
 
-  test('E. Voz com um unico cartao: +300 no cartao, banco intacto', async ({ page }) => {
+  test('E. Voz com um unico cartao: confirmação compacta e +300 no cartao, banco intacto', async ({ page }) => {
     await setup(page, 3600, [{ name: 'Nubank', limit: 5000 }]);
     await page.evaluate(async () => {
       window.VoiceAssistantUI.currentParsedTx = window.TransactionAIParser.parseText('Fiz uma compra de 300 reais no cartão');
       await window.VoiceAssistantUI.confirmAndSave();
     });
+    // Bloco D1: confirmação compacta (sem modal genérico) antes de salvar.
+    await expect(page.locator('#modalCreditConfirm')).not.toHaveClass(/hidden/);
+    await expect(page.locator('#creditConfCard')).toContainText('Nubank');
+    await page.locator('#btnCreditConfConfirm').click();
+    await page.waitForTimeout(150);
     const st = await finance(page);
     expect(st.cards[0].limitUsed).toBe(300);
     expect(st.bank).toBe(3600);
@@ -143,12 +148,17 @@ test.describe('30. Cartao: contabilizacao sem fallback silencioso', () => {
     await expect(page.locator('#cardPickerList .card-picker-select')).toHaveCount(2);
   });
 
-  test('G. Voz nomeada com dois cartoes: somente Nubank +300', async ({ page }) => {
+  test('G. Voz nomeada com dois cartoes: confirmação compacta e somente Nubank +300', async ({ page }) => {
     await setup(page, 3600, [{ name: 'Nubank', limit: 5000 }, { name: 'Inter', limit: 2000 }]);
     await page.evaluate(async () => {
       window.VoiceAssistantUI.currentParsedTx = window.TransactionAIParser.parseText('Fiz uma compra de 300 reais no cartão nubank');
       await window.VoiceAssistantUI.confirmAndSave();
     });
+    // Bloco D1: confirmação compacta identifica o Nubank, sem seletor.
+    await expect(page.locator('#modalCreditConfirm')).not.toHaveClass(/hidden/);
+    await expect(page.locator('#creditConfCard')).toContainText('Nubank');
+    await page.locator('#btnCreditConfConfirm').click();
+    await page.waitForTimeout(150);
     const st = await finance(page);
     expect(st.cards.find((c) => c.name === 'Nubank').limitUsed).toBe(300);
     expect(st.cards.find((c) => c.name === 'Inter').limitUsed).toBe(0);

@@ -205,6 +205,10 @@ test.describe('31. Pagamento da fatura do cartao por voz', () => {
       window.VoiceAssistantUI.currentParsedTx = window.TransactionAIParser.parseText('compra de 500 reais no cartão de crédito');
       await window.VoiceAssistantUI.confirmAndSave();
     });
+    // Bloco D1: compra por voz passa pela confirmação compacta antes de salvar.
+    await expect(page.locator('#modalCreditConfirm')).not.toHaveClass(/hidden/);
+    await page.locator('#btnCreditConfConfirm').click();
+    await page.waitForTimeout(150);
     const st = await cardState(page);
     expect(st.cards[0].limitUsed).toBe(500);
     expect(st.bank).toBe(3600);

@@ -200,6 +200,10 @@ test.describe('27. Cartao de credito: compra e pagamento', () => {
       window.VoiceAssistantUI.currentParsedTx = window.TransactionAIParser.parseText('Fiz uma compra de 500 reais no cartão nubank');
       await window.VoiceAssistantUI.confirmAndSave();
     });
+    // Bloco D1: compra por voz passa pela confirmação compacta antes de salvar.
+    await expect(page.locator('#modalCreditConfirm')).not.toHaveClass(/hidden/);
+    await page.locator('#btnCreditConfConfirm').click();
+    await page.waitForTimeout(150);
     let st = await cardState(page);
     expect(st.cards.find((c) => c.name === 'Nubank').limitUsed).toBe(500);
     expect(st.cards.find((c) => c.name === 'Inter').limitUsed).toBe(0);

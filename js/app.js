@@ -643,6 +643,19 @@ function setupEventListeners() {
     if (window.VoiceAssistantUI) window.VoiceAssistantUI.cancelVoice();
   });
 
+  // Bloco D1: confirmação compacta de compra no cartão.
+  document.getElementById('btnCreditConfConfirm')?.addEventListener('click', async () => {
+    if (window.VoiceAssistantUI) await window.VoiceAssistantUI.confirmCreditPurchase();
+  });
+
+  document.getElementById('btnCreditConfCancel')?.addEventListener('click', () => {
+    if (window.VoiceAssistantUI) window.VoiceAssistantUI.cancelCreditPurchase();
+  });
+
+  document.getElementById('btnCreditConfClose')?.addEventListener('click', () => {
+    if (window.VoiceAssistantUI) window.VoiceAssistantUI.cancelCreditPurchase();
+  });
+
   // EVENTOS DO ASSISTENTE DE VOZ PARA METAS & RESERVAS
   document.getElementById('btnMicGoalsHeader')?.addEventListener('click', () => {
     if (window.VoiceAssistantUI) window.VoiceAssistantUI.startGoalVoiceCapture();
