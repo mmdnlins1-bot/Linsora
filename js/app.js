@@ -1353,6 +1353,43 @@ function setupEventListeners() {
     }
   });
 
+  // Menu "⋮" das ações do cartão (somente apresentação: abre/fecha o
+  // popover; Ver extrato e Excluir usam os listeners já existentes).
+  const cardMenuToggle = document.getElementById('btnCardMenuToggle');
+  const cardActionsMenu = document.getElementById('cardActionsMenu');
+  const setCardMenuOpen = (open) => {
+    if (!cardMenuToggle || !cardActionsMenu) return;
+    cardActionsMenu.classList.toggle('hidden', !open);
+    cardMenuToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+    cardActionsMenu.style.transform = '';
+    if (open) {
+      // Guarda de viewport: mantém o menu totalmente visível.
+      const rect = cardActionsMenu.getBoundingClientRect();
+      let dx = 0;
+      if (rect.right > window.innerWidth - 8) dx = rect.right - (window.innerWidth - 8);
+      if (rect.left - dx < 8) dx = Math.max(0, rect.left - 8);
+      if (dx) cardActionsMenu.style.transform = `translateX(${-dx}px)`;
+    }
+  };
+  cardMenuToggle?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    setCardMenuOpen(cardActionsMenu?.classList.contains('hidden'));
+  });
+  document.addEventListener('click', (e) => {
+    if (cardActionsMenu && !cardActionsMenu.classList.contains('hidden')
+      && !e.target?.closest?.('.fatura-menu-wrap')) {
+      setCardMenuOpen(false);
+    }
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && cardActionsMenu && !cardActionsMenu.classList.contains('hidden')) {
+      setCardMenuOpen(false);
+    }
+  });
+  cardActionsMenu?.querySelectorAll('button').forEach((b) => {
+    b.addEventListener('click', () => setCardMenuOpen(false));
+  });
+
   // FLUXO COMPLETO DE UPLOAD DE FOTO DE PERFIL
   const processAndUploadAvatarDataUrl = async (dataUrl) => {
     const spinner = document.getElementById('avatarUploadSpinner');

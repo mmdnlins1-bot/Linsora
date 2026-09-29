@@ -152,6 +152,7 @@ test.describe('34. Bloco D2 - extrato e lançamentos por cartão', () => {
       window.LinsoraUI.selectCard(card.id);
     });
     await expect(page.locator('#faturaItemsList')).toContainText('Nenhum lançamento neste cartão');
+    await page.locator('#btnCardMenuToggle').click();
     await page.locator('#btnViewCardStatement').click();
     await expect(page.locator('#modalCardStatement')).not.toHaveClass(/hidden/);
     await expect(page.locator('#cardStatementTitle')).toContainText('Nubank');
@@ -172,6 +173,7 @@ test.describe('34. Bloco D2 - extrato e lançamentos por cartão', () => {
       window.LinsoraUI.selectCard(inter.id);
     });
     await expect(page.locator('#faturaItemsList')).toContainText('Compra Inter');
+    await page.locator('#btnCardMenuToggle').click();
     await page.locator('#btnViewCardStatement').click();
     await expect(page.locator('#modalCardStatement')).not.toHaveClass(/hidden/);
     await expect(page.locator('#cardStatementTitle')).toContainText('Banco Inter');
@@ -185,6 +187,7 @@ test.describe('34. Bloco D2 - extrato e lançamentos por cartão', () => {
       const nubank = window.linsoraStore.state.cards.find((c) => c.name === 'Nubank');
       window.LinsoraUI.selectCard(nubank.id);
     });
+    await page.locator('#btnCardMenuToggle').click();
     await page.locator('#btnViewCardStatement').click();
     await expect(page.locator('#cardStatementTitle')).toContainText('Nubank');
     await expect(page.locator('#cardStatementList')).toContainText('Compra Nubank');

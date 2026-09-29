@@ -485,9 +485,14 @@
               <div class="fatura-amount-row">
                 <div class="fatura-main-val" id="faturaTotalValue">R$ 0,00</div>
                 <div class="fatura-actions">
-                  <button type="button" class="linsora-btn secondary sm" id="btnViewCardStatement">🧾 Ver extrato</button>
                   <button type="button" class="linsora-btn primary sm" id="btnPayInvoice">Pagar Fatura</button>
-                  <button type="button" class="linsora-btn danger sm" id="btnDeleteCard">🗑️ Excluir</button>
+                  <div class="fatura-menu-wrap">
+                    <button type="button" class="linsora-btn secondary sm fatura-menu-toggle" id="btnCardMenuToggle" aria-haspopup="menu" aria-expanded="false" aria-controls="cardActionsMenu" aria-label="Mais ações do cartão">⋮</button>
+                    <div class="fatura-menu hidden" id="cardActionsMenu" role="menu" aria-label="Ações do cartão">
+                      <button type="button" class="linsora-btn secondary sm" role="menuitem" id="btnViewCardStatement">🧾 Ver extrato</button>
+                      <button type="button" class="linsora-btn danger sm" role="menuitem" id="btnDeleteCard">🗑️ Excluir cartão</button>
+                    </div>
+                  </div>
                 </div>
               </div>
 
