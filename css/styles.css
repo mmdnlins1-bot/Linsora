@@ -1753,6 +1753,16 @@ body.frame-mode .device-notch { display: block; }
 .fatura-menu { position: absolute; top: calc(100% + 6px); right: 0; z-index: 60; display: flex; flex-direction: column; gap: 4px; min-width: 200px; max-width: min(260px, calc(100vw - 32px)); padding: 6px; background: var(--bg-card); border: 1px solid var(--border-color-strong); border-radius: var(--radius-md); box-shadow: var(--shadow-lg); box-sizing: border-box; }
 .fatura-menu .linsora-btn { width: 100%; max-width: 100%; justify-content: flex-start; padding: 10px 12px; font-size: 13px; box-sizing: border-box; }
 
+/* Modal de pagamento da fatura (total ou parcial): somente apresentação.
+   A lógica financeira permanece no store (payCardInvoice/payCardAmount). */
+.pay-invoice-options { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+.pay-invoice-option { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 8px 12px; border: 1px solid var(--border-color); border-radius: var(--radius-md); cursor: pointer; font-weight: 600; font-size: 13.5px; box-sizing: border-box; }
+.pay-invoice-option input { width: 18px; height: 18px; accent-color: var(--accent-green-neon); flex: 0 0 auto; }
+#payInvoicePartialWrap { margin-top: 12px; }
+#payInvoicePartialWrap .form-group { margin-bottom: 8px; }
+.pay-invoice-remaining { font-size: 12.5px; font-weight: 600; color: var(--text-secondary); }
+.pay-invoice-error { font-size: 12.5px; font-weight: 600; color: #F87171; margin-top: 4px; }
+
 .limit-progress-wrapper { display: flex; flex-direction: column; gap: 5px; }
 .limit-labels { display: flex; justify-content: space-between; font-size: 11px; color: var(--text-secondary); }
 .limit-progress-bar { width: 100%; height: 7px; background: var(--bg-input); border-radius: var(--radius-full); overflow: hidden; }

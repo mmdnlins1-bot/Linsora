@@ -1460,6 +1460,54 @@
         </div>
       </div>
 
+      <!-- MODAL DE PAGAMENTO DA FATURA (total ou parcial) -->
+      <div class="linsora-modal-overlay hidden" id="modalPayInvoice">
+        <div class="linsora-modal-content floating-center-card" style="max-width: 400px;" role="dialog" aria-modal="true" aria-labelledby="payInvoiceTitle">
+          <div class="modal-header">
+            <h3 id="payInvoiceTitle">Pagar fatura do cartão 💳</h3>
+            <button type="button" class="modal-close" id="btnPayInvoiceClose" data-close-modal="modalPayInvoice">✕</button>
+          </div>
+          <div class="voice-conf-card">
+            <div class="voice-conf-amount-display">
+              <span style="font-size: 11px; color: var(--text-secondary); text-transform: uppercase; font-weight: 600;">Fatura atual</span>
+              <div class="voice-conf-amount-val expense" id="payInvoiceTotal">—</div>
+            </div>
+            <div class="voice-conf-details-grid">
+              <div class="voice-detail-box">
+                <span class="voice-detail-label">Cartão</span>
+                <span class="voice-detail-val" id="payInvoiceCard">—</span>
+              </div>
+              <div class="voice-detail-box">
+                <span class="voice-detail-label">Conta de débito</span>
+                <span class="voice-detail-val" id="payInvoiceAccount">—</span>
+              </div>
+            </div>
+            <div class="pay-invoice-options" role="radiogroup" aria-label="Tipo de pagamento">
+              <label class="pay-invoice-option">
+                <input type="radio" name="payInvoiceType" value="total" checked>
+                <span>Pagamento total</span>
+              </label>
+              <label class="pay-invoice-option">
+                <input type="radio" name="payInvoiceType" value="partial">
+                <span>Pagamento parcial</span>
+              </label>
+            </div>
+            <div id="payInvoicePartialWrap" class="hidden">
+              <div class="form-group">
+                <label for="payInvoiceAmount">Quanto deseja pagar?</label>
+                <input type="text" id="payInvoiceAmount" class="linsora-input" inputmode="decimal" placeholder="R$ 0,00" autocomplete="off">
+              </div>
+              <div class="pay-invoice-remaining" id="payInvoiceRemaining">Restará na fatura: —</div>
+              <div class="pay-invoice-error hidden" id="payInvoiceError" role="alert"></div>
+            </div>
+            <div class="voice-conf-actions">
+              <button type="button" class="linsora-btn primary block" id="btnPayInvoiceConfirm">Confirmar pagamento</button>
+              <button type="button" class="linsora-btn outline block" id="btnPayInvoiceCancel" data-close-modal="modalPayInvoice">Cancelar</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- TOAST NOTIFICATION FLOATING BANNER (POSICIONAMENTO PERFEITO NO TOPO) -->
       <div class="toast-container" id="toastContainer"></div>
 

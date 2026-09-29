@@ -1336,11 +1336,133 @@ function setupEventListeners() {
 
   document.getElementById('btnPixTransfer')?.addEventListener('click', () => LinsoraUI.openModal('modalPixArea'));
   document.getElementById('btnPixReceive')?.addEventListener('click', () => LinsoraUI.openModal('modalPixArea'));
-  document.getElementById('btnPayInvoice')?.addEventListener('click', async () => {
-    if (window.selectedCardId) {
-      const ok = await window.linsoraStore.payCardInvoice(window.selectedCardId);
-      if (ok) LinsoraUI.showToast('Fatura paga com sucesso!');
-      else LinsoraUI.showToast('Nenhum saldo devedor nesta fatura.', 'info');
+  // Modal de pagamento da fatura (total ou parcial). Somente apresentação:
+  // a lógica financeira permanece no store (payCardInvoice/payCardAmount).
+  const getPayInvoiceCard = () => {
+    if (!window.selectedCardId || !window.linsoraStore) return null;
+    return (window.linsoraStore.state?.cards || []).find((c) => c.id === window.selectedCardId) || null;
+  };
+  const getPayInvoiceType = () => {
+    const checked = document.querySelector('input[name="payInvoiceType"]:checked');
+    return checked ? checked.value : 'total';
+  };
+  const setPayInvoiceError = (message) => {
+    const errEl = document.getElementById('payInvoiceError');
+    if (!errEl) return;
+    if (message) {
+      errEl.textContent = message;
+      errEl.classList.remove('hidden');
+    } else {
+      errEl.textContent = '';
+      errEl.classList.add('hidden');
+    }
+  };
+  // Valida o valor parcial digitado contra a fatura atual.
+  // Retorna { ok:true, value } ou { ok:false, message }.
+  const validatePayInvoicePartial = (raw, invoiceTotal) => {
+    const text = String(raw ?? '').trim();
+    if (!text) return { ok: false, message: 'Informe o valor do pagamento.' };
+    if (text.includes('-')) return { ok: false, message: 'O valor deve ser maior que zero.' };
+    const value = LinsoraUtils.parseCurrencyToFloat(text);
+    if (!(value > 0)) return { ok: false, message: 'O valor deve ser maior que zero.' };
+    if (value > invoiceTotal) return { ok: false, message: 'O valor não pode ultrapassar a fatura.' };
+    return { ok: true, value };
+  };
+  const refreshPayInvoicePartial = () => {
+    const card = getPayInvoiceCard();
+    const total = card ? (Number(card.limitUsed) || 0) : 0;
+    const wrap = document.getElementById('payInvoicePartialWrap');
+    const input = document.getElementById('payInvoiceAmount');
+    const remainingEl = document.getElementById('payInvoiceRemaining');
+    const isPartial = getPayInvoiceType() === 'partial';
+    if (wrap) wrap.classList.toggle('hidden', !isPartial);
+    if (!isPartial) {
+      setPayInvoiceError('');
+      return { ok: true, value: total };
+    }
+    const check = validatePayInvoicePartial(input ? input.value : '', total);
+    if (remainingEl) {
+      remainingEl.textContent = check.ok
+        ? `Restará na fatura: ${LinsoraUtils.formatBRL(total - check.value)}`
+        : 'Restará na fatura: —';
+    }
+    return check;
+  };
+  const openPayInvoiceModal = () => {
+    const card = getPayInvoiceCard();
+    if (!card) {
+      LinsoraUI.showToast('Selecione um cartão para pagar a fatura.', 'info');
+      return;
+    }
+    const total = Number(card.limitUsed) || 0;
+    if (!(total > 0)) {
+      LinsoraUI.showToast('Nenhum saldo devedor nesta fatura.', 'info');
+      return;
+    }
+    const totalEl = document.getElementById('payInvoiceTotal');
+    if (totalEl) totalEl.textContent = LinsoraUtils.formatBRL(total);
+    const cardEl = document.getElementById('payInvoiceCard');
+    if (cardEl) cardEl.textContent = card.name || 'Cartão';
+    const accountEl = document.getElementById('payInvoiceAccount');
+    if (accountEl) {
+      const accs = window.linsoraStore.state?.accounts || [];
+      accountEl.textContent = accs.length > 0 ? accs[0].name : 'Conta Principal';
+    }
+    const totalRadio = document.querySelector('input[name="payInvoiceType"][value="total"]');
+    if (totalRadio) totalRadio.checked = true;
+    const input = document.getElementById('payInvoiceAmount');
+    if (input) input.value = '';
+    setPayInvoiceError('');
+    const remainingEl = document.getElementById('payInvoiceRemaining');
+    if (remainingEl) remainingEl.textContent = 'Restará na fatura: —';
+    const wrap = document.getElementById('payInvoicePartialWrap');
+    if (wrap) wrap.classList.add('hidden');
+    LinsoraUI.openModal('modalPayInvoice');
+  };
+  document.getElementById('btnPayInvoice')?.addEventListener('click', () => {
+    openPayInvoiceModal();
+  });
+  document.querySelectorAll('input[name="payInvoiceType"]').forEach((radio) => {
+    radio.addEventListener('change', () => refreshPayInvoicePartial());
+  });
+  document.getElementById('payInvoiceAmount')?.addEventListener('input', () => {
+    setPayInvoiceError('');
+    refreshPayInvoicePartial();
+  });
+  document.getElementById('btnPayInvoiceConfirm')?.addEventListener('click', async () => {
+    const card = getPayInvoiceCard();
+    if (!card) {
+      LinsoraUI.showToast('Selecione um cartão para pagar a fatura.', 'info');
+      return;
+    }
+    if (getPayInvoiceType() === 'partial') {
+      const total = Number(card.limitUsed) || 0;
+      if (!(total > 0)) {
+        LinsoraUI.showToast('Nenhum saldo devedor nesta fatura.', 'info');
+        return;
+      }
+      const input = document.getElementById('payInvoiceAmount');
+      const check = validatePayInvoicePartial(input ? input.value : '', total);
+      if (!check.ok) {
+        setPayInvoiceError(check.message);
+        LinsoraUI.showToast(check.message, 'error');
+        return;
+      }
+      const res = await window.linsoraStore.payCardAmount(card.id, check.value);
+      if (!res) {
+        LinsoraUI.showToast('Não foi possível registrar o pagamento.', 'error');
+        return;
+      }
+      LinsoraUI.closeModal('modalPayInvoice');
+      LinsoraUI.showToast(`Pagamento de ${LinsoraUtils.formatBRL(res.paid)} registrado! Restam ${LinsoraUtils.formatBRL(res.remaining)}.`);
+      return;
+    }
+    const ok = await window.linsoraStore.payCardInvoice(card.id);
+    if (ok) {
+      LinsoraUI.closeModal('modalPayInvoice');
+      LinsoraUI.showToast('Fatura paga com sucesso!');
+    } else {
+      LinsoraUI.showToast('Nenhum saldo devedor nesta fatura.', 'info');
     }
   });
 
