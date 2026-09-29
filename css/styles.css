@@ -1737,12 +1737,24 @@ body.frame-mode .device-notch { display: block; }
 .cc-number { font-size: 16px; font-weight: 700; letter-spacing: 2px; }
 .cc-bottom { display: flex; justify-content: space-between; font-size: 11.5px; opacity: 0.9; }
 
-.fatura-details-card { display: flex; flex-direction: column; gap: 14px; }
+.fatura-details-card { display: flex; flex-direction: column; gap: 14px; min-width: 0; max-width: 100%; box-sizing: border-box; }
 .fatura-header { display: flex; justify-content: space-between; align-items: flex-start; }
 .fatura-label { font-size: 11px; color: var(--text-secondary); font-weight: 600; }
 .fatura-card-name { font-size: 16px; font-weight: 800; }
-.fatura-amount-row { display: flex; justify-content: space-between; align-items: center; }
-.fatura-main-val { font-size: 24px; font-weight: 800; color: var(--accent-amber); }
+.fatura-amount-row { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; min-width: 0; max-width: 100%; box-sizing: border-box; }
+.fatura-main-val { font-size: 24px; font-weight: 800; color: var(--accent-amber); min-width: 0; }
+/* Ações do cartão (Ver extrato / Pagar fatura / Excluir): responsivas, sem
+   largura fixa e sem corte de texto. No mobile empilham em coluna ocupando
+   100% da largura interna; no desktop dividem a linha com quebra quando
+   necessário. Somente apresentação: ids, listeners e lógica preservados. */
+.fatura-actions { display: flex; flex-wrap: wrap; gap: 8px; min-width: 0; max-width: 100%; box-sizing: border-box; }
+.fatura-actions .linsora-btn { flex: 1 1 auto; min-width: 0; max-width: 100%; box-sizing: border-box; }
+@media (max-width: 640px) {
+  .fatura-amount-row { flex-direction: column; align-items: stretch; }
+  .fatura-actions { flex-direction: column; align-items: stretch; width: 100%; }
+  .fatura-actions .linsora-btn { width: 100%; }
+  .fatura-actions #btnDeleteCard { margin-top: 4px; }
+}
 
 .limit-progress-wrapper { display: flex; flex-direction: column; gap: 5px; }
 .limit-labels { display: flex; justify-content: space-between; font-size: 11px; color: var(--text-secondary); }
