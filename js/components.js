@@ -1235,8 +1235,15 @@ class LinsoraUIComponentEngine {
       `;
       return;
     }
+    // Bloco D3-A: no card, no máximo 3 lançamentos (ordem atual preservada,
+    // sem nova regra de ordenação e sem paginação). Acima disso, botão
+    // discreto "Ver mais" que abre o extrato completo já existente
+    // (modalCardStatement) para EXATAMENTE este cartão.
+    const MAX_FATURA_ITEMS = 3;
+    const visible = txs.slice(0, MAX_FATURA_ITEMS);
+    const remaining = txs.length - visible.length;
     const hideValues = store ? store.isHideValues : false;
-    container.innerHTML = txs.map((tx) => {
+    const rowsHtml = visible.map((tx) => {
       const icon = LinsoraUtils.getCategoryIcon(tx.category);
       const dateFormatted = LinsoraUtils.formatDateBR(tx.date);
       return `
@@ -1255,6 +1262,9 @@ class LinsoraUIComponentEngine {
         </div>
       `;
     }).join('');
+    container.innerHTML = rowsHtml + (remaining > 0 ? `
+      <button type="button" class="linsora-btn outline block sm" data-fatura-more="${LinsoraUtils.escapeHTML(card.id)}" onclick="window.LinsoraCardStatement && window.LinsoraCardStatement.open(this.getAttribute('data-fatura-more'))">Ver mais ${remaining}</button>
+    ` : '');
   }
 
   showToast(message, type = 'success') {

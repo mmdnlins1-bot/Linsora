@@ -244,4 +244,42 @@ test.describe('34. Bloco D2 - extrato e lançamentos por cartão', () => {
     });
     expect(res).toEqual(['Compra Nubank']);
   });
+
+  test('13. D3-A: mais de 3 lançamentos mostra Ver mais e abre o extrato', async ({ page }) => {
+    await setupBank(page, 5000);
+    await addCard(page, 'Nubank', 5000, 'Nubank');
+    for (let i = 1; i <= 5; i++) {
+      await purchase(page, 'Nubank', 10 * i, `Compra ${i}`);
+    }
+    await goCardsTab(page);
+    await page.evaluate(() => {
+      const card = window.linsoraStore.state.cards.find((c) => c.name === 'Nubank');
+      window.LinsoraUI.selectCard(card.id);
+    });
+    await expect(page.locator('#faturaItemsList .transaction-card')).toHaveCount(3);
+    await expect(page.locator('#faturaItemsList')).toContainText('Ver mais 2');
+    await page.locator('#faturaItemsList [data-fatura-more]').click();
+    await expect(page.locator('#modalCardStatement')).not.toHaveClass(/hidden/);
+    await expect(page.locator('#cardStatementTitle')).toContainText('Nubank');
+    await expect(page.locator('#cardStatementList .transaction-card')).toHaveCount(5);
+  });
+
+  test('14. D3-A: até 3 lançamentos sem botão Ver mais', async ({ page }) => {
+    await setupBank(page, 5000);
+    await addCard(page, 'Nubank', 5000, 'Nubank');
+    await purchase(page, 'Nubank', 100, 'Compra A');
+    await purchase(page, 'Nubank', 200, 'Compra B');
+    await goCardsTab(page);
+    await page.evaluate(() => {
+      const card = window.linsoraStore.state.cards.find((c) => c.name === 'Nubank');
+      window.LinsoraUI.selectCard(card.id);
+    });
+    await expect(page.locator('#faturaItemsList .transaction-card')).toHaveCount(2);
+    await expect(page.locator('#faturaItemsList [data-fatura-more]')).toHaveCount(0);
+  });
+
+  test('15. D3-B: subtítulo do patrimônio exibido na tela inicial', async ({ page }) => {
+    await expect(page.locator('.nw-sub')).toContainText('Contas - dívidas de cartão');
+    await expect(page.locator('#totalNetWorthMain')).toBeVisible();
+  });
 });

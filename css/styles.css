@@ -166,6 +166,10 @@
   color: #0F172A !important;
 }
 
+[data-theme="light"] .month-balance-hero .nw-sub {
+  color: #64748B !important;
+}
+
 [data-theme="light"] .month-balance-hero .stat-item {
   background: #FFFFFF !important;
   border: 1px solid rgba(0, 0, 0, 0.08) !important;
@@ -1329,6 +1333,7 @@ body.frame-mode .device-notch { display: block; }
 .nw-col.align-right { align-items: flex-end; }
 .nw-title { font-size: 11px; color: rgba(255, 255, 255, 0.7); font-weight: 600; }
 .nw-main-val { font-size: 16px; font-weight: 800; color: #FFFFFF; }
+.nw-sub { font-size: 10.5px; color: rgba(255, 255, 255, 0.55); font-weight: 500; }
 
 .nw-variation-badge { font-size: 11.5px; font-weight: 700; padding: 2px 8px; border-radius: var(--radius-full); }
 .nw-variation-badge.positive { color: var(--accent-green-neon); background: rgba(16, 185, 129, 0.15); }
