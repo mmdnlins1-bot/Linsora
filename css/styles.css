@@ -1746,17 +1746,12 @@ body.frame-mode .device-notch { display: block; }
 /* Ações do cartão: [Pagar fatura] + menu "⋮" (Ver extrato / Excluir).
    Somente apresentação: ids, listeners e lógica preservados. Sem largura
    fixa, sem corte de texto; o menu é um popover ancorado ao botão "⋮". */
-.fatura-actions { position: relative; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; max-width: 100%; box-sizing: border-box; }
-.fatura-actions #btnPayInvoice { flex: 1 1 auto; min-width: 0; max-width: 100%; box-sizing: border-box; }
+.fatura-actions { position: relative; display: flex; flex-wrap: nowrap; align-items: center; gap: 8px; flex: 0 1 auto; min-width: 0; max-width: 100%; box-sizing: border-box; }
+.fatura-actions #btnPayInvoice { flex: 0 0 auto; }
 .fatura-menu-wrap { position: relative; flex: 0 0 auto; display: flex; min-width: 0; box-sizing: border-box; }
 .fatura-menu-toggle { flex: 0 0 auto; width: 40px; padding-left: 0; padding-right: 0; font-size: 16px; line-height: 1; box-sizing: border-box; }
 .fatura-menu { position: absolute; top: calc(100% + 6px); right: 0; z-index: 60; display: flex; flex-direction: column; gap: 4px; min-width: 200px; max-width: min(260px, calc(100vw - 32px)); padding: 6px; background: var(--bg-card); border: 1px solid var(--border-color-strong); border-radius: var(--radius-md); box-shadow: var(--shadow-lg); box-sizing: border-box; }
 .fatura-menu .linsora-btn { width: 100%; max-width: 100%; justify-content: flex-start; padding: 10px 12px; font-size: 13px; box-sizing: border-box; }
-@media (max-width: 640px) {
-  .fatura-amount-row { flex-direction: column; align-items: stretch; }
-  .fatura-actions { flex-direction: row; align-items: center; width: 100%; }
-  .fatura-actions #btnPayInvoice { flex: 1 1 auto; min-width: 0; width: auto; }
-}
 
 .limit-progress-wrapper { display: flex; flex-direction: column; gap: 5px; }
 .limit-labels { display: flex; justify-content: space-between; font-size: 11px; color: var(--text-secondary); }

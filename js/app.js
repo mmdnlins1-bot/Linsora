@@ -1363,11 +1363,13 @@ function setupEventListeners() {
     cardMenuToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
     cardActionsMenu.style.transform = '';
     if (open) {
-      // Guarda de viewport: mantém o menu totalmente visível.
+      // Guarda de viewport: mantém o menu totalmente visível, deslocando
+      // para a esquerda (excesso à direita) ou para a direita (excesso à
+      // esquerda). Não altera layout: só transform visual do popover.
       const rect = cardActionsMenu.getBoundingClientRect();
       let dx = 0;
       if (rect.right > window.innerWidth - 8) dx = rect.right - (window.innerWidth - 8);
-      if (rect.left - dx < 8) dx = Math.max(0, rect.left - 8);
+      if (rect.left - dx < 8) dx = rect.left - 8;
       if (dx) cardActionsMenu.style.transform = `translateX(${-dx}px)`;
     }
   };
