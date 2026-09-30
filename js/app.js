@@ -1425,7 +1425,16 @@ function setupEventListeners() {
   document.querySelectorAll('input[name="payInvoiceType"]').forEach((radio) => {
     radio.addEventListener('change', () => refreshPayInvoicePartial());
   });
-  document.getElementById('payInvoiceAmount')?.addEventListener('input', () => {
+  document.getElementById('payInvoiceAmount')?.addEventListener('input', (e) => {
+    // Reutiliza a máscara pt-BR existente (idempotente com o attach global,
+    // cujo oninput é registrado depois deste listener): garante que a
+    // validação abaixo sempre leia o valor já formatado, sem criar
+    // segunda máscara.
+    const el = e && e.target ? e.target : document.getElementById('payInvoiceAmount');
+    if (el && window.LinsoraUtils && typeof window.LinsoraUtils.formatCurrencyInput === 'function') {
+      const formatted = window.LinsoraUtils.formatCurrencyInput(el.value);
+      if (el.value !== formatted && !(el.value === '' && formatted === '')) el.value = formatted;
+    }
     setPayInvoiceError('');
     refreshPayInvoicePartial();
   });

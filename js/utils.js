@@ -154,6 +154,35 @@ const LinsoraUtils = {
   },
 
   /**
+   * Ciclo de fatura de um cartão a partir do closingDay (Etapa 1 do extrato
+   * por fatura). Pura: sem leitura de estado, sem escrita, sem UTC.
+   * month segue o padrão JavaScript 0-11 (mesmo de clampDayOfMonth).
+   * Retorna { start, end } em chaves locais YYYY-MM-DD:
+   * - end = dia de fechamento (com clamp) no mês selecionado;
+   * - start = dia seguinte ao fechamento (com clamp) do mês anterior.
+   * closingDay inválido/ausente usa o default do cadastro (15).
+   * Retorna null se year/month forem inválidos.
+   */
+  getInvoiceCycle(closingDay, year, month) {
+    let cd = parseInt(closingDay, 10);
+    if (!(cd >= 1 && cd <= 31)) cd = 15;
+    const y = Number(year);
+    const m = Number(month);
+    if (!Number.isInteger(y) || !Number.isInteger(m) || m < 0 || m > 11) return null;
+    const p = (v) => String(v).padStart(2, '0');
+    const endDay = this.clampDayOfMonth(y, m, cd);
+    const end = `${y}-${p(m + 1)}-${p(endDay)}`;
+    const prevM = m === 0 ? 11 : m - 1;
+    const prevY = m === 0 ? y - 1 : y;
+    const prevClose = this.clampDayOfMonth(prevY, prevM, cd);
+    // Aritmética local (sem UTC): new Date(y, m, d) estoura para o mês
+    // seguinte quando d excede o tamanho do mês (ex.: 31/02 -> 02/03).
+    const startDate = new Date(prevY, prevM, prevClose + 1);
+    const start = `${startDate.getFullYear()}-${p(startDate.getMonth() + 1)}-${p(startDate.getDate())}`;
+    return { start, end };
+  },
+
+  /**
    * Gera um UUID v4 (RFC 4122) compatível com colunas UUID do Supabase.
    * Usa crypto.randomUUID quando disponível; senão crypto.getRandomValues;
    * por último, fallback com Math.random (sem formato proprietário).
