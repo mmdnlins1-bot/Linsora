@@ -503,6 +503,29 @@ class LinsoraStore {
     });
   }
 
+  /**
+   * Etapa 2 (extrato por fatura): lançamentos do cartão dentro de um ciclo
+   * [start, end] (chaves YYYY-MM-DD, comparação local, sem UTC). Leitura
+   * pura, sem efeitos colaterais. Preserva getCardTransactions: isolamento
+   * por usuário, vínculo cardId + fallback account, exclusão de
+   * isCardPayment. Datas inválidas/ausentes nunca casam. Ordena do mais
+   * recente para o mais antigo.
+   */
+  getCardTransactionsForInvoice(cardId, start, end) {
+    if (!/^\d{4}-\d{2}-\d{2}/.test(String(start || ''))) return [];
+    if (!/^\d{4}-\d{2}-\d{2}/.test(String(end || ''))) return [];
+    if (String(end) < String(start)) return [];
+    const s = String(start).slice(0, 10);
+    const e = String(end).slice(0, 10);
+    return this.getCardTransactions(cardId)
+      .filter((t) => {
+        const key = String(t.date || '').slice(0, 10);
+        if (!/^\d{4}-\d{2}-\d{2}/.test(key)) return false;
+        return key >= s && key <= e;
+      })
+      .sort((a, b) => (String(a.date).slice(0, 10) < String(b.date).slice(0, 10) ? 1 : -1));
+  }
+
   async payCardAmount(cardId, amount, accountName = null) {
     const card = (this.state?.cards || []).find((c) => c.id === cardId);
     const value = Number(amount);

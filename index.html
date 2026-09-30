@@ -1452,6 +1452,14 @@
             <h3 id="cardStatementTitle">Extrato do cartão 🧾</h3>
             <button type="button" class="modal-close" id="btnCardStatementClose" data-close-modal="modalCardStatement">✕</button>
           </div>
+          <div class="card-statement-nav" role="group" aria-label="Navegação da fatura">
+            <button type="button" class="linsora-btn outline sm" id="btnCardStatementPrev" aria-label="Fatura anterior">←</button>
+            <div class="card-statement-cycle">
+              <strong id="cardStatementCycleLabel">Fatura</strong>
+              <span id="cardStatementPeriod">—</span>
+            </div>
+            <button type="button" class="linsora-btn outline sm" id="btnCardStatementNext" aria-label="Próxima fatura">→</button>
+          </div>
           <div style="padding: 4px 2px 12px; font-size: 0.9rem; color: var(--text-muted);" id="cardStatementTotal">—</div>
           <div id="cardStatementList" style="display: flex; flex-direction: column; gap: 10px; max-height: 55vh; overflow-y: auto;"></div>
           <div class="voice-conf-actions">
