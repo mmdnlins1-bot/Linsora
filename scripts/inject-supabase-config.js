@@ -26,6 +26,7 @@ const DIST = path.join(ROOT, 'dist');
 // Arquivos/pastas estáticos que compõem o app web (mesmo conjunto servido em dev).
 const STATIC_ENTRIES = [
   'index.html',
+  'landing.html',
   'offline.html',
   'manifest.webmanifest',
   'sw.js',
