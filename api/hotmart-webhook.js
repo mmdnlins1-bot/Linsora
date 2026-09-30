@@ -7,7 +7,7 @@
  *
  * Fluxo desta etapa:
  * - Aceita SOMENTE POST (outros métodos -> 405).
- * - Exige HOTMART_HOTTOK / SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY
+ * - Exige HOTMART_HOTTOK / LINSORA_SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY
  *   (qualquer ausente -> 500, sem processar).
  * - Exige o header X-HOTMART-HOTTOK (ausente -> 401).
  * - Compara com crypto.timingSafeEqual (divergente -> 401, sem processar).
@@ -378,8 +378,11 @@ async function hotmartWebhook(req, res, deps) {
     }
 
     // Config essencial (sem padrão, nunca hardcoded). Ausente -> 500.
+    // URL reutiliza a mesma variável de produção do projeto
+    // (LINSORA_SUPABASE_URL); a chave admin continua separada
+    // (SUPABASE_SERVICE_ROLE_KEY) e a anon key nunca é usada aqui.
     const expectedHottok = env.HOTMART_HOTTOK;
-    const supabaseUrl = env.SUPABASE_URL;
+    const supabaseUrl = env.LINSORA_SUPABASE_URL;
     const serviceKey = env.SUPABASE_SERVICE_ROLE_KEY;
     if (!expectedHottok || !supabaseUrl || !serviceKey) {
       return res.status(500).json({ ok: false, error: 'service_not_configured' });

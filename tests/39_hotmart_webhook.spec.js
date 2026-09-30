@@ -22,7 +22,7 @@ const FAKE_USER_ID = 'user-ficticio-0001';
 function testEnv(overrides = {}) {
   const env = {
     HOTMART_HOTTOK: FAKE_HOTTOK,
-    SUPABASE_URL: FAKE_SUPABASE_URL,
+    LINSORA_SUPABASE_URL: FAKE_SUPABASE_URL,
     SUPABASE_SERVICE_ROLE_KEY: FAKE_SERVICE_KEY,
     HOTMART_OFFER_MENSAL: FAKE_OFFER_MENSAL,
     HOTMART_OFFER_ANUAL: FAKE_OFFER_ANUAL,
@@ -222,10 +222,10 @@ test.describe('39. Webhook Hotmart (Etapa 1)', () => {
     expect(mock.state.calls).toHaveLength(0);
   });
 
-  test('4. SUPABASE_URL ausente retorna 500', async () => {
+  test('4. LINSORA_SUPABASE_URL ausente retorna 500', async () => {
     const mock = makeSupabaseMock();
     const { req, res } = makeReqRes(authedBody());
-    await handler(req, res, { env: testEnv({ SUPABASE_URL: undefined }), fetchImpl: mock.fetchImpl });
+    await handler(req, res, { env: testEnv({ LINSORA_SUPABASE_URL: undefined }), fetchImpl: mock.fetchImpl });
     expect(res.statusCode).toBe(500);
     expect(mock.state.calls).toHaveLength(0);
   });
@@ -510,7 +510,7 @@ test.describe('39. Webhook Hotmart (Etapa 1)', () => {
     expect(code).not.toMatch(/HOTMART_HOTTOK\s*\|\|/);
     expect(code).toContain('HOTMART_HOTTOK');
     // Env lida via objeto injetavel (testes) com fallback para process.env.
-    expect(code).toContain('SUPABASE_URL');
+    expect(code).toContain('LINSORA_SUPABASE_URL');
     expect(code).toContain('SUPABASE_SERVICE_ROLE_KEY');
     expect(code).toContain('options.env || process.env');
     expect(code).toContain('timingSafeEqual');
