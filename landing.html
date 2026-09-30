@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="description" content="Linsora é o aplicativo de controle financeiro pessoal que registra gastos por comando de voz, controla cartões e mostra com o Conselheiro quanto você pode gastar.">
+  <meta name="theme-color" content="#070B12">
+  <title>Linsora — Controle financeiro pessoal por voz</title>
+  <!-- PENDÊNCIA SEO (não inventar): URL pública definitiva ainda não definida.
+       Quando definida, adicionar aqui: <link rel="canonical" ...>, og:url e og:image absoluta. -->
+  <meta property="og:title" content="Linsora — Controle financeiro pessoal por voz">
+  <meta property="og:description" content="Fale naturalmente — como “150 reais de gasolina” — e o Linsora registra seus gastos, controla cartões e mostra quanto você pode gastar.">
+  <meta property="og:type" content="website">
+  <meta property="og:locale" content="pt_BR">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="Linsora — Controle financeiro pessoal por voz">
+  <meta name="twitter:description" content="Registre gastos falando, controle cartões e pergunte ao Conselheiro quanto pode gastar.">
+  <link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png">
+  <link rel="apple-touch-icon" href="./icon-192.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/landing.css">
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "SoftwareApplication",
+        "name": "Linsora",
+        "applicationCategory": "FinanceApplication",
+        "operatingSystem": "Web",
+        "description": "Aplicativo de controle financeiro pessoal com registro de gastos por voz, controle de cartões e Conselheiro que mostra quanto você pode gastar.",
+        "offers": [
+          { "@type": "Offer", "name": "Plano Mensal", "price": "14.90", "priceCurrency": "BRL" },
+          { "@type": "Offer", "name": "Plano Anual", "price": "99.90", "priceCurrency": "BRL" }
+        ]
+      },
+      {
+        "@type": "FAQPage",
+        "mainEntity": [
+          { "@type": "Question", "name": "Como registro um gasto?", "acceptedAnswer": { "@type": "Answer", "text": "Você pode registrar falando naturalmente, como “150 reais de gasolina”, ou lançando manualmente no aplicativo." } },
+          { "@type": "Question", "name": "Preciso falar uma frase específica?", "acceptedAnswer": { "@type": "Answer", "text": "Não. O Linsora foi pensado para entender frases curtas e naturais, como “150 reais de gasolina”, “300 reais de farmácia” e “500 reais de mercado”." } },
+          { "@type": "Question", "name": "O que é o Conselheiro?", "acceptedAnswer": { "@type": "Answer", "text": "É a visão do Linsora que cruza saldo, compromissos registrados e valores da fatura para mostrar quanto está disponível. Exemplo ilustrativo, não é recomendação financeira." } },
+          { "@type": "Question", "name": "Preciso instalar alguma coisa?", "acceptedAnswer": { "@type": "Answer", "text": "Não. O Linsora funciona no navegador do celular e do computador e pode ser adicionado como atalho na tela inicial." } }
+        ]
+      }
+    ]
+  }
+  </script>
+  <noscript><style>.reveal{opacity:1 !important;transform:none !important;}</style></noscript>
+</head>
+<body>
+
+  <header class="lp-header">
+    <div class="lp-container lp-header-inner">
+      <a class="lp-brand" href="#hero" aria-label="Linsora — início">
+        <img src="icon-192.png" alt="Linsora" width="28" height="28" draggable="false">
+        <span>LINSORA</span>
+      </a>
+      <nav class="lp-nav" aria-label="Navegação principal">
+        <a href="#voz">Voz</a>
+        <a href="#produto">O Linsora</a>
+        <a href="#conselheiro">Conselheiro</a>
+        <a href="#precos">Preços</a>
+        <a href="#faq">Dúvidas</a>
+      </nav>
+      <a class="lp-btn lp-btn-primary lp-btn-sm" href="#precos">Começar agora</a>
+    </div>
+  </header>
+
+  <main>
+    <!-- 1. HERO -->
+    <section class="lp-hero" id="hero">
+      <div class="lp-container lp-hero-grid">
+        <div class="lp-hero-copy">
+          <span class="lp-badge">🎙️ Controle suas finanças falando</span>
+          <h1>Controle suas finanças falando com o Linsora.</h1>
+          <p class="lp-lead">Registre gastos, acompanhe contas, controle cartões e pergunte ao Conselheiro quanto pode gastar — inclusive por voz, do seu jeito.</p>
+          <div class="lp-cta-row">
+            <a class="lp-btn lp-btn-primary lp-btn-lg" href="#precos">Começar agora</a>
+            <a class="lp-btn lp-btn-outline lp-btn-lg" href="#voz">Ver como funciona com voz</a>
+          </div>
+          <p class="lp-micro">Sem planilhas. Fale curto ou completo: “150 reais de gasolina”.</p>
+        </div>
+        <div class="lp-hero-visual" aria-label="Demonstração de registro por voz no Linsora">
+          <div class="lp-mock lp-mock-voice reveal">
+            <span class="lp-mock-label">🎙️ Você fala</span>
+            <p class="lp-voice-quote">“150 reais de gasolina”</p>
+            <span class="lp-voice-arrow" aria-hidden="true">↓</span>
+            <div class="lp-voice-result">
+              <div><span>Valor</span><strong>R$ 150,00</strong></div>
+              <div><span>Categoria</span><strong>Gasolina</strong></div>
+              <div><span>Quando</span><strong>Hoje</strong></div>
+            </div>
+          </div>
+          <div class="lp-mock lp-mock-balance reveal">
+            <span class="lp-mock-label">Saldo do mês</span>
+            <strong class="lp-mock-value">R$ 1.250,00</strong>
+            <span class="lp-mock-sub">Entradas − saídas</span>
+          </div>
+          <p class="lp-demo-note">Valores demonstrativos — apenas ilustração.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 2. VOZ -->
+    <section class="lp-section lp-voice" id="voz">
+      <div class="lp-container">
+        <h2 class="reveal">É só falar. O Linsora entende.</h2>
+        <p class="lp-section-sub reveal">Você não precisa decorar comandos. Fale do seu jeito — curto ou completo — que o Linsora identifica o valor e a categoria para registrar o gasto.</p>
+        <div class="lp-voice-grid">
+          <div class="lp-voice-col reveal" aria-label="Exemplos para registrar gastos falando">
+            <h3>Registrar</h3>
+            <ul class="lp-voice-chips">
+              <li>“150 reais de gasolina”</li>
+              <li>“300 reais de farmácia”</li>
+              <li>“500 reais de mercado”</li>
+              <li>“50 reais de lanche”</li>
+              <li>“100 reais no cartão”</li>
+            </ul>
+            <p class="lp-voice-note">Fala → interpretação → registro. Exemplo: <strong>“150 reais de gasolina”</strong> vira <strong>R$ 150,00 · Gasolina · Hoje</strong>.</p>
+            <p class="lp-voice-note">Também funciona com frases completas: “Gastei 150 reais de gasolina” e “Paguei 300 reais de energia”.</p>
+          </div>
+          <div class="lp-voice-col reveal" aria-label="Exemplos de perguntas ao Conselheiro">
+            <h3>Perguntar</h3>
+            <ul class="lp-voice-chips">
+              <li>“Quanto gastei esse mês?”</li>
+              <li>“Posso gastar 100 reais hoje?”</li>
+            </ul>
+            <p class="lp-voice-note">Essas perguntas são respondidas pelo Conselheiro com base no seu saldo, nos compromissos e na fatura.</p>
+            <a class="lp-voice-link" href="#conselheiro">Ver como o Conselheiro responde ↓</a>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3. PROBLEMA -->
+    <section class="lp-section" id="problema">
+      <div class="lp-container">
+        <h2 class="reveal">Seu dinheiro não deveria ser tão difícil de entender.</h2>
+        <p class="lp-section-sub reveal">Pequenos descontroles do dia a dia que o Linsora ajuda a organizar:</p>
+        <div class="lp-grid lp-grid-3">
+          <div class="lp-card reveal"><div class="lp-card-icon">🧾</div><h3>Contas espalhadas</h3><p>Saldos em vários lugares, sem uma visão única.</p></div>
+          <div class="lp-card reveal"><div class="lp-card-icon">🫣</div><h3>Gastos invisíveis</h3><p>Pequenos gastos que passam despercebidos no mês.</p></div>
+          <div class="lp-card reveal"><div class="lp-card-icon">💳</div><h3>Cartão confuso</h3><p>Fatura, limite e lançamentos difíceis de acompanhar.</p></div>
+          <div class="lp-card reveal"><div class="lp-card-icon">❓</div><h3>Saldo incerto</h3><p>Difícil saber quanto realmente está disponível.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 4. PRODUTO (fusão de Sobre + Recursos) -->
+    <section class="lp-section lp-section-alt" id="produto">
+      <div class="lp-container">
+        <h2 class="reveal">O Linsora organiza tudo em um app simples.</h2>
+        <p class="lp-section-sub reveal">Registre por voz ou manualmente e acompanhe o essencial da sua vida financeira pessoal.</p>
+        <div class="lp-grid lp-grid-3">
+          <div class="lp-card reveal"><div class="lp-card-icon">🏦</div><h3>Contas</h3><p>Veja o saldo de cada conta e quanto tem disponível.</p></div>
+          <div class="lp-card reveal"><div class="lp-card-icon">💸</div><h3>Gastos e Extrato</h3><p>Registre falando e filtre por período e categoria.</p></div>
+          <div class="lp-card reveal"><div class="lp-card-icon">💳</div><h3>Cartões</h3><p>Limite, fatura atual e lançamentos por cartão.</p></div>
+          <div class="lp-card reveal"><div class="lp-card-icon">🎯</div><h3>Metas</h3><p>Defina objetivos e acompanhe o progresso.</p></div>
+          <div class="lp-card reveal"><div class="lp-card-icon">📅</div><h3>Compromissos</h3><p>Contas recorrentes e próximos vencimentos.</p></div>
+          <div class="lp-card reveal"><div class="lp-card-icon">🧠</div><h3>Conselheiro</h3><p>Descubra quanto pode gastar a partir dos seus dados.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 5. CONSELHEIRO -->
+    <section class="lp-section" id="conselheiro">
+      <div class="lp-container lp-split">
+        <div>
+          <h2 class="reveal">Você fala. O Linsora registra. O Conselheiro analisa.</h2>
+          <p class="lp-section-sub reveal">Ele cruza saldo, compromissos registrados e valores da fatura para mostrar quanto está disponível.</p>
+          <ul class="lp-voice-chips reveal" aria-label="Perguntas que o Conselheiro responde">
+            <li>“Quanto posso gastar hoje?”</li>
+            <li>“Quanto gastei esse mês?”</li>
+            <li>“O que vence esta semana?”</li>
+          </ul>
+          <span class="lp-badge reveal">Demonstração ilustrativa</span>
+        </div>
+        <div class="lp-chat reveal" aria-label="Demonstração de conversa com o Conselheiro">
+          <div class="lp-chat-msg lp-chat-user">
+            <span class="lp-chat-who">Você</span>
+            <p>Quanto posso gastar hoje?</p>
+          </div>
+          <div class="lp-chat-msg lp-chat-bot">
+            <span class="lp-chat-who">🧠 Conselheiro</span>
+            <p>Exemplo: saldo R$ 1.250,00 − compromissos R$ 420,00 − fatura R$ 480,00 = <strong>R$ 350,00 disponíveis hoje</strong>.</p>
+          </div>
+          <p class="lp-demo-note">Exemplo ilustrativo — não é uma recomendação financeira.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 6. CARTÃO DE CRÉDITO -->
+    <section class="lp-section lp-section-alt" id="cartao">
+      <div class="lp-container lp-split">
+        <div>
+          <h2 class="reveal">Seu cartão de crédito também sob controle.</h2>
+          <p class="lp-section-sub reveal">Limite, fatura atual e lançamentos por cartão. Também dá para registrar uma compra falando: “100 reais no cartão”.</p>
+        </div>
+        <div class="lp-cardmock reveal" aria-label="Demonstração do controle de cartão de crédito">
+          <div class="lp-cardmock-top">
+            <span>Cartão Exemplo</span>
+            <span>•••• 4021</span>
+          </div>
+          <div class="lp-cardmock-limits">
+            <div><span>Limite total</span><strong>R$ 5.000,00</strong></div>
+            <div><span>Utilizado</span><strong>R$ 1.200,00</strong></div>
+            <div><span>Disponível</span><strong class="lp-gold">R$ 3.800,00</strong></div>
+          </div>
+          <div class="lp-cardmock-invoice">
+            <div><span>Fatura atual</span><strong>R$ 480,00</strong></div>
+            <div><span>Ciclo da fatura</span><strong>11/08 a 10/09</strong></div>
+          </div>
+          <ul class="lp-cardmock-items">
+            <li>Mercado <span>R$ 210,00</span></li>
+            <li>Farmácia <span>R$ 85,00</span></li>
+            <li>Streaming <span>R$ 34,90</span></li>
+          </ul>
+          <p class="lp-demo-note">Valores demonstrativos — apenas ilustração.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 7. BENEFÍCIOS -->
+    <section class="lp-section" id="beneficios">
+      <div class="lp-container">
+        <h2 class="reveal">Feito para o seu dia a dia.</h2>
+        <div class="lp-grid lp-grid-3">
+          <div class="lp-card reveal"><h3>Registre em segundos</h3><p>Fale “150 reais de gasolina” em vez de preencher formulários.</p></div>
+          <div class="lp-card reveal"><h3>Saiba o disponível</h3><p>Saldo menos compromissos e fatura, de forma simples.</p></div>
+          <div class="lp-card reveal"><h3>Acompanhe cartões</h3><p>Limite, fatura e lançamentos por cartão.</p></div>
+          <div class="lp-card reveal"><h3>Veja compromissos</h3><p>Próximos vencimentos antes de gastar.</p></div>
+          <div class="lp-card reveal"><h3>Pergunte ao Conselheiro</h3><p>“Posso gastar 100 reais hoje?” com base nos seus dados.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 8. PREÇOS -->
+    <section class="lp-section lp-section-alt" id="precos">
+      <div class="lp-container">
+        <h2 class="reveal">Comece por menos de R$ 1 por dia.</h2>
+        <p class="lp-section-sub reveal">Escolha o plano ideal para você. Sem fidelidade. Cancele quando quiser.</p>
+        <div class="lp-prices">
+          <div class="lp-price reveal">
+            <h3>Mensal</h3>
+            <p class="lp-price-value">R$ 14,90<span>/mês</span></p>
+            <ul>
+              <li>Acesso completo ao aplicativo</li>
+              <li>Use no celular e no computador</li>
+              <li>Cancele quando quiser</li>
+            </ul>
+            <!-- Checkout Hotmart ainda não configurado: link não navegável (aponta para #precos).
+                 Quando as URLs reais existirem, configurar em js/landing.js sem alterar o HTML. -->
+            <a class="lp-btn lp-btn-outline lp-btn-block" data-hotmart="mensal" href="#precos" aria-label="Começar no plano mensal">Começar no mensal</a>
+          </div>
+          <div class="lp-price lp-price-featured reveal">
+            <span class="lp-price-seal">Mais econômico</span>
+            <h3>Anual</h3>
+            <p class="lp-price-value">R$ 99,90<span>/ano</span></p>
+            <p class="lp-price-month">Equivale a R$ 8,33 por mês</p>
+            <ul>
+              <li>Tudo do plano mensal</li>
+              <li>12 meses pelo preço de menos de 7</li>
+              <li>Cancele quando quiser</li>
+            </ul>
+            <a class="lp-btn lp-btn-primary lp-btn-block" data-hotmart="anual" href="#precos" aria-label="Começar no plano anual">Começar no anual</a>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 9. CONFIANÇA -->
+    <section class="lp-trust">
+      <div class="lp-container">
+        <p class="reveal">🔒 Pagamento processado com segurança pela Hotmart quando o checkout estiver configurado.</p>
+        <p class="lp-micro reveal">O Linsora funciona no navegador do celular e do computador. Você pode adicionar um atalho na tela inicial, sem instalar aplicativo nativo.</p>
+      </div>
+    </section>
+
+    <!-- 10. FAQ -->
+    <section class="lp-section" id="faq">
+      <div class="lp-container lp-faq-wrap">
+        <h2 class="reveal">Perguntas frequentes</h2>
+        <div class="lp-faq reveal">
+          <div class="lp-faq-item">
+            <button type="button" class="lp-faq-q" aria-expanded="false" aria-controls="faq-a-1" id="faq-q-1">O que é o Linsora?</button>
+            <div class="lp-faq-a" id="faq-a-1" role="region" aria-labelledby="faq-q-1"><p>O Linsora é um aplicativo de organização financeira pessoal: registre gastos por voz ou manualmente e acompanhe contas, cartões, extrato, metas e compromissos.</p></div>
+          </div>
+          <div class="lp-faq-item">
+            <button type="button" class="lp-faq-q" aria-expanded="false" aria-controls="faq-a-2" id="faq-q-2">Como registro um gasto?</button>
+            <div class="lp-faq-a" id="faq-a-2" role="region" aria-labelledby="faq-q-2"><p>Fale naturalmente, como “150 reais de gasolina”, ou registre manualmente no aplicativo. Também funciona com frases completas, como “Gastei 150 reais de gasolina”.</p></div>
+          </div>
+          <div class="lp-faq-item">
+            <button type="button" class="lp-faq-q" aria-expanded="false" aria-controls="faq-a-3" id="faq-q-3">Preciso falar uma frase específica?</button>
+            <div class="lp-faq-a" id="faq-a-3" role="region" aria-labelledby="faq-q-3"><p>Não. O Linsora foi pensado para entender frases curtas e naturais, como “150 reais de gasolina”, “300 reais de farmácia” e “500 reais de mercado”.</p></div>
+          </div>
+          <div class="lp-faq-item">
+            <button type="button" class="lp-faq-q" aria-expanded="false" aria-controls="faq-a-4" id="faq-q-4">O que é o Conselheiro?</button>
+            <div class="lp-faq-a" id="faq-a-4" role="region" aria-labelledby="faq-q-4"><p>O Conselheiro cruza seu saldo com os compromissos registrados e os valores da fatura para mostrar quanto está disponível. É uma visão ilustrativa dos seus dados — não é uma recomendação financeira.</p></div>
+          </div>
+          <div class="lp-faq-item">
+            <button type="button" class="lp-faq-q" aria-expanded="false" aria-controls="faq-a-5" id="faq-q-5">Meus dados ficam protegidos?</button>
+            <div class="lp-faq-a" id="faq-a-5" role="region" aria-labelledby="faq-q-5"><p>Seus dados ficam vinculados à sua conta e o acesso exige login. Use uma senha forte e não a compartilhe com ninguém.</p></div>
+          </div>
+          <div class="lp-faq-item">
+            <button type="button" class="lp-faq-q" aria-expanded="false" aria-controls="faq-a-6" id="faq-q-6">Preciso instalar alguma coisa?</button>
+            <div class="lp-faq-a" id="faq-a-6" role="region" aria-labelledby="faq-q-6"><p>Não. Você acessa pelo navegador e pode adicionar um atalho na tela inicial se quiser.</p></div>
+          </div>
+          <div class="lp-faq-item">
+            <button type="button" class="lp-faq-q" aria-expanded="false" aria-controls="faq-a-7" id="faq-q-7">Posso usar no celular e no computador?</button>
+            <div class="lp-faq-a" id="faq-a-7" role="region" aria-labelledby="faq-q-7"><p>Sim. A mesma conta funciona no celular, no computador e no tablet.</p></div>
+          </div>
+          <div class="lp-faq-item">
+            <button type="button" class="lp-faq-q" aria-expanded="false" aria-controls="faq-a-8" id="faq-q-8">Como funciona a assinatura?</button>
+            <div class="lp-faq-a" id="faq-a-8" role="region" aria-labelledby="faq-q-8"><p>Você escolhe o plano mensal ou anual e o pagamento será processado com segurança pela Hotmart quando o checkout estiver configurado.</p></div>
+          </div>
+          <div class="lp-faq-item">
+            <button type="button" class="lp-faq-q" aria-expanded="false" aria-controls="faq-a-9" id="faq-q-9">Posso cancelar minha assinatura?</button>
+            <div class="lp-faq-a" id="faq-a-9" role="region" aria-labelledby="faq-q-9"><p>Sim. O cancelamento pode ser feito quando você quiser, sem burocracia.</p></div>
+          </div>
+          <div class="lp-faq-item">
+            <button type="button" class="lp-faq-q" aria-expanded="false" aria-controls="faq-a-10" id="faq-q-10">Qual a diferença entre o plano mensal e anual?</button>
+            <div class="lp-faq-a" id="faq-a-10" role="region" aria-labelledby="faq-q-10"><p>Os dois dão acesso completo. O anual custa R$ 99,90 por ano (equivale a R$ 8,33 por mês) e sai mais econômico que pagar mês a mês.</p></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 11. CTA FINAL -->
+    <section class="lp-final" id="comecar">
+      <div class="lp-container">
+        <h2 class="reveal">Registre seu próximo gasto falando. Comece agora.</h2>
+        <p class="reveal">Diga “150 reais de gasolina” e deixe o Linsora organizar contas, cartões e compromissos para você.</p>
+        <a class="lp-btn lp-btn-primary lp-btn-lg reveal" href="#precos">Começar agora</a>
+      </div>
+    </section>
+  </main>
+
+  <!-- 12. RODAPÉ -->
+  <footer class="lp-footer">
+    <div class="lp-container">
+      <span class="lp-brand"><span>LINSORA</span></span>
+      <p>© 2026 Linsora. Todos os direitos reservados.</p>
+    </div>
+  </footer>
+
+  <script src="js/landing.js"></script>
+</body>
+</html>
