@@ -728,13 +728,17 @@ test.describe('39. Webhook Hotmart (Etapa 1)', () => {
     );
   });
 
-  test('38. cancelamento sem date_next_charge nao apaga period_end', async () => {
+  // Guarda de atualidade: cancelamento SEM nenhuma data não pode destruir
+  // uma assinatura active que possui evidência de data. O evento é registrado
+  // e vinculado para auditoria, mas a subscription permanece intacta.
+  test('38. cancelamento sem datas nao destroi ativa com datas', async () => {
     const mock = makeSupabaseMock({
       profile: { id: FAKE_USER_ID, email: FAKE_EMAIL },
       existingSubscription: {
         id: 'sub-row-ficticia-1',
         user_id: FAKE_USER_ID,
         status: 'active',
+        current_period_start: '2026-05-01T00:00:00.000Z',
         current_period_end: '2026-12-31T00:00:00.000Z',
       },
     });
@@ -750,11 +754,15 @@ test.describe('39. Webhook Hotmart (Etapa 1)', () => {
     });
     await handler(req, res, { env: testEnv(), fetchImpl: mock.fetchImpl });
     expect(res.statusCode).toBe(200);
-    expect(mock.state.subscriptionUpserts[0]).not.toHaveProperty('current_period_end');
-    expect(mock.state.store.subs.get(FAKE_USER_ID).current_period_end).toBe(
-      '2026-12-31T00:00:00.000Z'
-    );
-    expect(mock.state.store.subs.get(FAKE_USER_ID).status).toBe('canceled');
+    expect(res.payload).toEqual({ ok: true });
+    expect(mock.state.eventInserts).toHaveLength(1);
+    expect(mock.state.subscriptionUpserts).toHaveLength(0);
+    expect(mock.state.subscriptionPatches).toHaveLength(0);
+    const stored = mock.state.store.subs.get(FAKE_USER_ID);
+    expect(stored.status).toBe('active');
+    expect(stored.current_period_end).toBe('2026-12-31T00:00:00.000Z');
+    const storedEvent = mock.state.store.events.get('evt-ficticio-cancel-sem-vig');
+    expect(storedEvent.subscription_id).toBe('sub-row-ficticia-1');
   });
 
   test('39. cancelamento duplicado e idempotente', async () => {
@@ -854,5 +862,174 @@ test.describe('39. Webhook Hotmart (Etapa 1)', () => {
     expect(res.statusCode).toBe(200);
     expect(mock.state.subscriptionUpserts).toHaveLength(1);
     expect(mock.state.subscriptionUpserts[0].plan).toBe('anual');
+  });
+
+  // Guarda de atualidade: creation_date (momento do evento) decide; um
+  // CANCELED com creation anterior ao start gravado não regride o active.
+  async function approveThenStale(mock, env, approvedId, approvedCreation, staleId, staleEvent, staleCreation) {
+    const approved = purchasePayload({ id: approvedId });
+    approved.creation_date = approvedCreation;
+    const first = makeReqRes({
+      headers: { 'x-hotmart-hottok': FAKE_HOTTOK },
+      body: approved,
+    });
+    await handler(first.req, first.res, { env, fetchImpl: mock.fetchImpl });
+    expect(first.res.statusCode).toBe(200);
+    const stale = purchasePayload({ id: staleId, event: staleEvent });
+    stale.creation_date = staleCreation;
+    const second = makeReqRes({
+      headers: { 'x-hotmart-hottok': FAKE_HOTTOK },
+      body: stale,
+    });
+    await handler(second.req, second.res, { env, fetchImpl: mock.fetchImpl });
+    expect(second.res.statusCode).toBe(200);
+    expect(second.res.payload).toEqual({ ok: true });
+  }
+
+  test('45. APPROVED novo seguido de CANCELED antigo continua active', async () => {
+    const mock = makeSupabaseMock({ profile: { id: FAKE_USER_ID, email: FAKE_EMAIL } });
+    await approveThenStale(
+      mock, testEnv(),
+      'evt-ficticio-ordem-ap', 1780000000000,
+      'evt-ficticio-ordem-ca', 'PURCHASE_CANCELED', 1777000000000
+    );
+    expect(mock.state.subscriptionUpserts).toHaveLength(1);
+    expect(mock.state.subscriptionPatches).toHaveLength(0);
+    expect(mock.state.eventInserts).toHaveLength(2);
+    const stored = mock.state.store.subs.get(FAKE_USER_ID);
+    expect(stored.status).toBe('active');
+    expect(stored.current_period_end).toBe(new Date(1782592000000).toISOString());
+    const staleEvent = mock.state.store.events.get('evt-ficticio-ordem-ca');
+    expect(staleEvent.subscription_id).toBe('sub-row-ficticia-1');
+  });
+
+  test('46. APPROVED novo seguido de REFUNDED antigo nao regride', async () => {
+    const mock = makeSupabaseMock({ profile: { id: FAKE_USER_ID, email: FAKE_EMAIL } });
+    await approveThenStale(
+      mock, testEnv(),
+      'evt-ficticio-ordem-ap2', 1780000000000,
+      'evt-ficticio-ordem-rf', 'PURCHASE_REFUNDED', 1777000000000
+    );
+    expect(mock.state.subscriptionUpserts).toHaveLength(1);
+    expect(mock.state.subscriptionPatches).toHaveLength(0);
+    expect(mock.state.store.subs.get(FAKE_USER_ID).status).toBe('active');
+  });
+
+  test('47. APPROVED novo seguido de SUBSCRIPTION_CANCELLATION antigo nao regride', async () => {
+    const mock = makeSupabaseMock({ profile: { id: FAKE_USER_ID, email: FAKE_EMAIL } });
+    const env = testEnv();
+    const approved = purchasePayload({ id: 'evt-ficticio-ordem-ap3' });
+    approved.creation_date = 1780000000000;
+    const first = makeReqRes({
+      headers: { 'x-hotmart-hottok': FAKE_HOTTOK },
+      body: approved,
+    });
+    await handler(first.req, first.res, { env, fetchImpl: mock.fetchImpl });
+    expect(first.res.statusCode).toBe(200);
+    const stale = cancellationPayload({ id: 'evt-ficticio-ordem-sc' });
+    stale.data.date_next_charge = 1777000000000;
+    stale.creation_date = 1777000000000;
+    const second = makeReqRes({
+      headers: { 'x-hotmart-hottok': FAKE_HOTTOK },
+      body: stale,
+    });
+    await handler(second.req, second.res, { env, fetchImpl: mock.fetchImpl });
+    expect(second.res.statusCode).toBe(200);
+    expect(mock.state.subscriptionUpserts).toHaveLength(1);
+    expect(mock.state.subscriptionPatches).toHaveLength(0);
+    expect(mock.state.store.subs.get(FAKE_USER_ID).status).toBe('active');
+  });
+
+  test('48. CANCELED valido mais recente aplica cancelamento', async () => {
+    const mock = makeSupabaseMock({ profile: { id: FAKE_USER_ID, email: FAKE_EMAIL } });
+    const env = testEnv();
+    const approved = purchasePayload({ id: 'evt-ficticio-ordem-ap4' });
+    approved.creation_date = 1780000000000;
+    const first = makeReqRes({
+      headers: { 'x-hotmart-hottok': FAKE_HOTTOK },
+      body: approved,
+    });
+    await handler(first.req, first.res, { env, fetchImpl: mock.fetchImpl });
+    expect(first.res.statusCode).toBe(200);
+    const canceled = purchasePayload({ id: 'evt-ficticio-ordem-ca4', event: 'PURCHASE_CANCELED' });
+    canceled.creation_date = 1781000000000;
+    const second = makeReqRes({
+      headers: { 'x-hotmart-hottok': FAKE_HOTTOK },
+      body: canceled,
+    });
+    await handler(second.req, second.res, { env, fetchImpl: mock.fetchImpl });
+    expect(second.res.statusCode).toBe(200);
+    expect(mock.state.subscriptionUpserts).toHaveLength(2);
+    expect(mock.state.store.subs.get(FAKE_USER_ID).status).toBe('canceled');
+  });
+
+  test('49. SUBSCRIPTION_CANCELLATION mais recente aplica canceled', async () => {
+    const mock = makeSupabaseMock({ profile: { id: FAKE_USER_ID, email: FAKE_EMAIL } });
+    const env = testEnv();
+    const approved = purchasePayload({ id: 'evt-ficticio-ordem-ap5' });
+    approved.creation_date = 1780000000000;
+    const first = makeReqRes({
+      headers: { 'x-hotmart-hottok': FAKE_HOTTOK },
+      body: approved,
+    });
+    await handler(first.req, first.res, { env, fetchImpl: mock.fetchImpl });
+    expect(first.res.statusCode).toBe(200);
+    const canceled = cancellationPayload({ id: 'evt-ficticio-ordem-sc5' });
+    canceled.creation_date = 1781000000000;
+    const second = makeReqRes({
+      headers: { 'x-hotmart-hottok': FAKE_HOTTOK },
+      body: canceled,
+    });
+    await handler(second.req, second.res, { env, fetchImpl: mock.fetchImpl });
+    expect(second.res.statusCode).toBe(200);
+    expect(mock.state.store.subs.get(FAKE_USER_ID).status).toBe('canceled');
+  });
+
+  test('50. evento sem datas nao destroi ativa com datas', async () => {
+    const mock = makeSupabaseMock({ profile: { id: FAKE_USER_ID, email: FAKE_EMAIL } });
+    const env = testEnv();
+    const approved = purchasePayload({ id: 'evt-ficticio-ordem-ap6' });
+    approved.creation_date = 1780000000000;
+    const first = makeReqRes({
+      headers: { 'x-hotmart-hottok': FAKE_HOTTOK },
+      body: approved,
+    });
+    await handler(first.req, first.res, { env, fetchImpl: mock.fetchImpl });
+    expect(first.res.statusCode).toBe(200);
+    const dateless = purchasePayload({ id: 'evt-ficticio-ordem-ca6', event: 'PURCHASE_CANCELED' });
+    delete dateless.creation_date;
+    delete dateless.data.purchase.approved_date;
+    delete dateless.data.purchase.date_next_charge;
+    const second = makeReqRes({
+      headers: { 'x-hotmart-hottok': FAKE_HOTTOK },
+      body: dateless,
+    });
+    await handler(second.req, second.res, { env, fetchImpl: mock.fetchImpl });
+    expect(second.res.statusCode).toBe(200);
+    expect(mock.state.subscriptionUpserts).toHaveLength(1);
+    expect(mock.state.subscriptionPatches).toHaveLength(0);
+    expect(mock.state.store.subs.get(FAKE_USER_ID).status).toBe('active');
+  });
+
+  test('51. REFUNDED valido mais recente aplica refunded', async () => {
+    const mock = makeSupabaseMock({ profile: { id: FAKE_USER_ID, email: FAKE_EMAIL } });
+    const env = testEnv();
+    const approved = purchasePayload({ id: 'evt-ficticio-ordem-ap7' });
+    approved.creation_date = 1780000000000;
+    const first = makeReqRes({
+      headers: { 'x-hotmart-hottok': FAKE_HOTTOK },
+      body: approved,
+    });
+    await handler(first.req, first.res, { env, fetchImpl: mock.fetchImpl });
+    expect(first.res.statusCode).toBe(200);
+    const refunded = purchasePayload({ id: 'evt-ficticio-ordem-rf7', event: 'PURCHASE_REFUNDED' });
+    refunded.creation_date = 1781000000000;
+    const second = makeReqRes({
+      headers: { 'x-hotmart-hottok': FAKE_HOTTOK },
+      body: refunded,
+    });
+    await handler(second.req, second.res, { env, fetchImpl: mock.fetchImpl });
+    expect(second.res.statusCode).toBe(200);
+    expect(mock.state.store.subs.get(FAKE_USER_ID).status).toBe('refunded');
   });
 });

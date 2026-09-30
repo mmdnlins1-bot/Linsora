@@ -20,6 +20,11 @@
  *   criar assinatura e sem liberar acesso.
  * - Com usuário + evento conhecido + plano determinável: UPSERT em
  *   public.subscriptions por user_id (UNIQUE) e vínculo no evento.
+ * - Guarda de atualidade: evento comprovadamente mais antigo que o estado
+ *   gravado (por creation_date/approved_date vs current_period_start, ou
+ *   evento sem datas contra assinatura active/pending com datas) é ignorado
+ *   sem alterar a subscription (mas vinculado ao evento para auditoria).
+ *   Nunca usa received_at e nunca calcula datas.
  * - Eventos desconhecidos ou sem plano determinável: só o evento, 200.
  * - Falhas técnicas reais (Supabase fora, erro de escrita) -> 500.
  *
@@ -174,6 +179,9 @@ function extractEvent(body) {
     subscriberCode: asText(dataSubscriber.code) || asText(subscriber.code),
     subscriptionStatus: asText(subscription.status),
     planName: asText(planObj.name),
+    // Momento do evento na Hotmart (confiável para ordenação) com fallback
+    // para a data da compra. Nunca received_at (é hora do nosso servidor).
+    creationDate: parseHotmartDate(body.creation_date),
     approvedDate: parseHotmartDate(purchase.approved_date),
     nextChargeDate:
       parseHotmartDate(data.date_next_charge) ||
@@ -200,6 +208,36 @@ function resolvePlan(offerCode, planName, env) {
   if (normalized === 'mensal' || normalized === 'plano mensal') return 'mensal';
   if (normalized === 'anual' || normalized === 'plano anual') return 'anual';
   return null;
+}
+
+/**
+ * Momento do evento para ordenação: creation_date (quando ocorreu na Hotmart)
+ * tem prioridade sobre approved_date (quando a compra ocorreu), pois um
+ * cancelamento carrega a approved_date da compra ORIGINAL (antiga).
+ * Retorna null quando o payload não traz datas utilizáveis.
+ */
+function eventTime(ev) {
+  return ev.creationDate || ev.approvedDate || null;
+}
+
+/**
+ * Guarda contra eventos fora de ordem: um evento comprovadamente mais antigo
+ * que o estado gravado nunca pode regredi-lo.
+ * - Com data no evento: obsoleto se anterior ao current_period_start gravado.
+ * - Sem data no evento: obsoleto se a assinatura está active/pending e possui
+ *   qualquer evidência de data (start ou end). Sem evidência ou sem linha,
+ *   não há o que proteger (aplica normalmente).
+ * Comparação lexicográfica de ISOs UTC (mesmo formato). Nunca usa
+ * received_at e nunca calcula datas.
+ */
+function isStaleEvent(evTime, stored) {
+  if (!stored) return false;
+  if (evTime) {
+    const storedStart = asText(stored.current_period_start);
+    return !!storedStart && evTime < storedStart;
+  }
+  const hasDates = !!(asText(stored.current_period_start) || asText(stored.current_period_end));
+  return (stored.status === 'active' || stored.status === 'pending') && hasDates;
 }
 
 /**
@@ -309,7 +347,10 @@ function createDb({ baseUrl, serviceKey, fetchImpl }) {
 
     async getSubscriptionByUserId(userId) {
       const resp = await call('GET', 'subscriptions', {
-        query: '?select=id,user_id,status&user_id=eq.' + encodeURIComponent(userId),
+        query:
+          '?select=id,user_id,status,current_period_start,current_period_end' +
+          '&user_id=eq.' +
+          encodeURIComponent(userId),
       });
       const rows = (await readJson(resp, 'subscription_lookup')) || [];
       return Array.isArray(rows) && rows.length > 0 ? rows[0] : null;
@@ -368,6 +409,29 @@ async function doStatusOnlyPatch(db, ev, user, existingSubId, statusAfter) {
   if (ev.nextChargeDate) patch.current_period_end = ev.nextChargeDate;
   await db.patchSubscriptionByUserId(user.id, patch);
   await linkEvent(db, ev.hotmartEventId, user.id, existingSubId, null, statusAfter);
+}
+
+// Aplica um evento conhecido com guarda de atualidade. Retorna 'applied',
+// 'stale' (ignorado por ser mais antigo que o estado gravado, mas vinculado
+// ao evento para auditoria) ou 'event-only' (nada a vincular). Nunca cria
+// segunda linha nem apaga dados.
+async function processKnownEvent(db, ev, user, plan, statusAfter) {
+  const existing = await db.getSubscriptionByUserId(user.id);
+  if (isStaleEvent(eventTime(ev), existing)) {
+    if (existing) {
+      await linkEvent(db, ev.hotmartEventId, user.id, existing.id, plan, statusAfter);
+    }
+    return 'stale';
+  }
+  if (plan) {
+    await doFullUpsert(db, ev, user, plan, statusAfter);
+    return 'applied';
+  }
+  if (existing) {
+    await doStatusOnlyPatch(db, ev, user, existing.id, statusAfter);
+    return 'applied';
+  }
+  return 'event-only';
 }
 
 async function hotmartWebhook(req, res, deps) {
@@ -447,17 +511,10 @@ async function hotmartWebhook(req, res, deps) {
       // Só retoma quando há o que completar: usuário localizado agora, evento
       // conhecido e linha ainda sem vínculo. Órfão real (sem usuário) e evento
       // desconhecido continuam como estão; já-vinculado não é tocado.
+      // A retomada usa a mesma guarda de atualidade (nunca regride).
       if (existing && user && knownEvent && !existing.subscription_id) {
-        if (plan) {
-          await doFullUpsert(db, ev, user, plan, statusAfter);
-          resumed = true;
-        } else {
-          const existingSub = await db.getSubscriptionByUserId(user.id);
-          if (existingSub) {
-            await doStatusOnlyPatch(db, ev, user, existingSub.id, statusAfter);
-            resumed = true;
-          }
-        }
+        const outcome = await processKnownEvent(db, ev, user, plan, statusAfter);
+        resumed = outcome === 'applied';
       }
       safeLog({
         received: true, method: 'POST', at: new Date().toISOString(),
@@ -468,29 +525,14 @@ async function hotmartWebhook(req, res, deps) {
     }
 
     if (user && knownEvent) {
-      if (plan) {
-        await doFullUpsert(db, ev, user, plan, statusAfter);
-        safeLog({
-          received: true, method: 'POST', at: new Date().toISOString(),
-          event: ev.eventType, webhookId: ev.hotmartEventId,
-          userFound: true, emailDomain: emailDomain(ev.buyerEmail),
-          plan, statusAfter,
-        });
-        return res.status(200).json({ ok: true });
-      }
-
-      // Plano indeterminável: nunca inventar. Se já existir assinatura,
-      // atualiza SOMENTE o status (+ códigos/vigência presentes); senão,
-      // mantém só o evento para revisão.
-      const existing = await db.getSubscriptionByUserId(user.id);
-      if (existing) {
-        await doStatusOnlyPatch(db, ev, user, existing.id, statusAfter);
-      }
+      const outcome = await processKnownEvent(db, ev, user, plan, statusAfter);
       safeLog({
         received: true, method: 'POST', at: new Date().toISOString(),
         event: ev.eventType, webhookId: ev.hotmartEventId,
         userFound: true, emailDomain: emailDomain(ev.buyerEmail),
-        plan: null, statusAfter, planUndetermined: true,
+        plan, statusAfter,
+        stale: outcome === 'stale',
+        ...(plan ? {} : { planUndetermined: true }),
       });
       return res.status(200).json({ ok: true });
     }
