@@ -4,13 +4,15 @@
  * Rota: POST /api/hotmart-webhook (Vercel Serverless Function)
  * ============================================================================
  *
- * Escopo desta v1 (propositalmente mínimo):
+ * Escopo desta versão (recepção autenticada, sem processamento):
  * - Aceita SOMENTE POST (outros métodos -> 405).
- * - Lê o header X-HOTMART-HOTTOK, mas NÃO valida ainda.
+ * - Exige o segredo configurado em process.env.HOTMART_HOTTOK (ausente -> 500).
+ * - Exige o header X-HOTMART-HOTTOK (ausente -> 401).
+ * - Compara com crypto.timingSafeEqual (divergente -> 401, sem processar).
  * - Valida que o body é um JSON válido (inválido -> 400).
  * - NÃO grava nada no Supabase, NÃO processa compra, NÃO libera acesso.
  * - Registra no log técnico apenas metadados seguros da recepção.
- * - Responde 200 { ok: true } quando o POST é recebido corretamente.
+ * - Responde 200 { ok: true } quando o POST autenticado é recebido.
  *
  * Segurança:
  * - NENHUM segredo neste arquivo (sem Hottok, sem service_role, sem tokens).
@@ -20,6 +22,8 @@
  *   financeiros sensíveis do comprador (apenas tipo/id do evento + flags).
  */
 'use strict';
+
+const crypto = require('crypto');
 
 function safeLog(fields) {
   try {
@@ -59,6 +63,18 @@ function parseBody(body) {
   return { ok: false };
 }
 
+/**
+ * Comparação em tempo constante (crypto nativo do runtime Node/Vercel).
+ * Retorna false para tipos/comprimentos diferentes sem vazar o segredo.
+ */
+function secretsMatch(received, expected) {
+  if (typeof received !== 'string' || typeof expected !== 'string') return false;
+  const a = Buffer.from(received, 'utf8');
+  const b = Buffer.from(expected, 'utf8');
+  if (a.length !== b.length) return false;
+  return crypto.timingSafeEqual(a, b);
+}
+
 async function hotmartWebhook(req, res) {
   try {
     if (!req || req.method !== 'POST') {
@@ -66,10 +82,23 @@ async function hotmartWebhook(req, res) {
       return res.status(405).json({ ok: false, error: 'method_not_allowed' });
     }
 
-    // Lê o Hottok para uso futuro (validar contra process.env.HOTMART_HOTTOK).
-    // Nesta versão: NÃO valida, NÃO registra em log, NÃO usa para nada.
+    // Segredo exclusivamente da variável de ambiente (lido por requisição,
+    // sem valor padrão e nunca hardcoded). Ausente -> 500, sem processar.
+    const expectedHottok = process.env.HOTMART_HOTTOK;
+    if (!expectedHottok) {
+      return res.status(500).json({ ok: false, error: 'hottok_not_configured' });
+    }
+
+    // Header ausente -> 401, sem processar.
     const hottok = pickHottok(req.headers);
-    void hottok;
+    if (!hottok) {
+      return res.status(401).json({ ok: false, error: 'missing_hottok' });
+    }
+
+    // Hottok divergente -> 401, sem processar. O valor recebido NUNCA é logado.
+    if (!secretsMatch(hottok, expectedHottok)) {
+      return res.status(401).json({ ok: false, error: 'invalid_hottok' });
+    }
 
     const parsed = parseBody(req.body);
     if (!parsed.ok) {
