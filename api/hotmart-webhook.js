@@ -41,13 +41,15 @@ const ALLOWED_WRITE_TABLES = ['subscription_events', 'subscriptions'];
 const ALLOWED_READ_TABLES = ['profiles', 'subscriptions', 'subscription_events'];
 
 // Eventos Hotmart conhecidos -> status comercial. Qualquer outro evento é
-// registrado sem alterar assinatura.
+// registrado sem alterar assinatura. SUBSCRIPTION_CANCELLATION atualiza para
+// canceled e preserva a linha (nunca apaga a subscription).
 const STATUS_BY_EVENT = {
   PURCHASE_APPROVED: 'active',
   PURCHASE_DELAYED: 'pending',
   PURCHASE_CANCELED: 'canceled',
   PURCHASE_REFUNDED: 'refunded',
   PURCHASE_CHARGEBACK: 'chargeback',
+  SUBSCRIPTION_CANCELLATION: 'canceled',
 };
 
 function safeLog(fields) {
@@ -136,28 +138,45 @@ function secretsMatch(received, expected) {
 /**
  * Extração defensiva dos campos do Webhook V2. Campos ausentes viram null;
  * nada é inventado. O payload completo vai para subscription_events.raw.
+ *
+ * E-mail do comprador: eventos de compra usam data.buyer.email;
+ * SUBSCRIPTION_CANCELLATION usa data.subscriber.email (com fallback para
+ * data.buyer.email se o primeiro estiver ausente). Em ambos os casos,
+ * normalização trim + lowercase. Nunca ucode/transaction/sck.
+ * Subscriber code: data.subscriber.code (cancelamento) com fallback para
+ * data.subscription.subscriber.code (compras) — dado comercial, nunca auth.
+ * Vigência: data.date_next_charge (cancelamento) tem prioridade, depois
+ * purchase/subscription.date_next_charge. Nunca calcula datas.
  */
 function extractEvent(body) {
+  const eventType = asText(body.event);
   const data = asObject(body.data) || {};
   const buyer = asObject(data.buyer) || {};
+  const dataSubscriber = asObject(data.subscriber) || {};
   const purchase = asObject(data.purchase) || {};
   const offer = asObject(purchase.offer) || {};
   const subscription = asObject(data.subscription) || {};
   const subscriber = asObject(subscription.subscriber) || {};
   const planObj = asObject(subscription.plan) || {};
+  const buyerEmailNorm = normalizeEmail(buyer.email);
+  const subscriberEmailNorm = normalizeEmail(dataSubscriber.email);
   return {
     hotmartEventId: asText(body.id),
-    eventType: asText(body.event),
-    buyerEmail: normalizeEmail(buyer.email),
+    eventType,
+    buyerEmail:
+      eventType === 'SUBSCRIPTION_CANCELLATION'
+        ? subscriberEmailNorm || buyerEmailNorm
+        : buyerEmailNorm,
     buyerUcode: asText(buyer.ucode),
     transaction: asText(purchase.transaction),
     purchaseStatus: asText(purchase.status),
     offerCode: asText(offer.code),
-    subscriberCode: asText(subscriber.code),
+    subscriberCode: asText(dataSubscriber.code) || asText(subscriber.code),
     subscriptionStatus: asText(subscription.status),
     planName: asText(planObj.name),
     approvedDate: parseHotmartDate(purchase.approved_date),
     nextChargeDate:
+      parseHotmartDate(data.date_next_charge) ||
       parseHotmartDate(purchase.date_next_charge) ||
       parseHotmartDate(subscription.date_next_charge),
     raw: body,

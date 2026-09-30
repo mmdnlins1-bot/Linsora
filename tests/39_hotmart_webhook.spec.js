@@ -664,4 +664,137 @@ test.describe('39. Webhook Hotmart (Etapa 1)', () => {
     expect(res.payload).toEqual({ ok: false, error: 'invalid_json' });
     expect(mock.state.calls).toHaveLength(0);
   });
+
+  // Fixture fictícia de SUBSCRIPTION_CANCELLATION: SEM data.buyer — o e-mail
+  // vem de data.subscriber.email e a vigência de data.date_next_charge.
+  function cancellationPayload({ id = 'evt-ficticio-cancel-1', data = null } = {}) {
+    return {
+      id,
+      event: 'SUBSCRIPTION_CANCELLATION',
+      version: '2.0.0',
+      data: data || {
+        subscriber: { email: FAKE_EMAIL, name: 'Compradora Ficticia', code: 'SUB-FICTICIO-1' },
+        subscription: { plan: { name: 'Mensal' }, status: 'CANCELLED' },
+        date_next_charge: 1782592000000,
+      },
+    };
+  }
+
+  test('35. SUBSCRIPTION_CANCELLATION vincula pelo subscriber.email e cancela', async () => {
+    const mock = makeSupabaseMock({ profile: { id: FAKE_USER_ID, email: FAKE_EMAIL } });
+    const { req, res } = makeReqRes({
+      headers: { 'x-hotmart-hottok': FAKE_HOTTOK },
+      body: cancellationPayload(),
+    });
+    await handler(req, res, { env: testEnv(), fetchImpl: mock.fetchImpl });
+    expect(res.statusCode).toBe(200);
+    expect(res.payload).toEqual({ ok: true });
+    const lookup = mock.state.calls.find((c) => c.table === 'profiles');
+    expect(lookup.query).toContain(encodeURIComponent(FAKE_EMAIL));
+    expect(mock.state.subscriptionUpserts).toHaveLength(1);
+    const upsert = mock.state.subscriptionUpserts[0];
+    expect(upsert.user_id).toBe(FAKE_USER_ID);
+    expect(upsert.status).toBe('canceled');
+    expect(upsert.hotmart_subscriber_code).toBe('SUB-FICTICIO-1');
+    expect(mock.state.store.subs.size).toBe(1);
+    expect(mock.state.eventPatches[0].body.subscription_id).toBe('sub-row-ficticia-1');
+  });
+
+  test('36. SUBSCRIPTION_CANCELLATION sem usuario vira orfao', async () => {
+    const mock = makeSupabaseMock({ profile: null });
+    const { req, res } = makeReqRes({
+      headers: { 'x-hotmart-hottok': FAKE_HOTTOK },
+      body: cancellationPayload({ id: 'evt-ficticio-cancel-orfao' }),
+    });
+    await handler(req, res, { env: testEnv(), fetchImpl: mock.fetchImpl });
+    expect(res.statusCode).toBe(200);
+    expect(res.payload).toEqual({ ok: true });
+    expect(mock.state.eventInserts).toHaveLength(1);
+    expect(mock.state.eventInserts[0].user_id).toBeNull();
+    expect(mock.state.subscriptionUpserts).toHaveLength(0);
+    expect(mock.state.subscriptionPatches).toHaveLength(0);
+  });
+
+  test('37. cancelamento com date_next_charge grava period_end', async () => {
+    const mock = makeSupabaseMock({ profile: { id: FAKE_USER_ID, email: FAKE_EMAIL } });
+    const { req, res } = makeReqRes({
+      headers: { 'x-hotmart-hottok': FAKE_HOTTOK },
+      body: cancellationPayload({ id: 'evt-ficticio-cancel-vig' }),
+    });
+    await handler(req, res, { env: testEnv(), fetchImpl: mock.fetchImpl });
+    expect(res.statusCode).toBe(200);
+    expect(mock.state.subscriptionUpserts[0].current_period_end).toBe(
+      new Date(1782592000000).toISOString()
+    );
+  });
+
+  test('38. cancelamento sem date_next_charge nao apaga period_end', async () => {
+    const mock = makeSupabaseMock({
+      profile: { id: FAKE_USER_ID, email: FAKE_EMAIL },
+      existingSubscription: {
+        id: 'sub-row-ficticia-1',
+        user_id: FAKE_USER_ID,
+        status: 'active',
+        current_period_end: '2026-12-31T00:00:00.000Z',
+      },
+    });
+    const { req, res } = makeReqRes({
+      headers: { 'x-hotmart-hottok': FAKE_HOTTOK },
+      body: cancellationPayload({
+        id: 'evt-ficticio-cancel-sem-vig',
+        data: {
+          subscriber: { email: FAKE_EMAIL, code: 'SUB-FICTICIO-1' },
+          subscription: { plan: { name: 'Mensal' }, status: 'CANCELLED' },
+        },
+      }),
+    });
+    await handler(req, res, { env: testEnv(), fetchImpl: mock.fetchImpl });
+    expect(res.statusCode).toBe(200);
+    expect(mock.state.subscriptionUpserts[0]).not.toHaveProperty('current_period_end');
+    expect(mock.state.store.subs.get(FAKE_USER_ID).current_period_end).toBe(
+      '2026-12-31T00:00:00.000Z'
+    );
+    expect(mock.state.store.subs.get(FAKE_USER_ID).status).toBe('canceled');
+  });
+
+  test('39. cancelamento duplicado e idempotente', async () => {
+    const mock = makeSupabaseMock({ profile: { id: FAKE_USER_ID, email: FAKE_EMAIL } });
+    const env = testEnv();
+    const payload = () => ({
+      headers: { 'x-hotmart-hottok': FAKE_HOTTOK },
+      body: cancellationPayload({ id: 'evt-ficticio-cancel-dup' }),
+    });
+    const first = makeReqRes(payload());
+    await handler(first.req, first.res, { env, fetchImpl: mock.fetchImpl });
+    expect(first.res.statusCode).toBe(200);
+    const second = makeReqRes(payload());
+    await handler(second.req, second.res, { env, fetchImpl: mock.fetchImpl });
+    expect(second.res.statusCode).toBe(200);
+    expect(second.res.payload).toEqual({ ok: true });
+    expect(mock.state.eventInserts).toHaveLength(1);
+    expect(mock.state.subscriptionUpserts).toHaveLength(1);
+  });
+
+  test('40. buyer.email divergente nao desvia a vinculacao do cancelamento', async () => {
+    const mock = makeSupabaseMock({ profile: { id: FAKE_USER_ID, email: FAKE_EMAIL } });
+    const { req, res } = makeReqRes({
+      headers: { 'x-hotmart-hottok': FAKE_HOTTOK },
+      body: cancellationPayload({
+        id: 'evt-ficticio-cancel-buyer',
+        data: {
+          buyer: { email: 'outro.email.ficticio@exemplo.com' },
+          subscriber: { email: FAKE_EMAIL, code: 'SUB-FICTICIO-1' },
+          subscription: { plan: { name: 'Mensal' }, status: 'CANCELLED' },
+          date_next_charge: 1782592000000,
+        },
+      }),
+    });
+    await handler(req, res, { env: testEnv(), fetchImpl: mock.fetchImpl });
+    expect(res.statusCode).toBe(200);
+    const lookup = mock.state.calls.find((c) => c.table === 'profiles');
+    expect(lookup.query).toContain(encodeURIComponent(FAKE_EMAIL));
+    expect(lookup.query).not.toContain(encodeURIComponent('outro.email.ficticio@exemplo.com'));
+    expect(mock.state.subscriptionUpserts[0].email).toBe(FAKE_EMAIL);
+    expect(mock.state.subscriptionUpserts[0].status).toBe('canceled');
+  });
 });
