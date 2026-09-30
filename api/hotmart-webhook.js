@@ -185,8 +185,11 @@ function extractEvent(body) {
 
 /**
  * Determina 'mensal'|'anual' com segurança: primeiro pelo offer code
- * (comparado às envs), depois SOMENTE por match exato do plan.name.
- * Retorna null quando não é possível determinar (não inventa plano).
+ * (comparado às envs HOTMART_OFFER_MENSAL/HOTMART_OFFER_ANUAL); quando o
+ * código não está configurado ou não corresponde, fallback SOMENTE por match
+ * exato do nome oficial do plano ('Plano Mensal'/'Plano Anual', case
+ * insensitive). Nomes aproximados, parciais ou inventados -> null.
+ * Nunca usa preço nem offer.metadata para identificar o plano.
  */
 function resolvePlan(offerCode, planName, env) {
   const mensalOffer = asText(env.HOTMART_OFFER_MENSAL);
@@ -194,7 +197,8 @@ function resolvePlan(offerCode, planName, env) {
   if (offerCode && mensalOffer && offerCode === mensalOffer) return 'mensal';
   if (offerCode && anualOffer && offerCode === anualOffer) return 'anual';
   const normalized = (planName || '').trim().toLowerCase();
-  if (normalized === 'mensal' || normalized === 'anual') return normalized;
+  if (normalized === 'mensal' || normalized === 'plano mensal') return 'mensal';
+  if (normalized === 'anual' || normalized === 'plano anual') return 'anual';
   return null;
 }
 

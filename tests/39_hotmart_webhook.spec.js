@@ -775,8 +775,7 @@ test.describe('39. Webhook Hotmart (Etapa 1)', () => {
     expect(mock.state.subscriptionUpserts).toHaveLength(1);
   });
 
-  test('40. buyer.email divergente nao desvia a vinculacao do cancelamento', async () => {
-    const mock = makeSupabaseMock({ profile: { id: FAKE_USER_ID, email: FAKE_EMAIL } });
+  test('40. buyer.email divergente nao desvia a vinculacao do cancelamento', async () => {    const mock = makeSupabaseMock({ profile: { id: FAKE_USER_ID, email: FAKE_EMAIL } });
     const { req, res } = makeReqRes({
       headers: { 'x-hotmart-hottok': FAKE_HOTTOK },
       body: cancellationPayload({
@@ -796,5 +795,64 @@ test.describe('39. Webhook Hotmart (Etapa 1)', () => {
     expect(lookup.query).not.toContain(encodeURIComponent('outro.email.ficticio@exemplo.com'));
     expect(mock.state.subscriptionUpserts[0].email).toBe(FAKE_EMAIL);
     expect(mock.state.subscriptionUpserts[0].status).toBe('canceled');
+  });
+
+  test('41. plan.name "Plano Mensal" exato resulta em mensal', async () => {
+    const mock = makeSupabaseMock({ profile: { id: FAKE_USER_ID, email: FAKE_EMAIL } });
+    const payload = purchasePayload({ id: 'evt-ficticio-plano-nome-m' });
+    payload.data.purchase.offer.code = 'OFF-DESCONHECIDA-FICTICIA';
+    payload.data.subscription.plan.name = 'Plano Mensal';
+    const { req, res } = makeReqRes({
+      headers: { 'x-hotmart-hottok': FAKE_HOTTOK },
+      body: payload,
+    });
+    await handler(req, res, { env: testEnv(), fetchImpl: mock.fetchImpl });
+    expect(res.statusCode).toBe(200);
+    expect(mock.state.subscriptionUpserts).toHaveLength(1);
+    expect(mock.state.subscriptionUpserts[0].plan).toBe('mensal');
+  });
+
+  test('42. plan.name "Plano Anual" exato resulta em anual', async () => {
+    const mock = makeSupabaseMock({ profile: { id: FAKE_USER_ID, email: FAKE_EMAIL } });
+    const payload = purchasePayload({ id: 'evt-ficticio-plano-nome-a' });
+    payload.data.purchase.offer.code = 'OFF-DESCONHECIDA-FICTICIA';
+    payload.data.subscription.plan.name = 'Plano Anual';
+    const { req, res } = makeReqRes({
+      headers: { 'x-hotmart-hottok': FAKE_HOTTOK },
+      body: payload,
+    });
+    await handler(req, res, { env: testEnv(), fetchImpl: mock.fetchImpl });
+    expect(res.statusCode).toBe(200);
+    expect(mock.state.subscriptionUpserts).toHaveLength(1);
+    expect(mock.state.subscriptionUpserts[0].plan).toBe('anual');
+  });
+
+  test('43. offer code correspondente tem prioridade sobre plan.name', async () => {
+    const mock = makeSupabaseMock({ profile: { id: FAKE_USER_ID, email: FAKE_EMAIL } });
+    const payload = purchasePayload({ id: 'evt-ficticio-offer-prio' });
+    payload.data.purchase.offer.code = FAKE_OFFER_MENSAL;
+    payload.data.subscription.plan.name = 'Plano Anual';
+    const { req, res } = makeReqRes({
+      headers: { 'x-hotmart-hottok': FAKE_HOTTOK },
+      body: payload,
+    });
+    await handler(req, res, { env: testEnv(), fetchImpl: mock.fetchImpl });
+    expect(res.statusCode).toBe(200);
+    expect(mock.state.subscriptionUpserts[0].plan).toBe('mensal');
+  });
+
+  test('44. offer ausente usa fallback do plan.name', async () => {
+    const mock = makeSupabaseMock({ profile: { id: FAKE_USER_ID, email: FAKE_EMAIL } });
+    const payload = purchasePayload({ id: 'evt-ficticio-sem-offer' });
+    delete payload.data.purchase.offer;
+    payload.data.subscription.plan.name = 'Plano Anual';
+    const { req, res } = makeReqRes({
+      headers: { 'x-hotmart-hottok': FAKE_HOTTOK },
+      body: payload,
+    });
+    await handler(req, res, { env: testEnv(), fetchImpl: mock.fetchImpl });
+    expect(res.statusCode).toBe(200);
+    expect(mock.state.subscriptionUpserts).toHaveLength(1);
+    expect(mock.state.subscriptionUpserts[0].plan).toBe('anual');
   });
 });
