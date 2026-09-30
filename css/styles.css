@@ -1765,10 +1765,12 @@ body.frame-mode .device-notch { display: block; }
 
 /* Extrato do cartão por fatura (Etapa 2): navegação do ciclo dentro do modal
    existente. Somente apresentação; o cálculo do ciclo vive em getInvoiceCycle. */
-.card-statement-nav { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
-.card-statement-cycle { display: flex; flex-direction: column; align-items: center; gap: 2px; text-align: center; }
-.card-statement-cycle strong { font-size: 14px; }
-.card-statement-cycle span { font-size: 12px; color: var(--text-muted); }
+.card-statement-nav { display: flex; flex-direction: column; gap: 8px; margin-bottom: 8px; }
+.card-statement-cycle { display: flex; flex-direction: column; align-items: center; gap: 2px; text-align: center; min-width: 0; }
+.card-statement-cycle strong { font-size: 15px; }
+.card-statement-cycle span { font-size: 12.5px; font-weight: 600; color: var(--text-secondary); }
+.card-statement-nav-btns { display: flex; gap: 8px; }
+.card-statement-nav-btns .linsora-btn { flex: 1 1 0; min-width: 0; white-space: nowrap; }
 
 .limit-progress-wrapper { display: flex; flex-direction: column; gap: 5px; }
 .limit-labels { display: flex; justify-content: space-between; font-size: 11px; color: var(--text-secondary); }
