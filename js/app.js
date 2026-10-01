@@ -80,11 +80,20 @@ document.addEventListener('DOMContentLoaded', async () => {
   // o modal (z-index 1000) não fique atrás da splash (z-index 9999); o
   // reload com claim é idempotente (dedupe por ID + chave natural).
   if (sessionRes.success) {
+    // Gate de acesso pago: revalida a assinatura no servidor ANTES de entrar.
+    // 'granted'/'unavailable' (sem backend configurado) seguem o fluxo normal;
+    // 'blocked'/'error' exibem a tela de assinatura (fail-closed no erro).
+    const gate = await window.supabaseRepo.checkSubscriptionAccess(sessionRes.user.id);
+    if (gate.state !== 'granted' && gate.state !== 'unavailable') {
+      renderAppUI(window.linsoraStore.state);
+      showSubscriptionRequired(gate);
+      return;
+    }
     // Carga base (reaplica recibo 'imported' pré-existente, se houver).
     await window.linsoraStore.loadUserData(sessionRes.user);
     window.linsoraStore.ensureCurrentWindowOccurrences();
     renderAppUI(window.linsoraStore.state);
-    grantAppAccess();
+    showAppMain();
     // Oportunidade de claim na sessão restaurada (mesmo mecanismo do login).
     const priorReceipt = window.supabaseRepo?.getGuestClaimReceipt
       ? window.supabaseRepo.getGuestClaimReceipt(sessionRes.user.id)
@@ -128,7 +137,18 @@ function hideSplashScreen() {
   }
 }
 
-function grantAppAccess() {
+/**
+ * Exibe o app principal. Defesa em profundidade: exige usuário carregado no
+ * store; a autorização real acontece antes, via checkSubscriptionAccess.
+ * NÃO expor globalmente (sem window.*): a entrada ocorre somente pelo boot
+ * autenticado ou pelo formulário de login, após passar pelo gate.
+ */
+function showAppMain() {
+  const user = window.linsoraStore?.state?.user;
+  if (!user || !user.id) {
+    showSubscriptionRequired({ state: 'blocked', reason: 'no-session' });
+    return;
+  }
   const splash = document.getElementById('splashScreen');
   if (splash) {
     splash.classList.remove('active');
@@ -147,6 +167,12 @@ function grantAppAccess() {
     auth.classList.add('hidden');
   }
 
+  const subscription = document.getElementById('subscriptionScreen');
+  if (subscription) {
+    subscription.classList.remove('active');
+    subscription.classList.add('hidden');
+  }
+
   const main = document.getElementById('appMain');
   if (main) {
     main.classList.remove('hidden');
@@ -156,16 +182,75 @@ function grantAppAccess() {
   window.switchTab('tabDashboard');
 }
 
-// Exposto para os testes automatizados (tests/helpers/auth.js) acionarem
-// a entrada no app sem passar pelo formulário. Sem efeito no fluxo real.
-window.grantAppAccess = grantAppAccess;
+/**
+ * Exibe a tela de assinatura bloqueada (sem assinatura válida ou falha na
+ * verificação — fail-closed). Não carrega dados do usuário neste estado.
+ */
+function showSubscriptionRequired(gate) {
+  const splash = document.getElementById('splashScreen');
+  if (splash) {
+    splash.classList.remove('active');
+    splash.classList.add('hidden');
+  }
+  const onboarding = document.getElementById('onboardingScreen');
+  if (onboarding) {
+    onboarding.classList.remove('active');
+    onboarding.classList.add('hidden');
+  }
+  const auth = document.getElementById('authScreen');
+  if (auth) {
+    auth.classList.remove('active');
+    auth.classList.add('hidden');
+  }
+  const main = document.getElementById('appMain');
+  if (main) {
+    main.classList.remove('active');
+    main.classList.add('hidden');
+  }
+  const msg = document.getElementById('subscriptionMessage');
+  if (msg) {
+    msg.textContent = (gate && gate.state === 'error')
+      ? 'Não foi possível verificar sua assinatura. Verifique sua conexão e tente novamente.'
+      : 'Para usar o Linsora você precisa de uma assinatura ativa. Escolha um plano abaixo para continuar.';
+  }
+  const screen = document.getElementById('subscriptionScreen');
+  if (screen) {
+    screen.classList.remove('hidden');
+    screen.classList.add('active');
+  }
+}
+
+/**
+ * Ponto de entrada controlado para o fluxo de autorização.
+ * Reexecuta a verificação real de assinatura e roteia as telas — não concede
+ * acesso por si só (fail-closed). Exposto de forma mínima para automação e
+ * diagnóstico; a autorização continua vindo do servidor (ou modo local sem
+ * backend, onde não há autoridade de assinatura).
+ */
+window.LinsoraAccess = {
+  canEnter(subscription) {
+    return window.supabaseRepo.canEnterWithSubscription(subscription);
+  },
+  async refreshAccess() {
+    const user = window.linsoraStore?.state?.user;
+    const gate = user && user.id
+      ? await window.supabaseRepo.checkSubscriptionAccess(user.id)
+      : { state: 'blocked', reason: 'no-session' };
+    if (gate.state === 'granted' || gate.state === 'unavailable') {
+      showAppMain();
+    } else {
+      showSubscriptionRequired(gate);
+    }
+    return gate.state;
+  },
+};
 
 /**
  * Consentimento explícito para reivindicar recorrências guest.
  * Chamado após autenticação bem-sucedida e ANTES da carga definitiva da
  * conta (loadUserData). Sem recibo anterior e com candidatos placeholder,
  * pergunta ao usuário; sem candidatos, segue sem UI extra. Nunca usa
- * grantAppAccess/SIGNED_IN como prova — só a resposta a este prompt.
+ * a entrada no app como prova — só a resposta a este prompt.
  * @returns {Promise<boolean>} true = Importar, false = Começar do zero.
  */
 async function resolveGuestRecurringConsent(user) {
@@ -809,6 +894,13 @@ function setupEventListeners() {
           LinsoraUI.showToast(res.message, 'error');
           return;
         }
+        // Gate de acesso pago após autenticação (cadastro continua
+        // independente da autorização; sem assinatura, tela bloqueada).
+        const gateReg = await window.supabaseRepo.checkSubscriptionAccess(res.user.id);
+        if (gateReg.state !== 'granted' && gateReg.state !== 'unavailable') {
+          showSubscriptionRequired(gateReg);
+          return;
+        }
         const claimConsent = await resolveGuestRecurringConsent(res.user);
         await window.linsoraStore.loadUserData(res.user, { claimGuestRecurring: claimConsent });
         // O loadUserData já garante as ocorrências; reforço idempotente do
@@ -820,6 +912,13 @@ function setupEventListeners() {
           LinsoraUI.showToast(res.message, 'error');
           return;
         }
+        // Gate de acesso pago após autenticação (login continua independente
+        // da autorização; sem assinatura, tela bloqueada).
+        const gateLogin = await window.supabaseRepo.checkSubscriptionAccess(res.user.id);
+        if (gateLogin.state !== 'granted' && gateLogin.state !== 'unavailable') {
+          showSubscriptionRequired(gateLogin);
+          return;
+        }
         const claimConsent = await resolveGuestRecurringConsent(res.user);
         await window.linsoraStore.loadUserData(res.user, { claimGuestRecurring: claimConsent });
         // O loadUserData já garante as ocorrências; reforço idempotente do
@@ -827,7 +926,7 @@ function setupEventListeners() {
         window.linsoraStore.ensureCurrentWindowOccurrences?.({ silent: true });
       }
 
-      grantAppAccess();
+      showAppMain();
     };
   }
 
@@ -1779,16 +1878,40 @@ function setupEventListeners() {
   });
 
   document.getElementById('btnLogout')?.addEventListener('click', async () => {
-    await window.supabaseRepo.signOut();
-    if (window.linsoraStore) {
-      window.linsoraStore.clearState();
-    }
-
-    if (window.resetAuthMode) window.resetAuthMode();
-
-    const main = document.getElementById('appMain');
-    if (main) main.classList.add('hidden');
-    const auth = document.getElementById('authScreen');
-    if (auth) auth.classList.remove('hidden');
+    await performLogout();
   });
+
+  document.getElementById('btnSubscriptionLogout')?.addEventListener('click', async () => {
+    await performLogout();
+  });
+}
+
+/**
+ * Encerra a sessão e volta para a tela de login, escondendo app e
+ * tela de assinatura. Mesma rotina para o logout do app e o "Sair"
+ * da tela de assinatura bloqueada.
+ */
+async function performLogout() {
+  await window.supabaseRepo.signOut();
+  if (window.linsoraStore) {
+    window.linsoraStore.clearState();
+  }
+
+  if (window.resetAuthMode) window.resetAuthMode();
+
+  const main = document.getElementById('appMain');
+  if (main) {
+    main.classList.remove('active');
+    main.classList.add('hidden');
+  }
+  const subscription = document.getElementById('subscriptionScreen');
+  if (subscription) {
+    subscription.classList.remove('active');
+    subscription.classList.add('hidden');
+  }
+  const auth = document.getElementById('authScreen');
+  if (auth) {
+    auth.classList.remove('hidden');
+    auth.classList.add('active');
+  }
 }

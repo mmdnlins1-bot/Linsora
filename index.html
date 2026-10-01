@@ -211,6 +211,34 @@
       </section>
 
       <!-- ========================================== -->
+      <!-- 3B. TELA DE ASSINATURA (ACESSO BLOQUEADO) -->
+      <!-- Exibida quando a conta autenticada não possui assinatura válida. -->
+      <!-- ========================================== -->
+      <section class="screen subscription-screen hidden" id="subscriptionScreen">
+        <div class="auth-container">
+          <div class="auth-header">
+            <div class="brand-logo-small">
+              <img
+                src="icon-192.png"
+                alt="LINSORA Logo"
+                class="brand-logo-img"
+                draggable="false"
+              />
+              <span>LINSORA</span>
+            </div>
+            <h2>Seu acesso ao Linsora ainda não está ativo</h2>
+            <p id="subscriptionMessage">Para usar o Linsora você precisa de uma assinatura ativa. Escolha um plano abaixo para continuar.</p>
+          </div>
+
+          <div class="subscription-actions">
+            <a class="linsora-btn primary block lg" id="btnSubscribeMensal" href="https://pay.hotmart.com/V107831993J?off=7xk5d8xd" target="_blank" rel="nofollow sponsored noopener">Assinar Plano Mensal — R$ 14,90/mês</a>
+            <a class="linsora-btn primary block lg" id="btnSubscribeAnual" href="https://pay.hotmart.com/V107831993J?off=32op71oh" target="_blank" rel="nofollow sponsored noopener">Assinar Plano Anual — R$ 99,90/ano</a>
+            <button type="button" class="linsora-btn secondary block" id="btnSubscriptionLogout">Sair</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- ========================================== -->
       <!-- 4. CONTEÚDO PRINCIPAL DAS ABAS (APP MAIN)  -->
       <!-- ========================================== -->
       <main class="app-main hidden" id="appMain">

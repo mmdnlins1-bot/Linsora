@@ -478,6 +478,59 @@ class SupabaseRepository {
     return { success: false };
   }
 
+  /**
+   * Regra de acesso pago (fonte de verdade: public.subscriptions).
+   * NUNCA usa profiles.plan, localStorage, cache ou estado do cliente.
+   * Libera somente: status 'active' com vigência válida/ausente, ou
+   * 'canceled' com current_period_end futuro. Todo o resto bloqueia.
+   * @param {Object|null} sub Linha de subscriptions { status, current_period_end }
+   * @returns {boolean}
+   */
+  canEnterWithSubscription(sub) {
+    if (!sub || typeof sub !== 'object') return false;
+    if (sub.status !== 'active' && sub.status !== 'canceled') return false;
+    // Sem vigência: só 'active' entra; 'canceled' exige período futuro válido.
+    if (!sub.current_period_end) return sub.status === 'active';
+    const end = new Date(sub.current_period_end).getTime();
+    if (Number.isNaN(end)) return false;
+    return end > Date.now();
+  }
+
+  /**
+   * Consulta a assinatura do usuário para o gate de acesso.
+   * Usa a sessão autenticada (RLS: usuário lê somente a própria assinatura).
+   * @returns {Promise<{state:'granted'|'blocked'|'unavailable'|'error', subscription?, reason?}>}
+   * - granted: assinatura válida (pode entrar).
+   * - blocked: sem assinatura, inativa/expirada ou sem identidade de servidor.
+   * - unavailable: sem backend Supabase configurado (modo local/teste sem
+   *   autoridade de assinatura — preserva o comportamento legado; em produção
+   *   o Supabase está sempre configurado).
+   * - error: falha técnica (fail-closed: o app deve bloquear e pedir retry).
+   */
+  async checkSubscriptionAccess(userId) {
+    if (!this.supabase) return { state: 'unavailable' };
+    const id = String(userId || '');
+    if (!id || id === 'guest' || id === 'usr_guest' || id.startsWith('usr_')) {
+      return { state: 'blocked', reason: 'no-server-identity' };
+    }
+    try {
+      const { data, error } = await this.supabase
+        .from('subscriptions')
+        .select('status,current_period_end,plan')
+        .eq('user_id', id)
+        .limit(1);
+      if (error) return { state: 'error', reason: error.message || 'query-failed' };
+      const row = Array.isArray(data) && data.length > 0 ? data[0] : null;
+      if (!row) return { state: 'blocked', reason: 'no-subscription' };
+      if (this.canEnterWithSubscription(row)) {
+        return { state: 'granted', subscription: row };
+      }
+      return { state: 'blocked', reason: row.status || 'inactive' };
+    } catch (e) {
+      return { state: 'error', reason: (e && e.message) || 'lookup-failed' };
+    }
+  }
+
   generateLocalUserId(email) {
     if (!email) return 'usr_guest';
     const clean = String(email).toLowerCase().trim();

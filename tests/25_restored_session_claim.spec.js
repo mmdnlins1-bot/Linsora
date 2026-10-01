@@ -71,7 +71,10 @@ test.describe('25. Claim na sessao restaurada', () => {
     await page.clock.install({ time: FIXED_NOW });
     await seedRestoredSession(page, authId, seedOpts);
     await page.reload();
-    await page.waitForFunction(() => typeof window.grantAppAccess === 'function', { timeout: 10000 });
+    await page.waitForFunction(() => {
+      const splash = document.getElementById('splashScreen');
+      return window.linsoraStore && splash && !splash.classList.contains('active');
+    }, { timeout: 10000 });
   }
 
   async function waitBootUser(page, authId) {
