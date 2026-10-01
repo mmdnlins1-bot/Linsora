@@ -5,7 +5,8 @@
  *   LINSORA_SUPABASE_URL
  *   LINSORA_SUPABASE_ANON_KEY
  * e preenche as meta tags `linsora:supabase-url` / `linsora:supabase-anon-key`
- * na cópia de `index.html` gerada em `dist/`.
+ * na cópia de `index.html` gerada em `dist/` (e nas demais páginas que
+ * consomem a configuração, como `reset-password.html`).
  *
  * - O código-fonte mantém apenas placeholders (`content=""`); nada é gravado no Git.
  * - NUNCA usa `service_role` (nem mesmo lê essa variável).
@@ -29,6 +30,7 @@ const STATIC_ENTRIES = [
   'landing.html',
   'offline.html',
   'bemvindo.html',
+  'reset-password.html',
   'manifest.webmanifest',
   'sw.js',
   'icon-192.png',
@@ -83,27 +85,34 @@ function main() {
     copyRecursive(src, path.join(DIST, entry));
   }
 
-  const indexPath = path.join(DIST, 'index.html');
-  let html = fs.readFileSync(indexPath, 'utf8');
+  // Injeta a configuração pública nas páginas que a consomem
+  // (placeholders vazios são mantidos quando as variáveis não existem).
+  const injectTargets = ['index.html', 'reset-password.html'];
   let urlInjected = false;
   let keyInjected = false;
 
-  if (supabaseUrl && isPlausibleUrl(supabaseUrl) && html.includes(PLACEHOLDER_URL)) {
-    html = html.replace(
-      PLACEHOLDER_URL,
-      `<meta name="linsora:supabase-url" content="${escapeHtmlAttr(supabaseUrl)}">`
-    );
-    urlInjected = true;
-  }
-  if (anonKey && html.includes(PLACEHOLDER_KEY)) {
-    html = html.replace(
-      PLACEHOLDER_KEY,
-      `<meta name="linsora:supabase-anon-key" content="${escapeHtmlAttr(anonKey)}">`
-    );
-    keyInjected = true;
-  }
+  for (const target of injectTargets) {
+    const targetPath = path.join(DIST, target);
+    if (!fs.existsSync(targetPath)) continue;
+    let html = fs.readFileSync(targetPath, 'utf8');
 
-  fs.writeFileSync(indexPath, html);
+    if (supabaseUrl && isPlausibleUrl(supabaseUrl) && html.includes(PLACEHOLDER_URL)) {
+      html = html.replace(
+        PLACEHOLDER_URL,
+        `<meta name="linsora:supabase-url" content="${escapeHtmlAttr(supabaseUrl)}">`
+      );
+      urlInjected = true;
+    }
+    if (anonKey && html.includes(PLACEHOLDER_KEY)) {
+      html = html.replace(
+        PLACEHOLDER_KEY,
+        `<meta name="linsora:supabase-anon-key" content="${escapeHtmlAttr(anonKey)}">`
+      );
+      keyInjected = true;
+    }
+
+    fs.writeFileSync(targetPath, html);
+  }
 
   // Log seguro: presença/ausência apenas, nunca valores.
   console.log(

@@ -892,7 +892,9 @@ class SupabaseRepository {
     const cleanEmail = String(email || '').toLowerCase().trim();
     if (this.supabase) {
       try {
-        const { error } = await this.supabase.auth.resetPasswordForEmail(cleanEmail);
+        const { error } = await this.supabase.auth.resetPasswordForEmail(cleanEmail, {
+          redirectTo: this.getPasswordRecoveryRedirect(),
+        });
         if (error) throw error;
         return { success: true, message: 'Link de redefinição enviado para o seu e-mail!' };
       } catch (err) {
@@ -900,6 +902,29 @@ class SupabaseRepository {
       }
     }
     return { success: true, message: 'Solicitação de recuperação de senha enviada.' };
+  }
+
+  /**
+   * URL de retorno do e-mail de recuperação de senha (fluxo "Esqueci minha senha").
+   * Produção: página dedicada de redefinição. Demais origens (dev local,
+   * previews): a mesma página resolvida a partir da origem atual — sem
+   * hardcode de localhost e sem segredos. O Supabase valida esse destino
+   * contra os Redirect URLs permitidos no painel.
+   */
+  getPasswordRecoveryRedirect() {
+    const PROD_RECOVERY_URL = 'https://controle-financeiro-controle-financeiro-linsora.vercel.app/reset-password.html';
+    try {
+      const origin = typeof window !== 'undefined' && window.location
+        ? String(window.location.origin || '')
+        : '';
+      if (origin === 'https://controle-financeiro-controle-financeiro-linsora.vercel.app') {
+        return PROD_RECOVERY_URL;
+      }
+      if (origin && origin !== 'null' && /^https?:\/\//.test(origin)) {
+        return origin.replace(/\/+$/, '') + '/reset-password.html';
+      }
+    } catch (e) { /* usa o destino de produção como fallback seguro */ }
+    return PROD_RECOVERY_URL;
   }
 
   mapAuthErrorMessage(msg) {
