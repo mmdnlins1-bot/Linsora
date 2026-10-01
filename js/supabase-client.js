@@ -531,6 +531,52 @@ class SupabaseRepository {
     }
   }
 
+  /**
+   * Tenta vincular eventos Hotmart órfãos (compra antes do cadastro) à conta
+   * autenticada, via endpoint server-side POST /api/claim-subscription.
+   * Envia SOMENTE o access_token da sessão atual; nunca user_id/email
+   * arbitrários, nunca service_role (só o servidor a possui).
+   * @returns {Promise<{success:boolean, claimed?:boolean, status?:string, plan?:string, message?:string, transportError?:boolean}>}
+   */
+  async claimSubscription() {
+    if (!this.supabase) {
+      return { success: false, message: 'Sessão indisponível para verificação.' };
+    }
+    try {
+      const { data: sessionData, error: sessionError } = await this.supabase.auth.getSession();
+      const token = sessionData && sessionData.session && sessionData.session.access_token;
+      if (sessionError || !token) {
+        return { success: false, message: 'Sessão expirada. Entre novamente.' };
+      }
+      let resp = null;
+      try {
+        resp = await fetch('/api/claim-subscription', {
+          method: 'POST',
+          headers: { Authorization: 'Bearer ' + token },
+        });
+      } catch (e) {
+        return { success: false, transportError: true, message: 'Serviço indisponível. Tente novamente.' };
+      }
+      let body = null;
+      try {
+        body = await resp.json();
+      } catch (e) {
+        body = null;
+      }
+      if (!resp.ok || !body || typeof body !== 'object') {
+        return { success: false, transportError: true, message: 'Serviço indisponível. Tente novamente.' };
+      }
+      return {
+        success: true,
+        claimed: body.claimed === true,
+        status: typeof body.status === 'string' ? body.status : null,
+        plan: typeof body.plan === 'string' ? body.plan : null,
+      };
+    } catch (e) {
+      return { success: false, transportError: true, message: 'Serviço indisponível. Tente novamente.' };
+    }
+  }
+
   generateLocalUserId(email) {
     if (!email) return 'usr_guest';
     const clean = String(email).toLowerCase().trim();

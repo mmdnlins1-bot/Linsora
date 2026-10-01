@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Pagamento recebido. Ative seu acesso ao Linsora criando sua conta com o mesmo e-mail da compra.">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Pagamento recebido — Linsora</title>
+  <link rel="icon" type="image/png" href="icon-192.png">
+  <style>
+    :root {
+      --bg: #070B12;
+      --card: #111C30;
+      --text: #F8FAFC;
+      --muted: #94A3B8;
+      --accent: #10B981;
+      --accent-dark: #059669;
+      --border: rgba(255, 255, 255, 0.1);
+      --radius: 24px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: radial-gradient(circle at 50% 15%, #111C30 0%, var(--bg) 100%);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px 16px;
+    }
+    .card {
+      width: 100%;
+      max-width: 440px;
+      background: rgba(17, 26, 44, 0.9);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 32px 28px;
+      text-align: center;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      font-weight: 800;
+      letter-spacing: 2px;
+      margin-bottom: 20px;
+    }
+    .brand img { width: 36px; height: 36px; }
+    .check {
+      width: 64px;
+      height: 64px;
+      border-radius: 50%;
+      background: rgba(16, 185, 129, 0.15);
+      border: 2px solid var(--accent);
+      color: var(--accent);
+      font-size: 30px;
+      line-height: 60px;
+      margin: 0 auto 18px;
+    }
+    h1 { font-size: 24px; margin-bottom: 12px; }
+    p { color: var(--muted); font-size: 15px; line-height: 1.6; margin-bottom: 12px; }
+    p strong { color: var(--text); }
+    .actions { display: flex; flex-direction: column; gap: 12px; margin-top: 24px; }
+    .btn {
+      display: block;
+      padding: 14px 22px;
+      border-radius: 12px;
+      font-size: 15px;
+      font-weight: 700;
+      text-decoration: none;
+      text-align: center;
+    }
+    .btn-primary { background: linear-gradient(135deg, var(--accent), var(--accent-dark)); color: #FFFFFF; border: none; }
+    .btn-secondary { background: transparent; color: var(--text); border: 1px solid var(--border); }
+    .fine { font-size: 12.5px; margin-top: 18px; }
+  </style>
+</head>
+<body>
+  <main class="card">
+    <div class="brand"><img src="icon-192.png" alt="Linsora Logo"><span>LINSORA</span></div>
+    <div class="check" aria-hidden="true">✓</div>
+    <h1>Seu pagamento foi recebido</h1>
+    <p>A confirmação é processada de forma automática. Assim que estiver tudo certo, seu acesso é liberado.</p>
+    <p>Para ativar seu acesso ao Linsora, <strong>crie sua conta usando o mesmo e-mail informado na compra</strong>.</p>
+    <div class="actions">
+      <a class="btn btn-primary" href="/">Criar minha conta</a>
+      <a class="btn btn-secondary" href="/">Já tenho uma conta</a>
+    </div>
+    <p class="fine">Pagamentos processados com segurança pela Hotmart.</p>
+  </main>
+</body>
+</html>

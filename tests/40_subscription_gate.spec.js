@@ -177,4 +177,176 @@ test.describe('40. Gate de acesso pago', () => {
     await expect(page.locator('#btnSubscribeAnual')).toHaveAttribute('href', ANUAL_URL);
     await expect(page.locator('#subscriptionScreen h2')).toContainText('ainda não está ativo');
   });
+
+  // Boot com sessão restaurada: semeia sessão local, instala stubs via
+  // add_init_script (sobrevivem ao reload) e recarrega para o boot real.
+  async function seedBootSession(page, uid) {
+    await page.evaluate((id) => {
+      localStorage.setItem('LINSORA_SEEN_ONBOARDING', 'true');
+      localStorage.setItem('LINSORA_ACTIVE_LOCAL_SESSION', JSON.stringify({ id, name: 'Boot', email: 'boot@linsora.com.br' }));
+      localStorage.setItem(`LINSORA_DB_CACHE_${id}`, JSON.stringify({
+        user: { id, name: 'Boot', email: 'boot@linsora.com.br' },
+        accounts: [], transactions: [], goals: [], cards: [],
+        pixKeys: [], fixedBills: [], recurringBills: [], occurrences: [],
+      }));
+    }, uid);
+  }
+
+  async function installBootStubs(page, scriptedChecks, claimResult) {
+    await page.addInitScript(({ scripted, claim }) => {
+      window.__claimCalls__ = 0;
+      window.__gateScript__ = [...scripted];
+      window.__claimResult__ = claim;
+      const wrap = () => {
+        const repo = window.supabaseRepo;
+        if (repo && !repo.__testWrapped) {
+          repo.__testWrapped = true;
+          repo.checkSubscriptionAccess = async () => {
+            if (window.__gateScript__.length) return window.__gateScript__.shift();
+            return { state: 'blocked', reason: 'sem-roteiro' };
+          };
+          repo.claimSubscription = async () => {
+            window.__claimCalls__ += 1;
+            return window.__claimResult__;
+          };
+        }
+      };
+      if (window.supabaseRepo) wrap();
+      const iv = setInterval(() => {
+        wrap();
+        if (window.supabaseRepo && window.supabaseRepo.__testWrapped) clearInterval(iv);
+      }, 20);
+    }, { scripted: scriptedChecks, claim: claimResult });
+  }
+
+  async function claimCalls(page) {
+    return page.evaluate(() => window.__claimCalls__ || 0);
+  }
+
+  async function waitBootRoute(page) {
+    await page.waitForFunction(() => {
+      const noHidden = (el) => el && !el.classList.contains('hidden');
+      return noHidden(document.getElementById('appMain')) ||
+             noHidden(document.getElementById('subscriptionScreen'));
+    }, { timeout: 15000 });
+  }
+
+  test('21. boot restaurado com ativa entra sem claim', async ({ page }) => {
+    const uid = 'aaaaaaaa-1111-4222-8333-444444444444';
+    await page.goto('/');
+    await page.waitForFunction(
+      () => window.linsoraStore && window.LinsoraAccess && window.supabaseRepo,
+      { timeout: 10000 }
+    );
+    await seedBootSession(page, uid);
+    await installBootStubs(page, [{ state: 'granted' }], { success: true, claimed: false });
+    await page.reload();
+    await page.waitForFunction(
+      () => window.linsoraStore && window.LinsoraAccess && window.supabaseRepo,
+      { timeout: 10000 }
+    );
+    await waitBootRoute(page);
+    await expect(page.locator('#appMain')).toBeVisible();
+    await expect(page.locator('#subscriptionScreen')).toBeHidden();
+    expect(await claimCalls(page)).toBe(0);
+    const storeId = await page.evaluate(() => window.linsoraStore.state.user && window.linsoraStore.state.user.id);
+    expect(storeId).toBe(uid);
+  });
+
+  test('22. boot bloqueado com orfao faz claim e libera', async ({ page }) => {
+    const uid = 'bbbbbbbb-1111-4222-8333-444444444444';
+    await page.goto('/');
+    await page.waitForFunction(
+      () => window.linsoraStore && window.LinsoraAccess && window.supabaseRepo,
+      { timeout: 10000 }
+    );
+    await seedBootSession(page, uid);
+    await installBootStubs(
+      page,
+      [{ state: 'blocked', reason: 'no-subscription' }, { state: 'granted' }],
+      { success: true, claimed: true, status: 'active', plan: 'mensal' }
+    );
+    await page.reload();
+    await page.waitForFunction(
+      () => window.linsoraStore && window.LinsoraAccess && window.supabaseRepo,
+      { timeout: 10000 }
+    );
+    await waitBootRoute(page);
+    await expect(page.locator('#appMain')).toBeVisible();
+    await expect(page.locator('#subscriptionScreen')).toBeHidden();
+    expect(await claimCalls(page)).toBe(1);
+  });
+
+  test('23. boot bloqueado sem compra continua bloqueado', async ({ page }) => {
+    const uid = 'cccccccc-1111-4222-8333-444444444444';
+    await page.goto('/');
+    await page.waitForFunction(
+      () => window.linsoraStore && window.LinsoraAccess && window.supabaseRepo,
+      { timeout: 10000 }
+    );
+    await seedBootSession(page, uid);
+    await installBootStubs(
+      page,
+      [{ state: 'blocked', reason: 'no-subscription' }, { state: 'blocked', reason: 'no-subscription' }],
+      { success: true, claimed: false }
+    );
+    await page.reload();
+    await page.waitForFunction(
+      () => window.linsoraStore && window.LinsoraAccess && window.supabaseRepo,
+      { timeout: 10000 }
+    );
+    await waitBootRoute(page);
+    await expect(page.locator('#subscriptionScreen')).toBeVisible();
+    await expect(page.locator('#appMain')).toBeHidden();
+    await expect(page.locator('#subscriptionMessage')).toContainText('mesmo e-mail');
+    expect(await claimCalls(page)).toBe(1);
+  });
+
+  test('24. claim no boot executa no maximo uma vez', async ({ page }) => {
+    const uid = 'dddddddd-1111-4222-8333-444444444444';
+    await page.goto('/');
+    await page.waitForFunction(
+      () => window.linsoraStore && window.LinsoraAccess && window.supabaseRepo,
+      { timeout: 10000 }
+    );
+    await seedBootSession(page, uid);
+    await installBootStubs(
+      page,
+      [{ state: 'blocked', reason: 'no-subscription' }, { state: 'granted' }],
+      { success: true, claimed: true, status: 'active', plan: 'anual' }
+    );
+    await page.reload();
+    await page.waitForFunction(
+      () => window.linsoraStore && window.LinsoraAccess && window.supabaseRepo,
+      { timeout: 10000 }
+    );
+    await waitBootRoute(page);
+    await expect(page.locator('#appMain')).toBeVisible();
+    expect(await claimCalls(page)).toBe(1);
+  });
+
+  test('25. erro na API do claim mantem fail-closed no boot', async ({ page }) => {
+    const uid = 'eeeeeeee-1111-4222-8333-444444444444';
+    await page.goto('/');
+    await page.waitForFunction(
+      () => window.linsoraStore && window.LinsoraAccess && window.supabaseRepo,
+      { timeout: 10000 }
+    );
+    await seedBootSession(page, uid);
+    await installBootStubs(
+      page,
+      [{ state: 'blocked', reason: 'no-subscription' }],
+      { success: false, transportError: true }
+    );
+    await page.reload();
+    await page.waitForFunction(
+      () => window.linsoraStore && window.LinsoraAccess && window.supabaseRepo,
+      { timeout: 10000 }
+    );
+    await waitBootRoute(page);
+    await expect(page.locator('#subscriptionScreen')).toBeVisible();
+    await expect(page.locator('#appMain')).toBeHidden();
+    await expect(page.locator('#subscriptionMessage')).toContainText('conexão');
+    expect(await claimCalls(page)).toBe(1);
+  });
 });

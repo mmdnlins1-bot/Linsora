@@ -81,13 +81,15 @@ document.addEventListener('DOMContentLoaded', async () => {
   // reload com claim é idempotente (dedupe por ID + chave natural).
   if (sessionRes.success) {
     // Gate de acesso pago: revalida a assinatura no servidor ANTES de entrar.
-    // 'granted'/'unavailable' (sem backend configurado) seguem o fluxo normal;
-    // 'blocked'/'error' exibem a tela de assinatura (fail-closed no erro).
+    // 'granted'/'unavailable' (sem backend configurado) seguem o fluxo normal.
+    // Bloqueado: UMA única tentativa de claim (compra feita após o último
+    // login com a sessão ainda restaurada) e, se continuar bloqueado, tela
+    // de assinatura (fail-closed). Sem loop.
     const gate = await window.supabaseRepo.checkSubscriptionAccess(sessionRes.user.id);
     if (gate.state !== 'granted' && gate.state !== 'unavailable') {
       renderAppUI(window.linsoraStore.state);
-      showSubscriptionRequired(gate);
-      return;
+      const canProceed = await ensureAccessOrClaim(sessionRes.user.id);
+      if (!canProceed) return;
     }
     // Carga base (reaplica recibo 'imported' pré-existente, se houver).
     await window.linsoraStore.loadUserData(sessionRes.user);
@@ -186,7 +188,7 @@ function showAppMain() {
  * Exibe a tela de assinatura bloqueada (sem assinatura válida ou falha na
  * verificação — fail-closed). Não carrega dados do usuário neste estado.
  */
-function showSubscriptionRequired(gate) {
+function showSubscriptionRequired(gate, customMessage) {
   const splash = document.getElementById('splashScreen');
   if (splash) {
     splash.classList.remove('active');
@@ -209,15 +211,47 @@ function showSubscriptionRequired(gate) {
   }
   const msg = document.getElementById('subscriptionMessage');
   if (msg) {
-    msg.textContent = (gate && gate.state === 'error')
-      ? 'Não foi possível verificar sua assinatura. Verifique sua conexão e tente novamente.'
-      : 'Para usar o Linsora você precisa de uma assinatura ativa. Escolha um plano abaixo para continuar.';
+    msg.textContent = typeof customMessage === 'string' && customMessage
+      ? customMessage
+      : (gate && gate.state === 'error')
+        ? 'Não foi possível verificar sua assinatura. Verifique sua conexão e tente novamente.'
+        : 'Para usar o Linsora você precisa de uma assinatura ativa. Escolha um plano abaixo para continuar.';
   }
   const screen = document.getElementById('subscriptionScreen');
   if (screen) {
     screen.classList.remove('hidden');
     screen.classList.add('active');
   }
+}
+
+/**
+ * Fluxo pós-autenticação para quem ainda não tem acesso: UMA única tentativa
+ * de claim server-side (vincula compra feita antes do cadastro), seguida de
+ * reconsulta. Retorna true se pode prosseguir para carga/entrada.
+ * Fail-closed: API indisponível ou sem compra correspondente mantém o bloqueio.
+ */
+async function ensureAccessOrClaim(userId) {
+  let claimRes = null;
+  try {
+    claimRes = await window.supabaseRepo.claimSubscription();
+  } catch (e) {
+    claimRes = { success: false, transportError: true };
+  }
+  if (!claimRes || !claimRes.success) {
+    showSubscriptionRequired({ state: 'error' });
+    return false;
+  }
+  const gate = await window.supabaseRepo.checkSubscriptionAccess(userId);
+  if (gate.state === 'granted' || gate.state === 'unavailable') return true;
+  if (!claimRes.claimed) {
+    showSubscriptionRequired(
+      gate,
+      'Nenhuma compra encontrada para este e-mail. Use o mesmo e-mail informado na compra Hotmart e tente novamente.'
+    );
+  } else {
+    showSubscriptionRequired(gate);
+  }
+  return false;
 }
 
 /**
@@ -895,11 +929,12 @@ function setupEventListeners() {
           return;
         }
         // Gate de acesso pago após autenticação (cadastro continua
-        // independente da autorização; sem assinatura, tela bloqueada).
+        // independente da autorização; sem assinatura, tenta o claim uma vez
+        // e, se continuar bloqueado, exibe a tela de assinatura).
         const gateReg = await window.supabaseRepo.checkSubscriptionAccess(res.user.id);
         if (gateReg.state !== 'granted' && gateReg.state !== 'unavailable') {
-          showSubscriptionRequired(gateReg);
-          return;
+          const canProceed = await ensureAccessOrClaim(res.user.id);
+          if (!canProceed) return;
         }
         const claimConsent = await resolveGuestRecurringConsent(res.user);
         await window.linsoraStore.loadUserData(res.user, { claimGuestRecurring: claimConsent });
@@ -913,11 +948,12 @@ function setupEventListeners() {
           return;
         }
         // Gate de acesso pago após autenticação (login continua independente
-        // da autorização; sem assinatura, tela bloqueada).
+        // da autorização; sem assinatura, tenta o claim uma vez e, se
+        // continuar bloqueado, exibe a tela de assinatura).
         const gateLogin = await window.supabaseRepo.checkSubscriptionAccess(res.user.id);
         if (gateLogin.state !== 'granted' && gateLogin.state !== 'unavailable') {
-          showSubscriptionRequired(gateLogin);
-          return;
+          const canProceed = await ensureAccessOrClaim(res.user.id);
+          if (!canProceed) return;
         }
         const claimConsent = await resolveGuestRecurringConsent(res.user);
         await window.linsoraStore.loadUserData(res.user, { claimGuestRecurring: claimConsent });
