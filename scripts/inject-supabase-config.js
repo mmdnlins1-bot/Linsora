@@ -28,6 +28,7 @@ const STATIC_ENTRIES = [
   'index.html',
   'landing.html',
   'offline.html',
+  'bemvindo.html',
   'manifest.webmanifest',
   'sw.js',
   'icon-192.png',
