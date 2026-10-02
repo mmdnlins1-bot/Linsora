@@ -1270,6 +1270,100 @@ class LinsoraUIComponentEngine {
   showToast(message, type = 'success') {
     LinsoraUtils.showToast(message, type);
   }
+
+  /**
+   * Teclado virtual (mobile): mantém o campo em foco visível.
+   * Somente mobile (`max-width: 768px`): `focusin` delegado + `visualViewport`.
+   * Sem polling, sem loops, sem roubar foco, sem fechar modal/backdrop.
+   * Cobre login, "Esqueci minha senha" e demais `.linsora-modal-overlay`.
+   * Idempotente: chamadas repetidas não registram listeners extras.
+   */
+  initMobileKeyboardHandling() {
+    if (this._keyboardHandlingInit) return;
+    this._keyboardHandlingInit = true;
+    try {
+      if (typeof window === 'undefined' || typeof document === 'undefined') return;
+      if (!window.matchMedia) return;
+
+      const isMobileView = () => {
+        try { return window.matchMedia('(max-width: 768px)').matches; }
+        catch (e) { return false; }
+      };
+      const isCoarsePointer = () => {
+        try { return window.matchMedia('(pointer: coarse)').matches; }
+        catch (e) { return false; }
+      };
+      const isField = (el) => {
+        const tag = el && el.tagName ? String(el.tagName).toLowerCase() : '';
+        return tag === 'input' || tag === 'textarea' || tag === 'select';
+      };
+      const isInVisibleArea = (el) => {
+        try {
+          const rect = el.getBoundingClientRect();
+          const vv = window.visualViewport || null;
+          const viewTop = vv && typeof vv.offsetTop === 'number' ? vv.offsetTop : 0;
+          const viewHeight = vv && typeof vv.height === 'number'
+            ? vv.height
+            : (window.innerHeight || 0);
+          return rect.top >= viewTop - 1 && rect.bottom <= viewTop + viewHeight + 1;
+        } catch (e) { return true; }
+      };
+      const ensureFieldVisible = (el) => {
+        if (!el || !isField(el) || !isMobileView()) return;
+        if (document.activeElement !== el) return;
+        if (isInVisibleArea(el)) return; // somente quando necessário
+        try {
+          el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        } catch (e) {
+          try { el.scrollIntoView({ block: 'center' }); }
+          catch (e2) { /* ignora: nunca quebra digitação */ }
+        }
+      };
+
+      document.addEventListener('focusin', (e) => {
+        const target = e && e.target ? e.target : null;
+        if (!isField(target) || !isMobileView()) return;
+        // Um frame para o layout assentar com o teclado abrindo (iOS).
+        window.requestAnimationFrame(() => ensureFieldVisible(target));
+      }, { passive: true });
+
+      const vv = window.visualViewport;
+      if (vv && typeof vv.addEventListener === 'function') {
+        let handling = false; // anti-recursão: scroll não re-dispara tratamento
+        vv.addEventListener('resize', () => {
+          if (handling) return;
+          if (!isMobileView() || !isCoarsePointer()) return;
+          const active = document.activeElement;
+          if (!isField(active)) return;
+          // Teclado aberto = viewport visual menor que a janela.
+          let viewHeight = 0;
+          try { viewHeight = vv.height; } catch (e) { viewHeight = 0; }
+          if (!viewHeight || viewHeight >= (window.innerHeight || 0) - 1) return;
+          handling = true;
+          try { ensureFieldVisible(active); }
+          finally {
+            window.requestAnimationFrame(() => { handling = false; });
+          }
+        });
+      }
+    } catch (e) { /* nunca quebra o app por causa do teclado */ }
+  }
 }
 
 window.LinsoraUI = new LinsoraUIComponentEngine();
+
+// Teclado virtual mobile: auto-inicialização única (desktop vira no-op).
+try {
+  const bootKeyboardHandling = () => {
+    try {
+      if (window.LinsoraUI && typeof window.LinsoraUI.initMobileKeyboardHandling === 'function') {
+        window.LinsoraUI.initMobileKeyboardHandling();
+      }
+    } catch (e) { /* nunca quebra o boot */ }
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', bootKeyboardHandling);
+  } else {
+    bootKeyboardHandling();
+  }
+} catch (e) { /* nunca quebra o boot */ }

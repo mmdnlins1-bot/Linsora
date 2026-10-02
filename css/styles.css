@@ -660,13 +660,30 @@ body.fullscreen-mode .app-frame {
 
   .app-frame {
     width: 100vw !important;
-    height: 100dvh !important;
     height: 100vh !important;
+    height: 100dvh !important;
     max-width: 100% !important;
     max-height: 100% !important;
     border: none !important;
     border-radius: 0 !important;
     box-shadow: none !important;
+  }
+
+  /* Teclado virtual: o conteúdo do modal acompanha a altura visível
+     (navegadores sem dvh ignoram a 2ª linha e mantêm 86vh). */
+  .linsora-modal-content {
+    max-height: 86vh !important;
+    max-height: 86dvh !important;
+  }
+
+  /* Teclado virtual: telas de autenticação e overlays rolam na vertical
+     somente no mobile (desktop inalterado); sem rolagem horizontal. */
+  .screen,
+  .auth-screen,
+  .linsora-modal-overlay {
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    overscroll-behavior-y: contain;
   }
 
   .device-notch {
