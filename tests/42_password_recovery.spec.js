@@ -536,4 +536,174 @@ test.describe('42. Recuperação de senha', () => {
     }
     expect(dump.hash).toBe('');
   });
+
+  // Pós-recovery (commit da auditoria): botão único + limpeza do snapshot local.
+  const STALE_SNAPSHOT = JSON.stringify({ id: 'usr-ficticio-stale-1', email: 'stale.ficticio@exemplo.com', name: 'Stale Ficticio' });
+
+  async function seedLocalSnapshot(page) {
+    await page.evaluate((snap) => {
+      localStorage.setItem('LINSORA_ACTIVE_LOCAL_SESSION', snap);
+    }, STALE_SNAPSHOT);
+  }
+
+  async function seedIdbSnapshot(page) {
+    await page.evaluate((snap) => new Promise((resolve, reject) => {
+      const req = indexedDB.open('LinsoraSecureDB', 1);
+      req.onupgradeneeded = (e) => {
+        const db = e.target.result;
+        if (!db.objectStoreNames.contains('linsora_auth')) db.createObjectStore('linsora_auth');
+      };
+      req.onsuccess = () => {
+        const db = req.result;
+        try {
+          const tx = db.transaction('linsora_auth', 'readwrite');
+          tx.objectStore('linsora_auth').put(snap, 'LINSORA_ACTIVE_LOCAL_SESSION');
+          tx.oncomplete = () => { try { db.close(); } catch (e) {} resolve(); };
+          tx.onerror = () => { try { db.close(); } catch (e) {} reject(tx.error); };
+        } catch (e) { try { db.close(); } catch (e2) {} reject(e); }
+      };
+      req.onerror = () => reject(req.error);
+    }), STALE_SNAPSHOT);
+  }
+
+  async function readIdbSnapshot(page) {
+    return page.evaluate(() => new Promise((resolve) => {
+      try {
+        const req = indexedDB.open('LinsoraSecureDB', 1);
+        req.onsuccess = () => {
+          const db = req.result;
+          try {
+            if (!db.objectStoreNames.contains('linsora_auth')) { try { db.close(); } catch (e) {} resolve(null); return; }
+            const tx = db.transaction('linsora_auth', 'readonly');
+            const get = tx.objectStore('linsora_auth').get('LINSORA_ACTIVE_LOCAL_SESSION');
+            get.onsuccess = () => { try { db.close(); } catch (e) {} resolve(get.result === undefined ? null : get.result); };
+            get.onerror = () => { try { db.close(); } catch (e) {} resolve(null); };
+          } catch (e) { try { db.close(); } catch (e2) {} resolve(null); }
+        };
+        req.onerror = () => resolve(null);
+      } catch (e) { resolve(null); }
+    }));
+  }
+
+  test('24. (A) sucesso mostra UM único "Voltar para o login"', async ({ page }) => {
+    const counters = { updateUser: 0, logout: 0 };
+    await useFakeSupabaseConfig(page);
+    await mockAuthRest(page, counters);
+    await gotoResetPage(page, RECOVERY_HASH);
+    await waitRecoveryReady(page);
+    // Antes do sucesso o link de texto existe normalmente.
+    await expect(page.locator('#linkBackLogin')).toBeVisible();
+    await fillNewPasswords(page, NEW_PASSWORD);
+    await page.click('#btnSaveNewPassword');
+    await expect(page.locator('#recoveryStatus')).toContainText('Senha alterada com sucesso', { timeout: 10000 });
+    await expect(page.locator('#btnBackToLoginPrimary')).toBeVisible();
+    await expect(page.locator('#linkBackLogin')).toBeHidden();
+    expect(await page.locator('#btnBackToLoginPrimary').getAttribute('href')).toBe('/');
+  });
+
+  test('25. (B) sucesso remove o snapshot local do localStorage', async ({ page }) => {
+    const counters = { updateUser: 0, logout: 0 };
+    await useFakeSupabaseConfig(page);
+    await mockAuthRest(page, counters);
+    await gotoResetPage(page, RECOVERY_HASH);
+    await waitRecoveryReady(page);
+    // Semeia após o boot: o snapshot só precisa existir antes do sucesso.
+    await seedLocalSnapshot(page);
+    await page.evaluate(() => localStorage.setItem('LINSORA_SENTINEL_TEST', 'sentinel-ficticio-1'));
+    expect(await page.evaluate(() => localStorage.getItem('LINSORA_ACTIVE_LOCAL_SESSION'))).not.toBeNull();
+    await fillNewPasswords(page, NEW_PASSWORD);
+    await page.click('#btnSaveNewPassword');
+    await expect(page.locator('#recoveryStatus')).toContainText('Senha alterada com sucesso', { timeout: 10000 });
+    expect(await page.evaluate(() => localStorage.getItem('LINSORA_ACTIVE_LOCAL_SESSION'))).toBeNull();
+    // Outras chaves do app não são apagadas pela limpeza.
+    expect(await page.evaluate(() => localStorage.getItem('LINSORA_SENTINEL_TEST'))).toBe('sentinel-ficticio-1');
+    await page.evaluate(() => localStorage.removeItem('LINSORA_SENTINEL_TEST'));
+  });
+
+  test('26. (C) sucesso remove o snapshot do IndexedDB', async ({ page }) => {
+    const counters = { updateUser: 0, logout: 0 };
+    await useFakeSupabaseConfig(page);
+    await mockAuthRest(page, counters);
+    await gotoResetPage(page, RECOVERY_HASH);
+    await waitRecoveryReady(page);
+    await seedIdbSnapshot(page);
+    expect(await readIdbSnapshot(page)).not.toBeNull();
+    await fillNewPasswords(page, NEW_PASSWORD);
+    await page.click('#btnSaveNewPassword');
+    await expect(page.locator('#recoveryStatus')).toContainText('Senha alterada com sucesso', { timeout: 10000 });
+    expect(await readIdbSnapshot(page)).toBeNull();
+  });
+
+  test('27. (D) pós-recovery com snapshot stale: / abre login, sem planos', async ({ page }) => {
+    const counters = { updateUser: 0, logout: 0 };
+    await useFakeSupabaseConfig(page);
+    await mockAuthRest(page, counters);
+    await gotoResetPage(page, RECOVERY_HASH);
+    await waitRecoveryReady(page);
+    await seedLocalSnapshot(page);
+    await seedIdbSnapshot(page);
+    await fillNewPasswords(page, NEW_PASSWORD);
+    await page.click('#btnSaveNewPassword');
+    await expect(page.locator('#recoveryStatus')).toContainText('Senha alterada com sucesso', { timeout: 10000 });
+    await page.goto('/');
+    await page.waitForFunction(
+      () => window.linsoraStore && window.LinsoraAccess && window.supabaseRepo,
+      { timeout: 10000 }
+    );
+    await expect(page.locator('#authScreen')).toBeVisible({ timeout: 8000 });
+    await expect(page.locator('#appMain')).toBeHidden();
+    await expect(page.locator('#subscriptionScreen')).toBeHidden();
+  });
+
+  test('28. (E) falha no updateUser NÃO limpa o snapshot (só sucesso limpa)', async ({ page }) => {
+    const counters = { updateUser: 0, logout: 0 };
+    await useFakeSupabaseConfig(page);
+    await page.route(FAKE_SUPABASE_URL + '/auth/v1/*', async (route) => {
+      const req = route.request();
+      const url = req.url();
+      if (req.method() === 'PUT' && url.endsWith('/auth/v1/user')) {
+        counters.updateUser += 1;
+        await route.fulfill({ status: 401, contentType: 'application/json', body: JSON.stringify({ msg: 'invalid JWT: token has expired' }) });
+      } else if (url.includes('/auth/v1/logout')) {
+        counters.logout += 1;
+        await route.fulfill({ status: 204, body: '' });
+      } else {
+        await route.fulfill({ status: 200, contentType: 'application/json', body: '{}' });
+      }
+    });
+    await gotoResetPage(page, RECOVERY_HASH);
+    await waitRecoveryReady(page);
+    await seedLocalSnapshot(page);
+    await fillNewPasswords(page, NEW_PASSWORD);
+    await page.click('#btnSaveNewPassword');
+    await expect(page.locator('#recoveryStatus')).toContainText('expirou', { timeout: 10000 });
+    expect(counters.updateUser).toBe(1);
+    expect(await page.evaluate(() => localStorage.getItem('LINSORA_ACTIVE_LOCAL_SESSION'))).not.toBeNull();
+  });
+
+  test('29. (F) pós-sucesso sem segredos residuais', async ({ page }) => {
+    const counters = { updateUser: 0, logout: 0 };
+    const consoleTexts = [];
+    page.on('console', (msg) => consoleTexts.push(msg.text()));
+    await useFakeSupabaseConfig(page);
+    await mockAuthRest(page, counters);
+    await gotoResetPage(page, RECOVERY_HASH);
+    await waitRecoveryReady(page);
+    await seedLocalSnapshot(page);
+    await fillNewPasswords(page, NEW_PASSWORD);
+    await page.click('#btnSaveNewPassword');
+    await expect(page.locator('#recoveryStatus')).toContainText('Senha alterada com sucesso', { timeout: 10000 });
+    const dump = await page.evaluate(() => ({
+      ls: Object.keys(localStorage).map((k) => k + '=' + (localStorage.getItem(k) || '')).join('\n'),
+      url: window.location.href,
+      body: document.body.innerText,
+    }));
+    expect(await page.evaluate(() => localStorage.getItem('LINSORA_ACTIVE_LOCAL_SESSION'))).toBeNull();
+    for (const hay of [consoleTexts.join('\n'), dump.ls, dump.url, dump.body]) {
+      expect(hay).not.toContain(NEW_PASSWORD);
+      expect(hay).not.toContain('fake-access-token-abc123');
+      expect(hay).not.toContain('fake-refresh-token-xyz789');
+      expect(hay).not.toContain('stale.ficticio@exemplo.com');
+    }
+  });
 });
