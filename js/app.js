@@ -41,6 +41,19 @@ window.switchTab = function(tabId) {
 };
 
 document.addEventListener('DOMContentLoaded', async () => {
+  // Trava de segurança secundária: intercepta fluxo de recuperação na raiz antes do boot/gate
+  try {
+    const hash = window.location.hash || '';
+    const search = window.location.search || '';
+    const hasRecoveryHash = /(?:^|[#&])type=recovery(?:&|$)/.test(hash);
+    const hasRecoveryQuery = /(?:^|[?&])type=recovery(?:&|$)/.test(search);
+    const hasAuthCode = /(?:^|[?&])code=/.test(search);
+    if (hasRecoveryHash || hasRecoveryQuery || hasAuthCode) {
+      window.location.replace('./reset-password.html' + search + hash);
+      return;
+    }
+  } catch (e) {}
+
   console.log('🚀 LINSORA Finances — Inicializando aplicativo comercial...');
 
   // 1. Setup básico: store, listeners de UI e máscaras

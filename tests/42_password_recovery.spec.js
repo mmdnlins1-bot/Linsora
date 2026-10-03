@@ -259,4 +259,69 @@ test.describe('42. Recuperação de senha', () => {
     expect(await page.locator('#newPassword').getAttribute('type')).toBe('password');
     expect(await page.locator('#confirmPassword').getAttribute('type')).toBe('password');
   });
+
+  test('11. (A) raiz com recovery hash redireciona para reset-password.html sem abrir login/gate', async ({ page }) => {
+    const counters = { updateUser: 0, logout: 0 };
+    await useFakeSupabaseConfig(page);
+    await mockAuthRest(page, counters);
+    await page.goto('/#access_token=fake-token-123&type=recovery&refresh_token=fake-ref-456&expires_in=3600&token_type=bearer');
+    await page.waitForURL((url) => url.pathname.includes('reset-password.html'), { timeout: 10000 });
+    expect(page.url()).toContain('/reset-password.html');
+    await waitRecoveryReady(page);
+    await expect(page.locator('#recoveryStatus')).toContainText('Defina sua nova senha');
+    await expect(page.locator('#authScreen')).toHaveCount(0);
+    await expect(page.locator('#subscriptionBlockedOverlay')).toHaveCount(0);
+  });
+
+  test('12. (B) raiz com erro/expirado redireciona para reset-password.html com aviso adequado', async ({ page }) => {
+    await useFakeSupabaseConfig(page);
+    await page.goto('/#error=access_denied&error_code=403&error_description=Email+link+is+invalid+or+has+expired&type=recovery');
+    await page.waitForURL((url) => url.pathname.includes('reset-password.html'), { timeout: 10000 });
+    expect(page.url()).toContain('/reset-password.html');
+    await expect(page.locator('#recoveryStatus')).toContainText('expirou ou é inválido', { timeout: 10000 });
+    await expect(page.locator('#resetPasswordForm')).toBeHidden();
+    await expect(page.locator('#linkBackLogin')).toBeVisible();
+  });
+
+  test('13. (C) raiz com PKCE code query redireciona preservando o code', async ({ page }) => {
+    await useFakeSupabaseConfig(page);
+    await page.goto('/?code=auth-code-ficticio-12345');
+    await page.waitForURL((url) => url.pathname.includes('reset-password.html'), { timeout: 10000 });
+    expect(page.url()).toContain('/reset-password.html');
+    expect(page.url()).toContain('code=auth-code-ficticio-12345');
+  });
+
+  test('14. (D) acesso normal à raiz e hashes arbitrários não redirecionam', async ({ page }) => {
+    await gotoAuth(page);
+    expect(page.url()).not.toContain('reset-password.html');
+    await expect(page.locator('#authScreen')).toBeVisible();
+
+    await page.goto('/#outra-coisa');
+    await page.waitForFunction(
+      () => window.linsoraStore && window.LinsoraAccess && window.supabaseRepo,
+      { timeout: 10000 }
+    );
+    expect(page.url()).not.toContain('reset-password.html');
+    await expect(page.locator('#authScreen')).toBeVisible();
+  });
+
+  test('15. (E) fluxo recovery -> reset-password -> voltar para login permanece na raiz sem loop', async ({ page }) => {
+    const counters = { updateUser: 0, logout: 0 };
+    await useFakeSupabaseConfig(page);
+    await mockAuthRest(page, counters);
+    await page.goto('/#access_token=fake-token-loop-123&type=recovery&refresh_token=fake-ref-loop-456&expires_in=3600&token_type=bearer');
+    await page.waitForURL((url) => url.pathname.includes('reset-password.html'), { timeout: 10000 });
+    await waitRecoveryReady(page);
+
+    await page.click('#linkBackLogin');
+    await page.waitForURL((url) => url.pathname === '/' || url.pathname.endsWith('/index.html'), { timeout: 10000 });
+    expect(page.url()).not.toContain('reset-password.html');
+    await page.waitForFunction(
+      () => window.linsoraStore && window.LinsoraAccess && window.supabaseRepo,
+      { timeout: 10000 }
+    );
+    await expect(page.locator('#authScreen')).toBeVisible({ timeout: 8000 });
+    await page.waitForTimeout(1000);
+    expect(page.url()).not.toContain('reset-password.html');
+  });
 });

@@ -28,6 +28,26 @@
   <meta name="linsora:supabase-url" content="">
   <meta name="linsora:supabase-anon-key" content="">
 
+  <!-- Interceptação antecipada do fluxo de recuperação de senha:
+       Quando o Supabase entrega o link de recovery na raiz (#access_token=...&type=recovery
+       ou ?code=...), redireciona imediatamente para /reset-password.html antes do boot,
+       da checagem de sessão ou do subscription gate, preservando query e hash. -->
+  <script>
+    (function () {
+      try {
+        var hash = window.location.hash || '';
+        var search = window.location.search || '';
+        var hasRecoveryHash = /(?:^|[#&])type=recovery(?:&|$)/.test(hash);
+        var hasRecoveryQuery = /(?:^|[?&])type=recovery(?:&|$)/.test(search);
+        var hasAuthCode = /(?:^|[?&])code=/.test(search);
+        if (hasRecoveryHash || hasRecoveryQuery || hasAuthCode) {
+          var target = './reset-password.html' + search + hash;
+          window.location.replace(target);
+        }
+      } catch (e) {}
+    })();
+  </script>
+
   <!-- Configurações PWA & Aplicativo Android Mobile -->
   <meta name="theme-color" content="#070B12">
   <link rel="manifest" href="manifest.webmanifest">
