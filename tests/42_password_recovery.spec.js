@@ -164,7 +164,8 @@ test.describe('42. Recuperação de senha', () => {
     await gotoResetPage(page, RECOVERY_HASH);
     await waitRecoveryReady(page);
     await expect(page.locator('#recoveryStatus')).toContainText('Defina sua nova senha');
-    expect(await page.evaluate(() => window.location.hash)).toBe('');
+    // O SDK (detectSessionInUrl) pode higienizar o hash após consumir;
+    // a página NÃO limpa manualmente antes do sucesso (ver teste 22/G).
     expect(counters.updateUser).toBe(0);
   });
 
@@ -323,5 +324,216 @@ test.describe('42. Recuperação de senha', () => {
     await expect(page.locator('#authScreen')).toBeVisible({ timeout: 8000 });
     await page.waitForTimeout(1000);
     expect(page.url()).not.toContain('reset-password.html');
+  });
+
+  // Cobertura IMPLICIT adicional (A-H). Somente tokens/senhas fictícios.
+  test('16. (A) IMPLICIT válido estabelece sessão sem expor segredo', async ({ page }) => {
+    const counters = { updateUser: 0, logout: 0 };
+    const consoleTexts = [];
+    page.on('console', (msg) => consoleTexts.push(msg.text()));
+    await useFakeSupabaseConfig(page);
+    await mockAuthRest(page, counters);
+    await gotoResetPage(page, RECOVERY_HASH);
+    await waitRecoveryReady(page);
+    // Sessão persistida pelo SDK sob chave sb-*-auth-token (formato interno
+    // pode variar entre versões; basta existir e conter usuário/token fake).
+    const sess = await page.evaluate(() => {
+      const keys = Object.keys(localStorage).filter((k) => k.indexOf('sb-') === 0 && k.indexOf('auth-token') !== -1);
+      if (keys.length === 0) return { hasKeys: false, blob: '' };
+      const blob = keys.map((k) => String(localStorage.getItem(k) || '')).join('\n').slice(0, 2000);
+      return { hasKeys: true, blob };
+    });
+    expect(sess.hasKeys).toBe(true);
+    expect(sess.blob).toContain('fake-access-token-abc123');
+    expect(consoleTexts.join('\n')).not.toContain('fake-access-token-abc123');
+    expect(consoleTexts.join('\n')).not.toContain('fake-refresh-token-xyz789');
+  });
+
+  test('17. (B) sem falso "expirado" antes do timeout; libera após sessão válida', async ({ page }) => {
+    const counters = { updateUser: 0, logout: 0 };
+    await useFakeSupabaseConfig(page);
+    await mockAuthRest(page, counters);
+    await gotoResetPage(page, RECOVERY_HASH);
+    await page.waitForTimeout(400);
+    const earlyStatus = await page.locator('#recoveryStatus').innerText();
+    expect(earlyStatus).not.toContain('expirou ou é inválido');
+    await waitRecoveryReady(page);
+    await expect(page.locator('#recoveryStatus')).toContainText('Defina sua nova senha');
+  });
+
+  test('18. (C) sessão ausente mantém bloqueio e não chama updateUser', async ({ page }) => {
+    const counters = { updateUser: 0, logout: 0 };
+    await useFakeSupabaseConfig(page);
+    await mockAuthRest(page, counters);
+    // Hash de erro explícito: SDK não estabelece sessão; boot expira após timeout.
+    await gotoResetPage(page, '#error=access_denied&error_description=link-expirado-ficticio&type=recovery');
+    await expect(page.locator('#recoveryStatus')).toContainText(/inválido|expirou/, { timeout: 10000 });
+    await expect(page.locator('#resetPasswordForm')).toBeHidden();
+    expect(counters.updateUser).toBe(0);
+  });
+
+  test('19. (D) updateUser usa Authorization Bearer e ocorre 1x no sucesso', async ({ page }) => {
+    const counters = { updateUser: 0, logout: 0 };
+    let authHeader = '';
+    await useFakeSupabaseConfig(page);
+    await page.route(FAKE_SUPABASE_URL + '/auth/v1/*', async (route) => {
+      const req = route.request();
+      const url = req.url();
+      if (req.method() === 'PUT' && url.endsWith('/auth/v1/user')) {
+        counters.updateUser += 1;
+        authHeader = req.headers()['authorization'] || '';
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ id: 'usr-ficticio-rec-1', email: 'rec.ficticia@exemplo.com' }),
+        });
+      } else if (url.includes('/auth/v1/logout')) {
+        counters.logout += 1;
+        await route.fulfill({ status: 204, body: '' });
+      } else {
+        await route.fulfill({ status: 200, contentType: 'application/json', body: '{}' });
+      }
+    });
+    await gotoResetPage(page, RECOVERY_HASH);
+    await waitRecoveryReady(page);
+    await fillNewPasswords(page, NEW_PASSWORD);
+    await page.click('#btnSaveNewPassword');
+    await expect(page.locator('#recoveryStatus')).toContainText('Senha alterada com sucesso', { timeout: 10000 });
+    expect(counters.updateUser).toBe(1);
+    expect(authHeader).toMatch(/^Bearer\s+.+/);
+    expect(authHeader).not.toContain(NEW_PASSWORD);
+  });
+
+  test('20. (E) updateUser 401 orienta novo link sem expor token nem loop', async ({ page }) => {
+    const counters = { updateUser: 0, logout: 0 };
+    const consoleTexts = [];
+    page.on('console', (msg) => consoleTexts.push(msg.text()));
+    await useFakeSupabaseConfig(page);
+    await page.route(FAKE_SUPABASE_URL + '/auth/v1/*', async (route) => {
+      const req = route.request();
+      const url = req.url();
+      if (req.method() === 'PUT' && url.endsWith('/auth/v1/user')) {
+        counters.updateUser += 1;
+        await route.fulfill({ status: 401, contentType: 'application/json', body: JSON.stringify({ msg: 'invalid JWT: unable to parse or verify signature, token has expired' }) });
+      } else if (url.includes('/auth/v1/logout')) {
+        counters.logout += 1;
+        await route.fulfill({ status: 204, body: '' });
+      } else {
+        await route.fulfill({ status: 200, contentType: 'application/json', body: '{}' });
+      }
+    });
+    await gotoResetPage(page, RECOVERY_HASH);
+    await waitRecoveryReady(page);
+    await fillNewPasswords(page, NEW_PASSWORD);
+    await page.click('#btnSaveNewPassword');
+    await expect(page.locator('#recoveryStatus')).toContainText('expirou', { timeout: 10000 });
+    await expect(page.locator('#recoveryStatus')).toContainText('novo link');
+    expect(counters.updateUser).toBe(1);
+    expect(counters.logout).toBe(0);
+    // Sessão expirada bloqueia: botão desabilitado e nenhuma nova chamada,
+    // mesmo com submit programático (sem loop).
+    await expect(page.locator('#btnSaveNewPassword')).toBeDisabled();
+    await page.evaluate(() => {
+      const form = document.getElementById('resetPasswordForm');
+      if (form) form.requestSubmit();
+    });
+    await page.waitForTimeout(500);
+    expect(counters.updateUser).toBe(1);
+    expect(consoleTexts.join('\n')).not.toContain('fake-access-token-abc123');
+    const bodyText = await page.evaluate(() => document.body.innerText);
+    expect(bodyText).not.toContain('fake-access-token-abc123');
+    // Em erro a página NÃO higieniza manualmente (a limpeza só ocorre no
+    // sucesso; o SDK pode já ter consumido o hash ao estabelecer a sessão).
+  });
+
+  test('21. (F) erro de rede permite nova tentativa', async ({ page }) => {
+    const counters = { updateUser: 0, logout: 0 };
+    await useFakeSupabaseConfig(page);
+    let failFirst = true;
+    await page.route(FAKE_SUPABASE_URL + '/auth/v1/*', async (route) => {
+      const req = route.request();
+      const url = req.url();
+      if (req.method() === 'PUT' && url.endsWith('/auth/v1/user')) {
+        counters.updateUser += 1;
+        if (failFirst) {
+          failFirst = false;
+          await route.abort('failed');
+          return;
+        }
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ id: 'usr-ficticio-rec-1', email: 'rec.ficticia@exemplo.com' }),
+        });
+      } else if (url.includes('/auth/v1/logout')) {
+        counters.logout += 1;
+        await route.fulfill({ status: 204, body: '' });
+      } else {
+        await route.fulfill({ status: 200, contentType: 'application/json', body: '{}' });
+      }
+    });
+    await gotoResetPage(page, RECOVERY_HASH);
+    await waitRecoveryReady(page);
+    await fillNewPasswords(page, NEW_PASSWORD);
+    await page.click('#btnSaveNewPassword');
+    await expect(page.locator('#recoveryStatus')).toContainText('conexão', { timeout: 10000 });
+    expect(counters.updateUser).toBe(1);
+    // Retry permitido: segunda tentativa com rede OK deve ter sucesso.
+    await page.click('#btnSaveNewPassword');
+    await expect(page.locator('#recoveryStatus')).toContainText('Senha alterada com sucesso', { timeout: 10000 });
+    expect(counters.updateUser).toBe(2);
+  });
+
+  test('22. (G) sucesso limpa hash somente depois; encerra sessão', async ({ page }) => {
+    const counters = { updateUser: 0, logout: 0 };
+    await useFakeSupabaseConfig(page);
+    await mockAuthRest(page, counters);
+    await gotoResetPage(page, RECOVERY_HASH);
+    await waitRecoveryReady(page);
+    await fillNewPasswords(page, NEW_PASSWORD);
+    await page.click('#btnSaveNewPassword');
+    await expect(page.locator('#recoveryStatus')).toContainText('Senha alterada com sucesso', { timeout: 10000 });
+    await expect(page.locator('#resetPasswordForm')).toBeHidden();
+    expect(counters.updateUser).toBe(1);
+    expect(counters.logout).toBe(1);
+    expect(await page.evaluate(() => window.location.hash)).toBe('');
+    expect(page.url()).not.toContain('access_token');
+    const after = await page.evaluate(async () => {
+      const keys = Object.keys(localStorage).filter((k) => k.indexOf('sb-') === 0);
+      let anyToken = false;
+      for (const k of keys) {
+        try {
+          const parsed = JSON.parse(localStorage.getItem(k));
+          if (parsed && (parsed.access_token || (parsed.currentSession && parsed.currentSession.access_token))) { anyToken = true; break; }
+        } catch (e) { /* ignora */ }
+      }
+      return anyToken;
+    });
+    expect(after).toBe(false);
+  });
+
+  test('23. (H) nenhum vazamento em storage/console/URL/corpo', async ({ page }) => {
+    const counters = { updateUser: 0, logout: 0 };
+    const consoleTexts = [];
+    page.on('console', (msg) => consoleTexts.push(msg.text()));
+    await useFakeSupabaseConfig(page);
+    await mockAuthRest(page, counters);
+    await gotoResetPage(page, RECOVERY_HASH);
+    await waitRecoveryReady(page);
+    await fillNewPasswords(page, NEW_PASSWORD);
+    await page.click('#btnSaveNewPassword');
+    await expect(page.locator('#recoveryStatus')).toContainText('Senha alterada com sucesso', { timeout: 10000 });
+    const dump = await page.evaluate(() => ({
+      ls: Object.keys(localStorage).map((k) => k + '=' + (localStorage.getItem(k) || '')).join('\n'),
+      url: window.location.href,
+      body: document.body.innerText,
+      hash: window.location.hash,
+    }));
+    for (const hay of [consoleTexts.join('\n'), dump.ls, dump.url, dump.body]) {
+      expect(hay).not.toContain(NEW_PASSWORD);
+      expect(hay).not.toContain('fake-access-token-abc123');
+      expect(hay).not.toContain('fake-refresh-token-xyz789');
+    }
+    expect(dump.hash).toBe('');
   });
 });
