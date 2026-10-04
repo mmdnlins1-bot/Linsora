@@ -349,4 +349,46 @@ test.describe('40. Gate de acesso pago', () => {
     await expect(page.locator('#subscriptionMessage')).toContainText('conexão');
     expect(await claimCalls(page)).toBe(1);
   });
+
+  // Trial de 24h: distingue "sem assinatura + sem trial" (blocked, regra
+  // atual) de "sem assinatura + trial válido" (granted, reason trial).
+  async function installTrialGate(page, subRow, rpcRows) {
+    await page.evaluate(([row, rpc]) => {
+      const chainResult = { data: row ? [row] : [], error: null };
+      window.supabaseRepo.supabase = {
+        from: () => ({
+          select: () => ({ eq: () => ({ limit: () => Promise.resolve(chainResult) }) }),
+        }),
+        rpc: async () => ({ data: rpc, error: null }),
+      };
+      window.linsoraStore.state.user = { id: 'ffffffff-1111-4222-8333-444444444444', name: 'T', email: 't@t.com' };
+    }, [subRow, rpcRows]);
+  }
+
+  test('26. sem assinatura + sem trial = blocked (regra atual)', async ({ page }) => {
+    await installTrialGate(page,
+      { status: 'pending', current_period_end: null, plan: 'mensal', trial_started_at: null, trial_ends_at: null },
+      []);
+    expect(await refreshAccess(page)).toBe('blocked');
+    await expect(page.locator('#subscriptionScreen')).toBeVisible();
+    await expect(page.locator('#appMain')).toBeHidden();
+  });
+
+  test('27. sem assinatura + trial válido = granted (reason trial)', async ({ page }) => {
+    await installTrialGate(page,
+      { status: 'pending', current_period_end: null, plan: 'mensal', trial_started_at: '2026-10-01T12:00:00.000Z', trial_ends_at: '2026-10-02T12:00:00.000Z' },
+      [{ trial_valid: true, trial_ends_at: '2026-10-02T12:00:00.000Z' }]);
+    expect(await refreshAccess(page)).toBe('granted');
+    await expect(page.locator('#appMain')).toBeVisible();
+    await expect(page.locator('#subscriptionScreen')).toBeHidden();
+  });
+
+  test('28. sem assinatura + trial expirado = blocked', async ({ page }) => {
+    await installTrialGate(page,
+      { status: 'pending', current_period_end: null, plan: 'mensal', trial_started_at: '2026-08-31T12:00:00.000Z', trial_ends_at: '2026-09-01T12:00:00.000Z' },
+      [{ trial_valid: false, trial_ends_at: '2026-09-01T12:00:00.000Z' }]);
+    expect(await refreshAccess(page)).toBe('blocked');
+    await expect(page.locator('#subscriptionScreen')).toBeVisible();
+    await expect(page.locator('#appMain')).toBeHidden();
+  });
 });

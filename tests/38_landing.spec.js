@@ -211,4 +211,31 @@ test.describe('38. Landing page do Linsora', () => {
     await expect(page.locator('.lp-footer a')).toHaveCount(0);
     await expect(page.locator('header img[alt="Linsora"]')).toHaveCount(1);
   });
+
+  test('18. hero comunica o teste grátis de 24 horas', async ({ page }) => {
+    const hero = await page.locator('#hero').innerText();
+    expect(hero).toContain('24 horas');
+    expect(hero.toLowerCase()).toContain('gratuit');
+  });
+
+  test('19. CTA principal leva à criação de conta (não exige pagamento)', async ({ page }) => {
+    const headerHref = await page.locator('header a.lp-btn').first().getAttribute('href');
+    const heroHref = await page.locator('#hero a.lp-btn-primary').first().getAttribute('href');
+    const finalHref = await page.locator('#comecar .lp-btn').getAttribute('href');
+    for (const href of [headerHref, heroHref, finalHref]) {
+      expect(href).not.toBe('#precos');
+    }
+    expect(heroHref).toBe('/');
+    expect(finalHref).toBe('/');
+  });
+
+  test('20. preços mantidos + FAQ do trial', async ({ page }) => {
+    await expect(page.locator('#precos')).toContainText('R$ 14,90');
+    await expect(page.locator('#precos')).toContainText('R$ 99,90');
+    const precos = await page.locator('#precos').innerText();
+    expect(precos).toContain('24 horas');
+    const faq = await page.locator('#faq').innerText();
+    expect(faq).toContain('Como funciona o teste grátis?');
+    expect(faq).toContain('O que acontece quando o teste termina?');
+  });
 });

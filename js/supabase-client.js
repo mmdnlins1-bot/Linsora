@@ -499,9 +499,13 @@ class SupabaseRepository {
   /**
    * Consulta a assinatura do usuário para o gate de acesso.
    * Usa a sessão autenticada (RLS: usuário lê somente a própria assinatura).
+   * Ordem de decisão: (1) assinatura paga válida -> granted; (2) trial de
+   * 24h válido (autoridade: now() do Postgres via RPC) -> granted com
+   * reason 'trial'; (3) caso contrário -> blocked (tela de planos atual).
    * @returns {Promise<{state:'granted'|'blocked'|'unavailable'|'error', subscription?, reason?}>}
-   * - granted: assinatura válida (pode entrar).
-   * - blocked: sem assinatura, inativa/expirada ou sem identidade de servidor.
+   * - granted: assinatura válida ou trial válido (pode entrar).
+   * - blocked: sem assinatura, inativa/expirada e sem trial válido, ou sem
+   *   identidade de servidor.
    * - unavailable: sem backend Supabase configurado (modo local/teste sem
    *   autoridade de assinatura — preserva o comportamento legado; em produção
    *   o Supabase está sempre configurado).
@@ -516,7 +520,7 @@ class SupabaseRepository {
     try {
       const { data, error } = await this.supabase
         .from('subscriptions')
-        .select('status,current_period_end,plan')
+        .select('status,current_period_end,plan,trial_started_at,trial_ends_at')
         .eq('user_id', id)
         .limit(1);
       if (error) return { state: 'error', reason: error.message || 'query-failed' };
@@ -525,9 +529,48 @@ class SupabaseRepository {
       if (this.canEnterWithSubscription(row)) {
         return { state: 'granted', subscription: row };
       }
+      // Trial de 24h: segunda chance, decidida pelo servidor (now() do
+      // Postgres via RPC). Qualquer falha aqui mantém o bloqueio atual.
+      try {
+        const trial = await this.checkTrialAccess();
+        if (trial && trial.valid) {
+          return {
+            state: 'granted',
+            reason: 'trial',
+            trialEndsAt: trial.endsAt || row.trial_ends_at || null,
+            subscription: row,
+          };
+        }
+      } catch (e) { /* sem trial válido: segue para o bloqueio atual */ }
       return { state: 'blocked', reason: row.status || 'inactive' };
     } catch (e) {
       return { state: 'error', reason: (e && e.message) || 'lookup-failed' };
+    }
+  }
+
+  /**
+   * Validade do trial de 24h com autoridade de tempo do servidor.
+   * Chama o RPC public.get_trial_status(), que compara trial_ends_at com
+   * now() do Postgres usando auth.uid() — o relógio do navegador nunca
+   * participa da decisão. Retorna { valid:false } em qualquer falha ou
+   * quando o RPC não está disponível (fail-closed).
+   * @returns {Promise<{valid:boolean, endsAt:string|null}>}
+   */
+  async checkTrialAccess() {
+    try {
+      if (!this.supabase || typeof this.supabase.rpc !== 'function') {
+        return { valid: false, endsAt: null };
+      }
+      const { data, error } = await this.supabase.rpc('get_trial_status');
+      if (error) return { valid: false, endsAt: null };
+      const row = Array.isArray(data) ? data[0] : data;
+      if (!row) return { valid: false, endsAt: null };
+      return {
+        valid: row.trial_valid === true,
+        endsAt: row.trial_ends_at || null,
+      };
+    } catch (e) {
+      return { valid: false, endsAt: null };
     }
   }
 
