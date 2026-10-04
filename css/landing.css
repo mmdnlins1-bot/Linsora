@@ -241,6 +241,21 @@ h3 { font-size: 1.05rem; font-weight: 700; }
 .lp-split h2 { text-align: left; }
 .lp-split .lp-section-sub { text-align: left; margin-left: 0; }
 
+/* ---------- Fotos editoriais: sem container, sem fundo, sem moldura ----------
+   As artes são objetos claros sobre preto puro; o blend dissolve o fundo da
+   imagem no fundo escuro da seção. Nenhum background é adicionado atrás. */
+.lp-media { display: grid; gap: 32px; align-items: center; }
+.lp-media h2 { text-align: left; }
+.lp-media .lp-section-sub { text-align: left; margin-left: 0; }
+.lp-photo { margin: 0; display: flex; justify-content: center; }
+.lp-photo img {
+  width: 100%;
+  max-width: 320px;
+  height: auto;
+  display: block;
+  mix-blend-mode: screen;
+}
+
 /* ---------- Chat mockup ---------- */
 .lp-chat {
   background: var(--lp-card);
@@ -381,6 +396,10 @@ h3 { font-size: 1.05rem; font-weight: 700; }
   .lp-prices { grid-template-columns: 1fr 1.15fr; align-items: stretch; }
   .lp-split { grid-template-columns: 1fr 1fr; }
   .lp-voice-grid { grid-template-columns: 1.15fr 0.85fr; }
+  .lp-media { grid-template-columns: 1.05fr 0.95fr; }
+  .lp-media .lp-voice-grid { grid-template-columns: 1fr; }
+  .lp-media-flip > figure { order: -1; }
+  .lp-photo img { max-width: 400px; }
 }
 
 @media (min-width: 1024px) {
