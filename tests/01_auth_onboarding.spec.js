@@ -3,13 +3,15 @@ const { test, expect } = require('@playwright/test');
 test.describe('01. Fluxo de Autenticação & Onboarding', () => {
 
   test.beforeEach(async ({ page }) => {
-    // Limpar armazenamento para simular primeiro acesso
+    // Simula visitante vindo pela landing: limpa o storage e entra pelo
+    // funil (?vamos-comecar=1), que registra a flag e exibe o login direto
+    // (onboarding interno não é mais a porta de entrada).
     await page.goto('/');
     await page.evaluate(() => {
       localStorage.clear();
       sessionStorage.clear();
     });
-    await page.reload();
+    await page.goto('/?vamos-comecar=1');
   });
 
   test('Deve carregar a Splash Screen e ocultá-la após timeout', async ({ page }) => {
@@ -17,30 +19,14 @@ test.describe('01. Fluxo de Autenticação & Onboarding', () => {
     await expect(splash).toHaveClass(/hidden/, { timeout: 5000 });
   });
 
-  test('Deve navegar pelas etapas de Onboarding e acessar a tela de Login', async ({ page }) => {
-    await expect(page.locator('#onboardingScreen')).toBeVisible({ timeout: 5000 });
-
-    // Step 1 -> Step 2
-    await page.click('#btnNextOnboarding');
-    const step2 = page.locator('.onboarding-step[data-step="2"]');
-    await expect(step2).toHaveClass(/active/);
-
-    // Step 2 -> Step 3
-    await page.click('#btnNextOnboarding');
-    const step3 = page.locator('.onboarding-step[data-step="3"]');
-    await expect(step3).toHaveClass(/active/);
-
-    // Step 3 -> Auth Screen
-    await page.click('#btnNextOnboarding');
+  test('Vai direto ao login após o funil da landing (sem onboarding interno)', async ({ page }) => {
+    await expect(page.locator('#authScreen')).toBeVisible({ timeout: 8000 });
     await expect(page.locator('#onboardingScreen')).toHaveClass(/hidden/);
-    await expect(page.locator('#authScreen')).toBeVisible();
+    expect(page.url()).not.toContain('vamos-comecar');
   });
 
   test('Deve alternar entre Login e Cadastro com validação de campos', async ({ page }) => {
-    await expect(page.locator('#onboardingScreen')).toBeVisible({ timeout: 5000 });
-    await page.click('#btnSkipOnboarding');
-
-    await expect(page.locator('#authScreen')).toBeVisible();
+    await expect(page.locator('#authScreen')).toBeVisible({ timeout: 8000 });
     const btnToggle = page.locator('#btnToggleAuthMode');
     await btnToggle.click();
 
@@ -63,8 +49,7 @@ test.describe('01. Fluxo de Autenticação & Onboarding', () => {
   });
 
   test('Deve criar nova conta e realizar login automático com salvamento no banco', async ({ page }) => {
-    await expect(page.locator('#onboardingScreen')).toBeVisible({ timeout: 5000 });
-    await page.click('#btnSkipOnboarding');
+    await expect(page.locator('#authScreen')).toBeVisible({ timeout: 8000 });
 
     const btnToggle = page.locator('#btnToggleAuthMode');
     await btnToggle.click();
@@ -82,8 +67,7 @@ test.describe('01. Fluxo de Autenticação & Onboarding', () => {
   });
 
   test('Deve manter a sessão ativa ao fechar/recarregar o app (Persistência da Sessão)', async ({ page }) => {
-    await expect(page.locator('#onboardingScreen')).toBeVisible({ timeout: 5000 });
-    await page.click('#btnSkipOnboarding');
+    await expect(page.locator('#authScreen')).toBeVisible({ timeout: 8000 });
 
     await page.fill('#authEmail', 'persistente@linsora.com.br');
     await page.fill('#authPassword', '123456');
@@ -101,8 +85,7 @@ test.describe('01. Fluxo de Autenticação & Onboarding', () => {
   });
 
   test('Deve realizar Logout apenas quando o usuário clicar no botão "Sair"', async ({ page }) => {
-    await expect(page.locator('#onboardingScreen')).toBeVisible({ timeout: 5000 });
-    await page.click('#btnSkipOnboarding');
+    await expect(page.locator('#authScreen')).toBeVisible({ timeout: 8000 });
 
     await page.fill('#authEmail', 'teste@linsora.com.br');
     await page.fill('#authPassword', '123456');

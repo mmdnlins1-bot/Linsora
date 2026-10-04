@@ -21,6 +21,9 @@ async function login(page, options = {}) {
   const email = options.email || 'teste@linsora.com.br';
   const password = options.password || '123456';
 
+  await page.addInitScript(() => {
+    try { localStorage.setItem('LINSORA_SEEN_ONBOARDING', 'true'); } catch (e) { /* ignora */ }
+  });
   await page.goto('/');
 
   // Aguardar a inicialização do app.js

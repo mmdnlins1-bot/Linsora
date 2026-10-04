@@ -17,6 +17,9 @@ const RECOVERY_HASH =
 const NEW_PASSWORD = 'S3nh4-F1ct1c1a-Xy9Z';
 
 async function gotoAuth(page) {
+  await page.addInitScript(() => {
+    try { localStorage.setItem('LINSORA_SEEN_ONBOARDING', 'true'); } catch (e) { /* ignora */ }
+  });
   await page.goto('/');
   await page.waitForFunction(
     () => window.linsoraStore && window.LinsoraAccess && window.supabaseRepo,

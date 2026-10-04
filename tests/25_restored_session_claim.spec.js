@@ -70,7 +70,7 @@ test.describe('25. Claim na sessao restaurada', () => {
     await page.evaluate(() => { localStorage.clear(); sessionStorage.clear(); });
     await page.clock.install({ time: FIXED_NOW });
     await seedRestoredSession(page, authId, seedOpts);
-    await page.reload();
+    await page.goto('/');
     await page.waitForFunction(() => {
       const splash = document.getElementById('splashScreen');
       return window.linsoraStore && splash && !splash.classList.contains('active');

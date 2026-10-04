@@ -20,6 +20,11 @@ function trialRow(endsAt) {
 }
 
 async function gotoApp(page) {
+  // Usuário conhecido (fora do funil de primeiro acesso): a flag impede
+  // o redirect para a landing antes do boot expor o store.
+  await page.addInitScript(() => {
+    try { localStorage.setItem('LINSORA_SEEN_ONBOARDING', 'true'); } catch (e) { /* ignora */ }
+  });
   await page.goto('/');
   await page.waitForFunction(
     () => window.linsoraStore && window.LinsoraAccess && window.supabaseRepo && window.LinsoraAccountStatus,

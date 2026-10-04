@@ -225,8 +225,8 @@ test.describe('38. Landing page do Linsora', () => {
     for (const href of [headerHref, heroHref, finalHref]) {
       expect(href).not.toBe('#precos');
     }
-    expect(heroHref).toBe('/');
-    expect(finalHref).toBe('/');
+    expect(heroHref).toBe('/?vamos-comecar=1');
+    expect(finalHref).toBe('/?vamos-comecar=1');
   });
 
   test('20. preços mantidos + FAQ do trial', async ({ page }) => {

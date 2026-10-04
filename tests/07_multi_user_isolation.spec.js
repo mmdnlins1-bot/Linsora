@@ -8,19 +8,17 @@ test.describe('07. Auditoria de Multi-Usuários, Isolamento de Dados & Troca de 
   });
 
   test('Fluxo completo multi-usuário: Cadastro, Isolamento Estrito, Troca de Contas e Persistência', async ({ page }) => {
-    // Limpeza inicial explícita de storage
+    // Limpeza inicial explícita de storage + entrada pelo funil da landing
     await page.evaluate(() => {
       localStorage.clear();
       sessionStorage.clear();
     });
-    await page.reload();
+    await page.goto('/?vamos-comecar=1');
 
     // ------------------------------------------------------------------------
-    // 1. ETAPA ONBOARDING -> TELA DE AUTH
+    // 1. FUNIL DA LANDING -> TELA DE AUTH
     // ------------------------------------------------------------------------
-    await expect(page.locator('#onboardingScreen')).toBeVisible({ timeout: 5000 });
-    await page.click('#btnSkipOnboarding');
-    await expect(page.locator('#authScreen')).toBeVisible();
+    await expect(page.locator('#authScreen')).toBeVisible({ timeout: 8000 });
 
     // ------------------------------------------------------------------------
     // 2. CADASTRO & LOGIN DO USUÁRIO A
@@ -157,12 +155,9 @@ test.describe('07. Auditoria de Multi-Usuários, Isolamento de Dados & Troca de 
       localStorage.clear();
       sessionStorage.clear();
     });
-    await page.reload();
-    // Aguardar splash sumir e onboarding aparecer
-    await expect(page.locator('#splashScreen')).toBeVisible({ timeout: 5000 }).catch(() => {});
-    await page.waitForTimeout(1500); // Aguardar timer da splash (1200ms)
-
-    await page.click('#btnSkipOnboarding');
+    // Entrada pelo funil da landing (storage limpo redirecionaria para lá)
+    await page.goto('/?vamos-comecar=1');
+    await expect(page.locator('#authScreen')).toBeVisible({ timeout: 8000 });
     await page.click('#btnToggleAuthMode');
 
     // Cadastrar usuarioX

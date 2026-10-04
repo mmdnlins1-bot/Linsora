@@ -121,6 +121,32 @@ document.addEventListener('DOMContentLoaded', async () => {
       renderAppUI(window.linsoraStore.state);
     }
   } else {
+    // Sem sessão: funil de primeiro acesso via Landing Page.
+    // - ?vamos-comecar=1 (CTA da landing): registra a passagem pelo funil,
+    //   limpa o parâmetro sem recarregar e segue para o login (sem loop).
+    // - Sem parâmetro e sem flag: visitante novo -> landing (replace, sem
+    //   entrar no histórico, e interrompe o boot aqui).
+    // - Com flag (usuário conhecido deslogado): comportamento atual (login).
+    // O recovery guard acima continua tendo prioridade total aqui.
+    try {
+      const funnelParams = new URLSearchParams(window.location.search || '');
+      if (funnelParams.get('vamos-comecar') === '1') {
+        try { localStorage.setItem('LINSORA_SEEN_ONBOARDING', 'true'); } catch (e) { /* sem persistência: segue para o login mesmo assim */ }
+        try {
+          funnelParams.delete('vamos-comecar');
+          const rest = funnelParams.toString();
+          const cleanUrl = window.location.pathname + (rest ? `?${rest}` : '') + (window.location.hash || '');
+          window.history.replaceState(null, '', cleanUrl);
+        } catch (e) { /* URL paramétrica preservada: sem loop, só cosmético */ }
+      } else {
+        let seenOnboarding = null;
+        try { seenOnboarding = localStorage.getItem('LINSORA_SEEN_ONBOARDING'); } catch (e) { seenOnboarding = null; }
+        if (!seenOnboarding) {
+          window.location.replace('./landing.html');
+          return;
+        }
+      }
+    } catch (e) { /* ambiente sem URL/localStorage: segue para o fluxo atual */ }
     // Sem sessão: renderiza estado vazio e exibe tela de login
     window.linsoraStore.ensureCurrentWindowOccurrences();
     renderAppUI(window.linsoraStore.state);

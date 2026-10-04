@@ -12,6 +12,11 @@ const EXPIRED_END = '2026-09-01T12:00:00.000Z';
 const USER_ID = '11111111-2222-4333-8444-555555555555';
 
 async function gotoApp(page) {
+  // Usuário conhecido (fora do funil de primeiro acesso): a flag impede
+  // o redirect para a landing antes do boot expor o store.
+  await page.addInitScript(() => {
+    try { localStorage.setItem('LINSORA_SEEN_ONBOARDING', 'true'); } catch (e) { /* ignora */ }
+  });
   await page.goto('/');
   await page.waitForFunction(
     () => window.linsoraStore && window.LinsoraAccess && window.supabaseRepo,

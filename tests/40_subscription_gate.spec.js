@@ -10,6 +10,11 @@ const ANUAL_URL = 'https://pay.hotmart.com/V107831993J?off=32op71oh';
 
 test.describe('40. Gate de acesso pago', () => {
   test.beforeEach(async ({ page }) => {
+    // Usuário conhecido (fora do funil de primeiro acesso): a flag impede
+    // o redirect para a landing e o boot decide a rota pelo gate/sessão.
+    await page.addInitScript(() => {
+      try { localStorage.setItem('LINSORA_SEEN_ONBOARDING', 'true'); } catch (e) { /* ignora */ }
+    });
     await page.goto('/');
     await page.waitForFunction(
       () => window.linsoraStore && window.LinsoraAccess && window.supabaseRepo,

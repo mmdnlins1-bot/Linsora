@@ -6,6 +6,9 @@ const { test, expect } = require('@playwright/test');
 // regressão funcional (login, "Esqueci minha senha", reset-password).
 
 async function gotoAuth(page) {
+  await page.addInitScript(() => {
+    try { localStorage.setItem('LINSORA_SEEN_ONBOARDING', 'true'); } catch (e) { /* ignora */ }
+  });
   await page.goto('/');
   await page.waitForFunction(
     () => window.linsoraStore && window.LinsoraAccess && window.supabaseRepo && window.LinsoraUI,
