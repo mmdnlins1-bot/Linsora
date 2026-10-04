@@ -198,7 +198,7 @@ test.describe('42. Recuperação de senha', () => {
     });
     await fillNewPasswords(page, '12345');
     await page.click('#btnSaveNewPassword');
-    await expect(page.locator('#recoveryStatus')).toContainText('mínimo 6');
+    await expect(page.locator('#recoveryStatus')).toContainText('pelo menos 6');
     expect(counters.updateUser).toBe(0);
   });
 
@@ -704,6 +704,173 @@ test.describe('42. Recuperação de senha', () => {
       expect(hay).not.toContain('fake-access-token-abc123');
       expect(hay).not.toContain('fake-refresh-token-xyz789');
       expect(hay).not.toContain('stale.ficticio@exemplo.com');
+    }
+  });
+
+  // Refinamento cirúrgico: volta ao login, regra visível, validação e same_password.
+  test('30. (A) sucesso: só "Voltar para o login" e vai direto ao Login sem subscriptionScreen', async ({ page }) => {
+    const counters = { updateUser: 0, logout: 0 };
+    await useFakeSupabaseConfig(page);
+    await mockAuthRest(page, counters);
+    await gotoResetPage(page, RECOVERY_HASH);
+    await waitRecoveryReady(page);
+    await fillNewPasswords(page, NEW_PASSWORD);
+    await page.click('#btnSaveNewPassword');
+    await expect(page.locator('#recoveryStatus')).toContainText('Senha alterada com sucesso', { timeout: 10000 });
+    await expect(page.locator('#btnBackToLoginPrimary')).toBeVisible();
+    await expect(page.locator('#linkBackLogin')).toBeHidden();
+    await expect(page.locator('#resetPasswordForm')).toBeHidden();
+    await page.click('#btnBackToLoginPrimary');
+    await page.waitForFunction(
+      () => window.linsoraStore && window.LinsoraAccess && window.supabaseRepo,
+      { timeout: 10000 }
+    );
+    await expect(page.locator('#authScreen')).toBeVisible({ timeout: 8000 });
+    await expect(page.locator('#appMain')).toBeHidden();
+    await expect(page.locator('#subscriptionScreen')).toBeHidden();
+  });
+
+  test('31. (B) conta sem assinatura: pós-recovery volta ao Login sem abrir planos', async ({ page }) => {
+    const counters = { updateUser: 0, logout: 0 };
+    await useFakeSupabaseConfig(page);
+    await mockAuthRest(page, counters);
+    await gotoResetPage(page, RECOVERY_HASH);
+    await waitRecoveryReady(page);
+    await seedLocalSnapshot(page);
+    await fillNewPasswords(page, NEW_PASSWORD);
+    await page.click('#btnSaveNewPassword');
+    await expect(page.locator('#recoveryStatus')).toContainText('Senha alterada com sucesso', { timeout: 10000 });
+    // Clicar em voltar leva ao Login; o gate de assinatura só pode aparecer
+    // depois de um novo login, nunca como consequência do retorno.
+    await page.click('#btnBackToLoginPrimary');
+    await page.waitForFunction(
+      () => window.linsoraStore && window.LinsoraAccess && window.supabaseRepo,
+      { timeout: 10000 }
+    );
+    await expect(page.locator('#authScreen')).toBeVisible({ timeout: 8000 });
+    await expect(page.locator('#subscriptionScreen')).toBeHidden();
+    await expect(page.locator('#appMain')).toBeHidden();
+  });
+
+  test('32. (C) senha com 5 caracteres: mensagem de mínimo e sem updateUser', async ({ page }) => {
+    const counters = { updateUser: 0, logout: 0 };
+    await useFakeSupabaseConfig(page);
+    await mockAuthRest(page, counters);
+    await gotoResetPage(page, RECOVERY_HASH);
+    await waitRecoveryReady(page);
+    // A regra fica visível desde a abertura, antes de qualquer envio.
+    await expect(page.locator('#newPasswordHint')).toContainText('pelo menos 6');
+    await expect(page.locator('#confirmPasswordHint')).toContainText('mesma senha');
+    await expect(page.locator('#newPassword')).toHaveAttribute('placeholder', 'Nova senha');
+    await page.evaluate(() => {
+      for (const id of ['newPassword', 'confirmPassword']) {
+        const el = document.getElementById(id);
+        el.removeAttribute('minlength');
+        el.removeAttribute('required');
+      }
+    });
+    await fillNewPasswords(page, '12345');
+    await page.click('#btnSaveNewPassword');
+    await expect(page.locator('#recoveryStatus')).toContainText('pelo menos 6');
+    expect(counters.updateUser).toBe(0);
+    await expect(page.locator('#resetPasswordForm')).toBeVisible();
+  });
+
+  test('33. (D) confirmação diferente: mensagem de divergência e sem updateUser', async ({ page }) => {
+    const counters = { updateUser: 0, logout: 0 };
+    await useFakeSupabaseConfig(page);
+    await mockAuthRest(page, counters);
+    await gotoResetPage(page, RECOVERY_HASH);
+    await waitRecoveryReady(page);
+    await fillNewPasswords(page, NEW_PASSWORD, 'outra-senha-ficticia-2');
+    await page.click('#btnSaveNewPassword');
+    await expect(page.locator('#recoveryStatus')).toContainText('não coincidem');
+    expect(counters.updateUser).toBe(0);
+    await expect(page.locator('#resetPasswordForm')).toBeVisible();
+  });
+
+  test('34. (E) senha igual à anterior (same_password 422) mostra mensagem específica', async ({ page }) => {
+    const counters = { updateUser: 0, logout: 0 };
+    await useFakeSupabaseConfig(page);
+    await page.route(FAKE_SUPABASE_URL + '/auth/v1/*', async (route) => {
+      const req = route.request();
+      const url = req.url();
+      if (req.method() === 'PUT' && url.endsWith('/auth/v1/user')) {
+        counters.updateUser += 1;
+        await route.fulfill({
+          status: 422,
+          contentType: 'application/json',
+          // Resposta real do Supabase Auth: code same_password.
+          body: JSON.stringify({ code: 'same_password', msg: 'New password should be different from the old password.' }),
+        });
+      } else if (url.includes('/auth/v1/logout')) {
+        counters.logout += 1;
+        await route.fulfill({ status: 204, body: '' });
+      } else {
+        await route.fulfill({ status: 200, contentType: 'application/json', body: '{}' });
+      }
+    });
+    await gotoResetPage(page, RECOVERY_HASH);
+    await waitRecoveryReady(page);
+    await fillNewPasswords(page, 'senha-reutilizada-1');
+    await page.click('#btnSaveNewPassword');
+    await expect(page.locator('#recoveryStatus')).toContainText('diferente da senha anterior', { timeout: 10000 });
+    const statusText = await page.locator('#recoveryStatus').innerText();
+    expect(statusText).not.toContain('pelo menos 6');
+    expect(counters.updateUser).toBe(1);
+    // Recuperação de erro permite nova tentativa (formulário segue visível).
+    await expect(page.locator('#resetPasswordForm')).toBeVisible();
+  });
+
+  test('35. (F) senha válida chama updateUser e conclui o sucesso', async ({ page }) => {
+    const counters = { updateUser: 0, logout: 0 };
+    await useFakeSupabaseConfig(page);
+    await mockAuthRest(page, counters);
+    await gotoResetPage(page, RECOVERY_HASH);
+    await waitRecoveryReady(page);
+    await fillNewPasswords(page, NEW_PASSWORD);
+    await page.click('#btnSaveNewPassword');
+    await expect(page.locator('#recoveryStatus')).toContainText('Senha alterada com sucesso', { timeout: 10000 });
+    expect(counters.updateUser).toBe(1);
+    expect(counters.logout).toBe(1);
+  });
+
+  test('36. (G) sem exposição de segredos em erro same_password ou validação local', async ({ page }) => {
+    const counters = { updateUser: 0, logout: 0 };
+    const consoleTexts = [];
+    page.on('console', (msg) => consoleTexts.push(msg.text()));
+    await useFakeSupabaseConfig(page);
+    await page.route(FAKE_SUPABASE_URL + '/auth/v1/*', async (route) => {
+      const req = route.request();
+      const url = req.url();
+      if (req.method() === 'PUT' && url.endsWith('/auth/v1/user')) {
+        counters.updateUser += 1;
+        await route.fulfill({
+          status: 422,
+          contentType: 'application/json',
+          body: JSON.stringify({ code: 'same_password', msg: 'New password should be different from the old password.' }),
+        });
+      } else if (url.includes('/auth/v1/logout')) {
+        counters.logout += 1;
+        await route.fulfill({ status: 204, body: '' });
+      } else {
+        await route.fulfill({ status: 200, contentType: 'application/json', body: '{}' });
+      }
+    });
+    await gotoResetPage(page, RECOVERY_HASH);
+    await waitRecoveryReady(page);
+    const SAME_AS_NEW = 'senha-reutilizada-2-xy';
+    await fillNewPasswords(page, SAME_AS_NEW);
+    await page.click('#btnSaveNewPassword');
+    await expect(page.locator('#recoveryStatus')).toContainText('diferente da senha anterior', { timeout: 10000 });
+    const dump = await page.evaluate(() => ({
+      url: window.location.href,
+      body: document.body.innerText,
+    }));
+    for (const hay of [consoleTexts.join('\n'), dump.url, dump.body]) {
+      expect(hay).not.toContain(SAME_AS_NEW);
+      expect(hay).not.toContain('fake-access-token-abc123');
+      expect(hay).not.toContain('fake-refresh-token-xyz789');
     }
   });
 });
