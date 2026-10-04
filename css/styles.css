@@ -2305,6 +2305,15 @@ body.frame-mode .device-notch { display: block; }
 .badge-status-chip.warning { background: rgba(245, 158, 11, 0.15); color: var(--accent-amber); }
 .badge-status-chip.danger { background: rgba(239, 68, 68, 0.15); color: var(--accent-red); }
 
+/* Indicador de status da conta (Trial 24h): somente visual, sem autoridade de acesso. */
+.account-trial-info { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; margin-top: 8px; }
+.account-trial-info.hidden { display: none; }
+.account-trial-countdown { font-size: 12.5px; font-weight: 600; color: var(--text-primary); line-height: 1.4; }
+.account-trial-endtime { font-size: 11.5px; color: var(--text-muted); line-height: 1.4; }
+.account-trial-endtime.hidden { display: none; }
+.account-trial-cta { background: transparent; border: 1px solid var(--accent-green-neon); color: var(--accent-green-neon); border-radius: var(--radius-full); padding: 4px 12px; font-size: 11.5px; font-weight: 700; cursor: pointer; margin-top: 2px; }
+.account-trial-cta:active { transform: scale(0.97); }
+
 .empty-state-card { background: var(--bg-card); border: 1px dashed var(--border-color-strong); border-radius: var(--radius-lg); padding: 22px 14px; text-align: center; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; color: var(--text-secondary); width: 100%; }
 .empty-state-card .empty-icon { font-size: 28px; }
 .empty-state-card p { font-size: 13.5px; font-weight: 700; color: var(--text-primary); }

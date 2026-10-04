@@ -254,6 +254,7 @@
             <a class="linsora-btn primary block lg" id="btnSubscribeMensal" href="https://pay.hotmart.com/V107831993J?off=7xk5d8xd" target="_blank" rel="nofollow sponsored noopener">Assinar Plano Mensal — R$ 14,90/mês</a>
             <a class="linsora-btn primary block lg" id="btnSubscribeAnual" href="https://pay.hotmart.com/V107831993J?off=32op71oh" target="_blank" rel="nofollow sponsored noopener">Assinar Plano Anual — R$ 99,90/ano</a>
             <button type="button" class="linsora-btn secondary block" id="btnSubscriptionLogout">Sair</button>
+            <button type="button" class="linsora-btn secondary block hidden" id="btnBackToApp">Voltar ao app</button>
           </div>
         </div>
       </section>
@@ -640,8 +641,13 @@
                   <h3 id="profileNameDisplay">Usuário</h3>
                   <span style="font-size: 13px; color: var(--text-muted);" id="profileEmailDisplay">usuario@linsora.com.br</span>
                   <div style="margin-top: 6px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-                    <span class="badge-status-chip success">Conta PRO Premium</span>
+                    <span class="badge-status-chip success hidden" id="accountStatusBadge">Conta</span>
                     <button type="button" class="change-photo-btn" id="btnTriggerPhotoUpload" style="cursor: pointer;">📷 Alterar Foto</button>
+                  </div>
+                  <div id="accountTrialInfo" class="hidden account-trial-info">
+                    <span id="accountTrialCountdown" class="account-trial-countdown"></span>
+                    <span id="accountTrialEndTime" class="account-trial-endtime"></span>
+                    <button type="button" class="account-trial-cta" id="btnViewPlans">Ver planos</button>
                   </div>
                 </div>
               </div>

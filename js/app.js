@@ -109,6 +109,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     window.linsoraStore.ensureCurrentWindowOccurrences();
     renderAppUI(window.linsoraStore.state);
     showAppMain();
+    try { renderAccountStatus(gate); } catch (e) { /* badge visual: nunca bloqueia a entrada */ }
     // Oportunidade de claim na sessão restaurada (mesmo mecanismo do login).
     const priorReceipt = window.supabaseRepo?.getGuestClaimReceipt
       ? window.supabaseRepo.getGuestClaimReceipt(sessionRes.user.id)
@@ -235,6 +236,10 @@ function showSubscriptionRequired(gate, customMessage) {
     screen.classList.remove('hidden');
     screen.classList.add('active');
   }
+  // Fluxo bloqueado padrão: sem botão de retorno (só o fluxo "Ver planos"
+  // do trial o exibe, após chamar esta função).
+  const backToApp = document.getElementById('btnBackToApp');
+  if (backToApp) backToApp.classList.add('hidden');
 }
 
 /**
@@ -283,12 +288,183 @@ window.LinsoraAccess = {
     const gate = user && user.id
       ? await window.supabaseRepo.checkSubscriptionAccess(user.id)
       : { state: 'blocked', reason: 'no-session' };
+    try { renderAccountStatus(gate); } catch (e) { /* badge visual: nunca bloqueia o roteamento */ }
     if (gate.state === 'granted' || gate.state === 'unavailable') {
       showAppMain();
     } else {
       showSubscriptionRequired(gate);
     }
     return gate.state;
+  },
+};
+
+/**
+ * STATUS DA CONTA (visual, Trial de 24h) — SOMENTE APRESENTAÇÃO.
+ * Fonte exclusiva: objeto `gate` retornado por checkSubscriptionAccess()
+ * ({ state, reason, trialEndsAt }). NUNCA lê profiles.plan,
+ * linsoraStore.state.user.plan, localStorage ou cache — esses valores
+ * legados (ex. 'PRO') não decidem nem exibem status.
+ * O countdown NUNCA concede acesso: ao zerar, chama
+ * LinsoraAccess.refreshAccess() e o gate decide (fail-closed).
+ */
+function formatTrialRemaining(endsAt, nowMs) {
+  const end = endsAt instanceof Date ? endsAt.getTime() : new Date(endsAt).getTime();
+  const now = typeof nowMs === 'number' ? nowMs : Date.now();
+  if (Number.isNaN(end) || Number.isNaN(now)) return '';
+  const diff = end - now;
+  if (diff <= 0) return 'Seu teste terminou';
+  const totalMin = Math.floor(diff / 60000);
+  if (totalMin < 1) return 'Seu teste termina em menos de 1min';
+  if (totalMin < 60) return `Seu teste termina em ${totalMin}min`;
+  const h = Math.floor(totalMin / 60);
+  const m = totalMin % 60;
+  return `Seu teste termina em ${h}h ${String(m).padStart(2, '0')}min`;
+}
+
+function formatTrialEndTime(endsAt) {
+  const d = new Date(endsAt);
+  if (Number.isNaN(d.getTime())) return '';
+  const hh = String(d.getHours()).padStart(2, '0');
+  const mm = String(d.getMinutes()).padStart(2, '0');
+  const t = new Date();
+  const sameDay = d.getFullYear() === t.getFullYear()
+    && d.getMonth() === t.getMonth()
+    && d.getDate() === t.getDate();
+  if (sameDay) return `Termina hoje às ${hh}:${mm}`;
+  const dd = String(d.getDate()).padStart(2, '0');
+  const mo = String(d.getMonth() + 1).padStart(2, '0');
+  return `Termina em ${dd}/${mo} às ${hh}:${mm}`;
+}
+
+let accountStatusCountdownTimer = null;
+let accountStatusRevalidateTimer = null;
+let accountStatusEndsAt = null;
+let lastAccountGate = null;
+// Guarda anti-loop: o countdown zerado dispara UMA revalidação por período
+// (trialEndsAt). Sem isso, gate ainda 'granted/trial' + endsAt passado
+// (mock de teste, skew de relógio) faria render -> refresh -> render...
+let accountStatusRevalidatedFor = null;
+
+const ACCOUNT_STATUS_TICK_MS = 45000;
+const ACCOUNT_STATUS_REVALIDATE_MS = 5 * 60 * 1000;
+
+function clearAccountStatusTimers() {
+  if (accountStatusCountdownTimer !== null) {
+    clearInterval(accountStatusCountdownTimer);
+    accountStatusCountdownTimer = null;
+  }
+  if (accountStatusRevalidateTimer !== null) {
+    clearInterval(accountStatusRevalidateTimer);
+    accountStatusRevalidateTimer = null;
+  }
+}
+
+function resetAccountStatusUI() {
+  clearAccountStatusTimers();
+  accountStatusEndsAt = null;
+  accountStatusRevalidatedFor = null;
+  const badge = document.getElementById('accountStatusBadge');
+  const trialInfo = document.getElementById('accountTrialInfo');
+  if (badge) {
+    badge.textContent = 'Conta';
+    badge.className = 'badge-status-chip success hidden';
+  }
+  if (trialInfo) trialInfo.classList.add('hidden');
+}
+
+function updateTrialCountdownText() {
+  if (!accountStatusEndsAt) return null;
+  const endMs = new Date(accountStatusEndsAt).getTime();
+  if (Number.isNaN(endMs)) return null;
+  const remaining = endMs - Date.now();
+  const cd = document.getElementById('accountTrialCountdown');
+  const et = document.getElementById('accountTrialEndTime');
+  if (cd) cd.textContent = formatTrialRemaining(accountStatusEndsAt);
+  if (et) {
+    const suffix = formatTrialEndTime(accountStatusEndsAt);
+    et.textContent = suffix;
+    et.classList.toggle('hidden', !suffix);
+  }
+  return remaining;
+}
+
+function renderAccountStatus(gate) {
+  lastAccountGate = gate && typeof gate === 'object' ? gate : null;
+  clearAccountStatusTimers();
+  const badge = document.getElementById('accountStatusBadge');
+  const trialInfo = document.getElementById('accountTrialInfo');
+  if (!badge || !trialInfo) return lastAccountGate;
+  const isPaid = !!lastAccountGate
+    && lastAccountGate.state === 'granted'
+    && lastAccountGate.reason !== 'trial';
+  const trialEndsAt = lastAccountGate
+    && lastAccountGate.state === 'granted'
+    && lastAccountGate.reason === 'trial'
+    ? lastAccountGate.trialEndsAt : null;
+  if (isPaid) {
+    badge.textContent = 'CONTA PREMIUM';
+    badge.className = 'badge-status-chip success';
+    trialInfo.classList.add('hidden');
+    accountStatusEndsAt = null;
+    return lastAccountGate;
+  }
+  if (trialEndsAt) {
+    badge.textContent = 'TESTE GRÁTIS';
+    badge.className = 'badge-status-chip warning';
+    trialInfo.classList.remove('hidden');
+    // Novo período: permite uma futura revalidação por expiração.
+    if (accountStatusEndsAt !== trialEndsAt) accountStatusRevalidatedFor = null;
+    accountStatusEndsAt = trialEndsAt;
+    const remaining = updateTrialCountdownText();
+    if (remaining === null || remaining <= 0) {
+      // Já expirado na renderização: UMA revalidação; o gate decide.
+      // Fire-and-forget proposital: nunca bloquear o roteamento atual nem
+      // entrar em loop quando o gate insistir em granted/trial.
+      if (accountStatusRevalidatedFor !== trialEndsAt
+        && window.LinsoraAccess && typeof window.LinsoraAccess.refreshAccess === 'function') {
+        accountStatusRevalidatedFor = trialEndsAt;
+        window.LinsoraAccess.refreshAccess();
+      }
+    } else {
+      accountStatusCountdownTimer = setInterval(() => {
+        const left = updateTrialCountdownText();
+        if (left !== null && left <= 0) {
+          clearAccountStatusTimers();
+          if (accountStatusRevalidatedFor !== accountStatusEndsAt
+            && window.LinsoraAccess && typeof window.LinsoraAccess.refreshAccess === 'function') {
+            accountStatusRevalidatedFor = accountStatusEndsAt;
+            window.LinsoraAccess.refreshAccess();
+          }
+        }
+      }, ACCOUNT_STATUS_TICK_MS);
+      accountStatusRevalidateTimer = setInterval(() => {
+        if (document.visibilityState === 'visible'
+          && window.LinsoraAccess && typeof window.LinsoraAccess.refreshAccess === 'function') {
+          window.LinsoraAccess.refreshAccess();
+        }
+      }, ACCOUNT_STATUS_REVALIDATE_MS);
+    }
+    return lastAccountGate;
+  }
+  // Bloqueado / sem sessão / indisponível: neutro, sem afirmar plano.
+  resetAccountStatusUI();
+  return lastAccountGate;
+}
+
+window.formatTrialRemaining = formatTrialRemaining;
+window.formatTrialEndTime = formatTrialEndTime;
+window.LinsoraAccountStatus = {
+  render: renderAccountStatus,
+  clear: clearAccountStatusTimers,
+  reset: resetAccountStatusUI,
+  state() {
+    return {
+      hasCountdownTimer: accountStatusCountdownTimer !== null,
+      hasRevalidateTimer: accountStatusRevalidateTimer !== null,
+      endsAt: accountStatusEndsAt,
+      lastGateReason: lastAccountGate ? (lastAccountGate.reason || null) : null,
+      lastGateState: lastAccountGate ? (lastAccountGate.state || null) : null,
+    };
   },
 };
 
@@ -954,6 +1130,7 @@ function setupEventListeners() {
         // O loadUserData já garante as ocorrências; reforço idempotente do
         // fluxo real de registro (não duplica, não altera o motor).
         window.linsoraStore.ensureCurrentWindowOccurrences?.({ silent: true });
+        try { renderAccountStatus(gateReg); } catch (e) { /* badge visual */ }
       } else {
         const res = await window.supabaseRepo.signInWithEmail(email, password);
         if (!res.success) {
@@ -973,6 +1150,7 @@ function setupEventListeners() {
         // O loadUserData já garante as ocorrências; reforço idempotente do
         // fluxo real de login (não duplica, não altera o motor).
         window.linsoraStore.ensureCurrentWindowOccurrences?.({ silent: true });
+        try { renderAccountStatus(gateLogin); } catch (e) { /* badge visual */ }
       }
 
       showAppMain();
@@ -1933,6 +2111,37 @@ function setupEventListeners() {
   document.getElementById('btnSubscriptionLogout')?.addEventListener('click', async () => {
     await performLogout();
   });
+
+  // Badge de trial: CTA reutiliza a tela de planos existente (sem checkout novo).
+  document.getElementById('btnViewPlans')?.addEventListener('click', () => {
+    const gate = lastAccountGate && lastAccountGate.state === 'granted'
+      ? lastAccountGate
+      : { state: 'blocked' };
+    let msg = 'Escolha um plano para continuar sem interrupção.';
+    try {
+      const main = accountStatusEndsAt ? formatTrialRemaining(accountStatusEndsAt) : '';
+      if (main) msg = `${main}. Escolha um plano para continuar sem interrupção.`;
+    } catch (e) { /* mensagem padrão */ }
+    showSubscriptionRequired(gate, msg);
+    // Somente este fluxo exibe o retorno (usuário ainda tem acesso válido).
+    document.getElementById('btnBackToApp')?.classList.remove('hidden');
+  });
+
+  document.getElementById('btnBackToApp')?.addEventListener('click', async () => {
+    document.getElementById('btnBackToApp')?.classList.add('hidden');
+    if (window.LinsoraAccess && typeof window.LinsoraAccess.refreshAccess === 'function') {
+      await window.LinsoraAccess.refreshAccess();
+    } else {
+      showAppMain();
+    }
+  });
+
+  // Contador é visual: ao voltar à aba, recalcula o texto sem consultar o servidor.
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && accountStatusEndsAt) {
+      try { updateTrialCountdownText(); } catch (e) { /* visual */ }
+    }
+  });
 }
 
 /**
@@ -1941,6 +2150,12 @@ function setupEventListeners() {
  * da tela de assinatura bloqueada.
  */
 async function performLogout() {
+  try { clearAccountStatusTimers(); } catch (e) { /* visual */ }
+  accountStatusEndsAt = null;
+  lastAccountGate = null;
+  try { resetAccountStatusUI(); } catch (e) { /* visual */ }
+  const backToApp = document.getElementById('btnBackToApp');
+  if (backToApp) backToApp.classList.add('hidden');
   await window.supabaseRepo.signOut();
   if (window.linsoraStore) {
     window.linsoraStore.clearState();
