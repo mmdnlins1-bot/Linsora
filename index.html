@@ -37,6 +37,11 @@
       try {
         var hash = window.location.hash || '';
         var search = window.location.search || '';
+        // Confirmação de cadastro (marcador email_confirmed do signUp):
+        // permanece na raiz para o app concluir o fluxo; NÃO é recovery
+        // e NÃO deve ir para reset-password.html.
+        var isSignupConfirmation = /(?:^|[?&])email_confirmed=1(?:&|$)/.test(search);
+        if (isSignupConfirmation) return;
         var hasRecoveryHash = /(?:^|[#&])type=recovery(?:&|$)/.test(hash);
         var hasRecoveryQuery = /(?:^|[?&])type=recovery(?:&|$)/.test(search);
         var hasAuthCode = /(?:^|[?&])code=/.test(search);
@@ -180,8 +185,13 @@
               />
               <span>LINSORA</span>
             </div>
-            <h2 id="authTitle">Seja bem-vindo(a)</h2>
+            <h2 id="authTitle">Entrar na sua conta</h2>
             <p id="authSubtitle">Entre na sua conta para gerenciar seu patrimônio com inteligência.</p>
+          </div>
+
+          <div id="confirmationPending" class="hidden" role="status" style="margin-bottom:12px;border-radius:12px;padding:12px 14px;font-size:14px;line-height:1.5;background:rgba(16,185,129,0.12);border:1px solid rgba(16,185,129,0.4);color:#6EE7B7;">
+            <span id="confirmationPendingText">Conta criada! Enviamos um e-mail de confirmação para você. Confirme seu endereço de e-mail para continuar.</span>
+            <button type="button" class="link-btn-bold" id="btnResendConfirmation" style="display:block;margin-top:8px;">Reenviar e-mail de confirmação</button>
           </div>
 
           <form id="authForm" class="auth-form" onsubmit="return false;">
@@ -220,12 +230,12 @@
               </div>
             </div>
 
-            <button type="submit" class="linsora-btn primary block lg" id="btnSubmitAuth">Entrar na Conta</button>
+            <button type="submit" class="linsora-btn primary block lg" id="btnSubmitAuth">Entrar</button>
           </form>
 
           <div class="auth-toggle">
-            <span id="toggleText">Ainda não tem conta?</span>
-            <button type="button" class="link-btn-bold" id="btnToggleAuthMode">Cadastrar-se</button>
+            <span id="toggleText">Não tenho uma conta.</span>
+            <button type="button" class="link-btn-bold" id="btnToggleAuthMode">Criar conta</button>
           </div>
         </div>
       </section>

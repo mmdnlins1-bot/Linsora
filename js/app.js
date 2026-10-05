@@ -45,12 +45,19 @@ document.addEventListener('DOMContentLoaded', async () => {
   try {
     const hash = window.location.hash || '';
     const search = window.location.search || '';
-    const hasRecoveryHash = /(?:^|[#&])type=recovery(?:&|$)/.test(hash);
-    const hasRecoveryQuery = /(?:^|[?&])type=recovery(?:&|$)/.test(search);
-    const hasAuthCode = /(?:^|[?&])code=/.test(search);
-    if (hasRecoveryHash || hasRecoveryQuery || hasAuthCode) {
-      window.location.replace('./reset-password.html' + search + hash);
-      return;
+    // Confirmação de cadastro (marcador email_confirmed do signUp):
+    // permanece na raiz; NÃO é recovery e NÃO vai para reset-password.html.
+    const isSignupConfirmation = /(?:^|[?&])email_confirmed=1(?:&|$)/.test(search);
+    if (isSignupConfirmation) {
+      // segue para o boot normal (que conclui a confirmação sem gate de planos)
+    } else {
+      const hasRecoveryHash = /(?:^|[#&])type=recovery(?:&|$)/.test(hash);
+      const hasRecoveryQuery = /(?:^|[?&])type=recovery(?:&|$)/.test(search);
+      const hasAuthCode = /(?:^|[?&])code=/.test(search);
+      if (hasRecoveryHash || hasRecoveryQuery || hasAuthCode) {
+        window.location.replace('./reset-password.html' + search + hash);
+        return;
+      }
     }
   } catch (e) {}
 
@@ -123,21 +130,72 @@ document.addEventListener('DOMContentLoaded', async () => {
   } else {
     // Sem sessão: funil de primeiro acesso via Landing Page.
     // - ?vamos-comecar=1 (CTA da landing): registra a passagem pelo funil,
-    //   limpa o parâmetro sem recarregar e segue para o login (sem loop).
-    // - Sem parâmetro e sem flag: visitante novo -> landing (replace, sem
-    //   entrar no histórico, e interrompe o boot aqui).
-    // - Com flag (usuário conhecido deslogado): comportamento atual (login).
+    //   limpa o parâmetro sem recarregar e abre DIRETAMENTE o estado
+    //   "Criar conta" (sem loop). Sem o parâmetro, comportamento normal.
+    // - ?email_confirmed=1 (retorno do link de confirmação de cadastro):
+    //   tenta concluir a troca do código (best-effort, mesmo aparelho) e
+    //   apresenta o login com orientação; nunca entra no app sem sessão
+    //   válida + gate.
+    // - Sem parâmetro e sem flag: visitante novo -> landing (replace).
+    // - Com flag (usuário conhecido deslogado): login.
     // O recovery guard acima continua tendo prioridade total aqui.
+    let openRegisterMode = false;
     try {
       const funnelParams = new URLSearchParams(window.location.search || '');
       if (funnelParams.get('vamos-comecar') === '1') {
-        try { localStorage.setItem('LINSORA_SEEN_ONBOARDING', 'true'); } catch (e) { /* sem persistência: segue para o login mesmo assim */ }
+        try { localStorage.setItem('LINSORA_SEEN_ONBOARDING', 'true'); } catch (e) { /* sem persistência: segue para o cadastro mesmo assim */ }
+        openRegisterMode = true;
         try {
           funnelParams.delete('vamos-comecar');
           const rest = funnelParams.toString();
           const cleanUrl = window.location.pathname + (rest ? `?${rest}` : '') + (window.location.hash || '');
           window.history.replaceState(null, '', cleanUrl);
         } catch (e) { /* URL paramétrica preservada: sem loop, só cosmético */ }
+      } else if (funnelParams.get('email_confirmed') === '1') {
+        try { localStorage.setItem('LINSORA_SEEN_ONBOARDING', 'true'); } catch (e) { /* segue para o login */ }
+        // Conclusão best-effort do PKCE no mesmo aparelho: sem ela o
+        // usuário confirma no servidor e entra pelo login normal.
+        try {
+          const code = funnelParams.get('code');
+          if (code && window.supabaseRepo && window.supabaseRepo.supabase &&
+              window.supabaseRepo.supabase.auth &&
+              typeof window.supabaseRepo.supabase.auth.exchangeCodeForSession === 'function') {
+            await window.supabaseRepo.supabase.auth.exchangeCodeForSession(code).catch(() => null);
+          }
+        } catch (e) { /* confirmação segue válida no servidor; login manual resolve */ }
+        try {
+          funnelParams.delete('code');
+          funnelParams.delete('email_confirmed');
+          const rest = funnelParams.toString();
+          const cleanUrl = window.location.pathname + (rest ? `?${rest}` : '') + (window.location.hash || '');
+          window.history.replaceState(null, '', cleanUrl);
+        } catch (e) { /* limpeza cosmética */ }
+        try {
+          const fresh = window.supabaseRepo && window.supabaseRepo.supabase
+            ? await window.supabaseRepo.supabase.auth.getSession()
+            : null;
+          const freshSession = fresh && fresh.data ? fresh.data.session : null;
+          if (freshSession && freshSession.user) {
+            const gateConfirm = await window.supabaseRepo.checkSubscriptionAccess(freshSession.user.id);
+            if (gateConfirm.state === 'granted' || gateConfirm.state === 'unavailable') {
+              const userMeta = freshSession.user.user_metadata || {};
+              const confirmedUser = {
+                id: freshSession.user.id,
+                email: freshSession.user.email,
+                name: userMeta.full_name || userMeta.name || String(freshSession.user.email || '').split('@')[0]
+              };
+              const claimConsent = await resolveGuestRecurringConsent(confirmedUser);
+              await window.linsoraStore.loadUserData(confirmedUser, { claimGuestRecurring: claimConsent });
+              window.linsoraStore.ensureCurrentWindowOccurrences();
+              renderAppUI(window.linsoraStore.state);
+              showAppMain();
+              try { renderAccountStatus(gateConfirm); } catch (e) { /* badge visual */ }
+              try { LinsoraUI.showToast('E-mail confirmado com sucesso! Bem-vindo ao Linsora.', 'success'); } catch (e) {}
+              return;
+            }
+          }
+        } catch (e) { /* sem sessão válida: segue para o login abaixo */ }
+        window.__linsoraEmailJustConfirmed = true;
       } else {
         let seenOnboarding = null;
         try { seenOnboarding = localStorage.getItem('LINSORA_SEEN_ONBOARDING'); } catch (e) { seenOnboarding = null; }
@@ -147,11 +205,22 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
       }
     } catch (e) { /* ambiente sem URL/localStorage: segue para o fluxo atual */ }
-    // Sem sessão: renderiza estado vazio e exibe tela de login
+    // Sem sessão: renderiza estado vazio e exibe tela de autenticação
     window.linsoraStore.ensureCurrentWindowOccurrences();
     renderAppUI(window.linsoraStore.state);
-    console.log('[AUDITORIA_SESSAO] Usuário não logado. Exibindo tela de login/onboarding.');
+    console.log('[AUDITORIA_SESSAO] Usuário não logado. Exibindo tela de autenticação.');
     hideSplashScreen();
+    // Primeiro acesso via "Começar agora": cadastro direto. Demais casos:
+    // login (padrão), exceto retorno de confirmação que também é login
+    // com mensagem de sucesso.
+    try {
+      if (openRegisterMode && window.setAuthMode) window.setAuthMode('register');
+      else if (window.__linsoraEmailJustConfirmed) {
+        window.__linsoraEmailJustConfirmed = false;
+        if (window.setAuthMode) window.setAuthMode('login');
+        try { LinsoraUI.showToast('E-mail confirmado com sucesso! Entre com sua conta para continuar.', 'success'); } catch (e) {}
+      }
+    } catch (e) { /* modo padrão de login preservado */ }
   }
 });
 
@@ -1087,33 +1156,80 @@ function setupEventListeners() {
   }
 
   let isRegisterMode = false;
-  window.resetAuthMode = function() {
-    isRegisterMode = false;
+  const AUTH_TEXTS = {
+    login: {
+      title: 'Entrar na sua conta',
+      subtitle: 'Entre na sua conta para gerenciar seu patrimônio com inteligência.',
+      submit: 'Entrar',
+      toggleText: 'Não tenho uma conta.',
+      toggleBtn: 'Criar conta'
+    },
+    register: {
+      title: 'Crie sua conta',
+      subtitle: 'Comece seu teste gratuito de 24 horas.',
+      submit: 'Criar minha conta',
+      toggleText: 'Já tenho uma conta.',
+      toggleBtn: 'Entrar'
+    }
+  };
+  function applyAuthMode(mode) {
+    isRegisterMode = (mode === 'register');
+    const t = isRegisterMode ? AUTH_TEXTS.register : AUTH_TEXTS.login;
     const nameGroup = document.getElementById('nameGroup');
     const confirmPasswordGroup = document.getElementById('confirmPasswordGroup');
     const authTitle = document.getElementById('authTitle');
+    const authSubtitle = document.getElementById('authSubtitle');
     const btnSubmitAuth = document.getElementById('btnSubmitAuth');
     const toggleText = document.getElementById('toggleText');
     const btnToggleAuth = document.getElementById('btnToggleAuthMode');
-
-    if (nameGroup) nameGroup.style.display = 'none';
-    if (confirmPasswordGroup) confirmPasswordGroup.style.display = 'none';
-    if (authTitle) authTitle.innerText = 'Seja bem-vindo(a)';
-    if (btnSubmitAuth) btnSubmitAuth.innerText = 'Entrar na Conta';
-    if (toggleText) toggleText.innerText = 'Ainda não tem conta?';
-    if (btnToggleAuth) btnToggleAuth.innerText = 'Cadastrar-se';
+    if (nameGroup) nameGroup.style.display = isRegisterMode ? 'block' : 'none';
+    if (confirmPasswordGroup) confirmPasswordGroup.style.display = isRegisterMode ? 'block' : 'none';
+    if (authTitle) authTitle.innerText = t.title;
+    if (authSubtitle) authSubtitle.innerText = t.subtitle;
+    if (btnSubmitAuth) btnSubmitAuth.innerText = t.submit;
+    if (toggleText) toggleText.innerText = t.toggleText;
+    if (btnToggleAuth) btnToggleAuth.innerText = t.toggleBtn;
+    if (!isRegisterMode) hideConfirmationPending();
+  }
+  function hideConfirmationPending() {
+    const box = document.getElementById('confirmationPending');
+    if (box) box.classList.add('hidden');
+  }
+  function showConfirmationPending(message) {
+    const box = document.getElementById('confirmationPending');
+    const txt = document.getElementById('confirmationPendingText');
+    if (txt && message) txt.innerText = message;
+    if (box) box.classList.remove('hidden');
+  }
+  window.setAuthMode = applyAuthMode;
+  window.resetAuthMode = function() {
+    applyAuthMode('login');
   };
 
   const btnToggleAuth = document.getElementById('btnToggleAuthMode');
   if (btnToggleAuth) {
     btnToggleAuth.onclick = function() {
-      isRegisterMode = !isRegisterMode;
-      document.getElementById('nameGroup').style.display = isRegisterMode ? 'block' : 'none';
-      document.getElementById('confirmPasswordGroup').style.display = isRegisterMode ? 'block' : 'none';
-      document.getElementById('authTitle').innerText = isRegisterMode ? 'Criar sua conta' : 'Seja bem-vindo(a)';
-      document.getElementById('btnSubmitAuth').innerText = isRegisterMode ? 'Cadastrar e Acessar' : 'Entrar na Conta';
-      document.getElementById('toggleText').innerText = isRegisterMode ? 'Já tem uma conta?' : 'Ainda não tem conta?';
-      btnToggleAuth.innerText = isRegisterMode ? 'Fazer Login' : 'Cadastrar-se';
+      applyAuthMode(isRegisterMode ? 'login' : 'register');
+    };
+  }
+
+  const btnResendConfirmation = document.getElementById('btnResendConfirmation');
+  if (btnResendConfirmation) {
+    btnResendConfirmation.onclick = async function() {
+      const email = (document.getElementById('authEmail') || {}).value || '';
+      if (!email) {
+        LinsoraUI.showToast('Informe seu e-mail para reenviar a confirmação.', 'error');
+        return;
+      }
+      btnResendConfirmation.disabled = true;
+      try {
+        const res = await window.supabaseRepo.resendConfirmationEmail(email);
+        LinsoraUI.showToast(res.message, res.success ? 'success' : 'error');
+      } catch (e) {
+        LinsoraUI.showToast('Não foi possível reenviar agora. Tente novamente.', 'error');
+      } finally {
+        btnResendConfirmation.disabled = false;
+      }
     };
   }
 
@@ -1143,6 +1259,15 @@ function setupEventListeners() {
           LinsoraUI.showToast(res.message, 'error');
           return;
         }
+        // Confirmação pendente: NÃO entra no app, NÃO cria sessão local,
+        // NÃO executa gate. Apenas orienta a confirmar o e-mail.
+        if (res.needsConfirmation) {
+          showConfirmationPending(res.message || 'Conta criada! Enviamos um e-mail de confirmação para você. Confirme seu endereço de e-mail para continuar.');
+          LinsoraUI.showToast(res.message || 'Conta criada! Enviamos um e-mail de confirmação para você. Confirme seu endereço de e-mail para continuar.', 'success');
+          try { document.getElementById('authPassword').value = ''; } catch (e) {}
+          try { document.getElementById('authConfirmPassword').value = ''; } catch (e) {}
+          return;
+        }
         // Gate de acesso pago após autenticação (cadastro continua
         // independente da autorização; sem assinatura, tenta o claim uma vez
         // e, se continuar bloqueado, exibe a tela de assinatura).
@@ -1160,6 +1285,9 @@ function setupEventListeners() {
       } else {
         const res = await window.supabaseRepo.signInWithEmail(email, password);
         if (!res.success) {
+          if (res.emailNotConfirmed) {
+            showConfirmationPending(res.message);
+          }
           LinsoraUI.showToast(res.message, 'error');
           return;
         }

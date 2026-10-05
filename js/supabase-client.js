@@ -781,6 +781,14 @@ class SupabaseRepository {
       } catch (err) {
         const errMsg = this.mapAuthErrorMessage(err.message);
         if (window.LinsoraLogger) window.LinsoraLogger.error('Falha no signInWithEmail Supabase', errMsg);
+        const lower = String((err && err.message) || '').toLowerCase();
+        if (lower.includes('email not confirmed') || lower.includes('email_not_confirmed') || lower.includes('not confirmed')) {
+          return {
+            success: false,
+            emailNotConfirmed: true,
+            message: 'Seu e-mail ainda não foi confirmado. Verifique sua caixa de entrada e confirme o endereço para entrar no Linsora.'
+          };
+        }
         return { success: false, message: errMsg };
       }
     }
@@ -872,9 +880,38 @@ class SupabaseRepository {
         const { data, error } = await this.supabase.auth.signUp({
           email: cleanEmail,
           password,
-          options: { data: { full_name: userName } }
+          options: {
+            data: { full_name: userName },
+            emailRedirectTo: this.getEmailConfirmationRedirect()
+          }
         });
         if (error) throw error;
+        // Confirmação de e-mail obrigatória (Supabase Auth é a autoridade):
+        // user sem session = cadastro criado, acesso AINDA NÃO permitido.
+        // Nenhum estado de sessão é criado aqui (sem currentUserId, sem
+        // getDbData, sem LINSORA_ACTIVE_LOCAL_SESSION, sem gate, sem app).
+        if (data && data.user && !data.session) {
+          if (window.LinsoraLogger) window.LinsoraLogger.auth('signUpWithEmail aguardando confirmação de e-mail', { email: cleanEmail }, data.user.id);
+          return {
+            success: true,
+            needsConfirmation: true,
+            user: null,
+            email: cleanEmail,
+            message: 'Conta criada! Enviamos um e-mail de confirmação para você. Confirme seu endereço de e-mail para continuar.'
+          };
+        }
+        // Sem sessão não há acesso: trata como confirmação pendente
+        // (nunca entra no app apenas porque data.user existe).
+        if (!data || !data.user || !data.session) {
+          if (window.LinsoraLogger) window.LinsoraLogger.auth('signUpWithEmail sem sessão: confirmação pendente', { email: cleanEmail });
+          return {
+            success: true,
+            needsConfirmation: true,
+            user: null,
+            email: cleanEmail,
+            message: 'Conta criada! Enviamos um e-mail de confirmação para você. Confirme seu endereço de e-mail para continuar.'
+          };
+        }
         this.currentUserId = data.user.id;
         const db = await this.getDbData(data.user.id, { id: data.user.id, email: cleanEmail, name: userName });
         await this.saveActiveLocalSession(db.user);
@@ -948,6 +985,55 @@ class SupabaseRepository {
   }
 
   /**
+   * Reenvia o e-mail de confirmação de cadastro via API oficial do
+   * Supabase Auth (resend type signup). Não cria sessão, não cria
+   * mecanismo próprio de confirmação, não revela existência de contas
+   * além da mensagem genérica de sucesso do provedor.
+   */
+  async resendConfirmationEmail(email) {
+    const cleanEmail = String(email || '').toLowerCase().trim();
+    if (!cleanEmail) return { success: false, message: 'Informe seu e-mail para reenviar a confirmação.' };
+    if (this.supabase) {
+      try {
+        const { error } = await this.supabase.auth.resend({
+          type: 'signup',
+          email: cleanEmail,
+          options: { emailRedirectTo: this.getEmailConfirmationRedirect() },
+        });
+        if (error) throw error;
+        return { success: true, message: 'E-mail de confirmação reenviado. Verifique sua caixa de entrada.' };
+      } catch (err) {
+        return { success: false, message: this.mapAuthErrorMessage(err.message) };
+      }
+    }
+    return { success: true, message: 'E-mail de confirmação reenviado. Verifique sua caixa de entrada.' };
+  }
+
+  /**
+   * URL de retorno do e-mail de CONFIRMAÇÃO de cadastro (fluxo signUp).
+   * Raiz do app com marcador `email_confirmed=1` — mesma origem do fluxo
+   * atual, sem hardcode de localhost e sem segredos. O marcador permite
+   * ao guard da raiz distinguir confirmação de cadastro (fica no app)
+   * de recuperação de senha (vai para reset-password.html).
+   * O Supabase valida esse destino contra os Redirect URLs permitidos.
+   */
+  getEmailConfirmationRedirect() {
+    const PROD_CONFIRM_URL = 'https://controle-financeiro-controle-financeiro-linsora.vercel.app/?email_confirmed=1';
+    try {
+      const origin = typeof window !== 'undefined' && window.location
+        ? String(window.location.origin || '')
+        : '';
+      if (origin === 'https://controle-financeiro-controle-financeiro-linsora.vercel.app') {
+        return PROD_CONFIRM_URL;
+      }
+      if (origin && origin !== 'null' && /^https?:\/\//.test(origin)) {
+        return origin.replace(/\/+$/, '') + '/?email_confirmed=1';
+      }
+    } catch (e) { /* usa o destino de produção como fallback seguro */ }
+    return PROD_CONFIRM_URL;
+  }
+
+  /**
    * URL de retorno do e-mail de recuperação de senha (fluxo "Esqueci minha senha").
    * Produção: página dedicada de redefinição. Demais origens (dev local,
    * previews): a mesma página resolvida a partir da origem atual — sem
@@ -973,6 +1059,9 @@ class SupabaseRepository {
   mapAuthErrorMessage(msg) {
     if (!msg) return 'Ocorreu um erro na autenticação.';
     const lower = msg.toLowerCase();
+    if (lower.includes('email not confirmed') || lower.includes('email_not_confirmed') || lower.includes('not confirmed')) {
+      return 'Seu e-mail ainda não foi confirmado. Verifique sua caixa de entrada e confirme o endereço para entrar no Linsora.';
+    }
     if (lower.includes('invalid login credentials') || lower.includes('invalid_credentials')) {
       return 'E-mail ou senha incorretos.';
     }

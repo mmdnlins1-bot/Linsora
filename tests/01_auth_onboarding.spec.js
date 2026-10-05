@@ -19,18 +19,19 @@ test.describe('01. Fluxo de Autenticação & Onboarding', () => {
     await expect(splash).toHaveClass(/hidden/, { timeout: 5000 });
   });
 
-  test('Vai direto ao login após o funil da landing (sem onboarding interno)', async ({ page }) => {
+  test('Vai direto ao CADASTRO após o funil da landing (sem onboarding interno)', async ({ page }) => {
     await expect(page.locator('#authScreen')).toBeVisible({ timeout: 8000 });
     await expect(page.locator('#onboardingScreen')).toHaveClass(/hidden/);
+    // Funil "Começar agora": primeira tela é Criar conta, não login.
+    await expect(page.locator('#authTitle')).toHaveText('Crie sua conta');
+    await expect(page.locator('#btnSubmitAuth')).toHaveText('Criar minha conta');
     expect(page.url()).not.toContain('vamos-comecar');
   });
 
-  test('Deve alternar entre Login e Cadastro com validação de campos', async ({ page }) => {
+  test('Deve alternar entre Cadastro e Login com validação de campos', async ({ page }) => {
     await expect(page.locator('#authScreen')).toBeVisible({ timeout: 8000 });
-    const btnToggle = page.locator('#btnToggleAuthMode');
-    await btnToggle.click();
-
-    await expect(page.locator('#authTitle')).toHaveText('Criar sua conta');
+    // Estado inicial do funil: cadastro.
+    await expect(page.locator('#authTitle')).toHaveText('Crie sua conta');
     await expect(page.locator('#nameGroup')).toBeVisible();
     await expect(page.locator('#confirmPasswordGroup')).toBeVisible();
 
@@ -44,15 +45,19 @@ test.describe('01. Fluxo de Autenticação & Onboarding', () => {
     // Toast de erro para senhas que não coincidem
     await expect(page.locator('#toastContainer')).toContainText('As senhas não coincidem');
 
+    // Alternar para login e voltar para cadastro.
+    const btnToggle = page.locator('#btnToggleAuthMode');
     await btnToggle.click();
-    await expect(page.locator('#authTitle')).toHaveText('Seja bem-vindo(a)');
+    await expect(page.locator('#authTitle')).toHaveText('Entrar na sua conta');
+    await btnToggle.click();
+    await expect(page.locator('#authTitle')).toHaveText('Crie sua conta');
   });
 
   test('Deve criar nova conta e realizar login automático com salvamento no banco', async ({ page }) => {
     await expect(page.locator('#authScreen')).toBeVisible({ timeout: 8000 });
 
-    const btnToggle = page.locator('#btnToggleAuthMode');
-    await btnToggle.click();
+    // Funil abre cadastro direto (sem toggle prévio).
+    await expect(page.locator('#authTitle')).toHaveText('Crie sua conta');
 
     const uniqueEmail = `novo_user_${Date.now()}@linsora.com.br`;
     await page.fill('#authName', 'Carlos Eduardo');
@@ -68,6 +73,10 @@ test.describe('01. Fluxo de Autenticação & Onboarding', () => {
 
   test('Deve manter a sessão ativa ao fechar/recarregar o app (Persistência da Sessão)', async ({ page }) => {
     await expect(page.locator('#authScreen')).toBeVisible({ timeout: 8000 });
+
+    // Teste de LOGIN: alternar do cadastro inicial (funil) para login.
+    await page.click('#btnToggleAuthMode');
+    await expect(page.locator('#authTitle')).toHaveText('Entrar na sua conta');
 
     await page.fill('#authEmail', 'persistente@linsora.com.br');
     await page.fill('#authPassword', '123456');
@@ -86,6 +95,10 @@ test.describe('01. Fluxo de Autenticação & Onboarding', () => {
 
   test('Deve realizar Logout apenas quando o usuário clicar no botão "Sair"', async ({ page }) => {
     await expect(page.locator('#authScreen')).toBeVisible({ timeout: 8000 });
+
+    // Teste de LOGIN: alternar do cadastro inicial (funil) para login.
+    await page.click('#btnToggleAuthMode');
+    await expect(page.locator('#authTitle')).toHaveText('Entrar na sua conta');
 
     await page.fill('#authEmail', 'teste@linsora.com.br');
     await page.fill('#authPassword', '123456');

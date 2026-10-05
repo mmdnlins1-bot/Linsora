@@ -21,10 +21,9 @@ test.describe('07. Auditoria de Multi-Usuários, Isolamento de Dados & Troca de 
     await expect(page.locator('#authScreen')).toBeVisible({ timeout: 8000 });
 
     // ------------------------------------------------------------------------
-    // 2. CADASTRO & LOGIN DO USUÁRIO A
+    // 2. CADASTRO & LOGIN DO USUÁRIO A (funil abre cadastro direto)
     // ------------------------------------------------------------------------
-    await page.click('#btnToggleAuthMode');
-    await expect(page.locator('#authTitle')).toHaveText('Criar sua conta');
+    await expect(page.locator('#authTitle')).toHaveText('Crie sua conta');
 
     await page.fill('#authName', 'Usuário A');
     await page.fill('#authEmail', 'usuarioA@linsora.com.br');
@@ -68,7 +67,7 @@ test.describe('07. Auditoria de Multi-Usuários, Isolamento de Dados & Troca de 
     // 4. CADASTRO & LOGIN DO USUÁRIO B (VERIFICAÇÃO DE ISOLAMENTO 100% ZERADO)
     // ------------------------------------------------------------------------
     await page.click('#btnToggleAuthMode');
-    await expect(page.locator('#authTitle')).toHaveText('Criar sua conta');
+    await expect(page.locator('#authTitle')).toHaveText('Crie sua conta');
 
     await page.fill('#authName', 'Usuário B');
     await page.fill('#authEmail', 'usuarioB@linsora.com.br');
@@ -158,7 +157,8 @@ test.describe('07. Auditoria de Multi-Usuários, Isolamento de Dados & Troca de 
     // Entrada pelo funil da landing (storage limpo redirecionaria para lá)
     await page.goto('/?vamos-comecar=1');
     await expect(page.locator('#authScreen')).toBeVisible({ timeout: 8000 });
-    await page.click('#btnToggleAuthMode');
+    // Funil abre cadastro direto (sem toggle prévio).
+    await expect(page.locator('#authTitle')).toHaveText('Crie sua conta');
 
     // Cadastrar usuarioX
     await page.fill('#authName', 'Usuário X');
