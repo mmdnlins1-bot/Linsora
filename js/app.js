@@ -1206,8 +1206,8 @@ function setupEventListeners() {
     };
   }
 
-  document.getElementById('btnFabNewTransaction')?.addEventListener('click', () => openNewTxModal('DESPESA'));
-  document.getElementById('btnNewTransactionHeader')?.addEventListener('click', () => openNewTxModal('DESPESA'));
+  document.getElementById('btnFabNewTransaction')?.addEventListener('click', () => openNewTxModal('RECEITA'));
+  document.getElementById('btnNewTransactionHeader')?.addEventListener('click', () => openNewTxModal('RECEITA'));
   document.getElementById('btnGoToTransactions')?.addEventListener('click', () => window.switchTab('tabTransactions'));
 
   const btnTypeExpense = document.getElementById('btnTypeExpense');
