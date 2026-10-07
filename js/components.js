@@ -991,8 +991,8 @@ class LinsoraUIComponentEngine {
 
     container.innerHTML = notifs.map(n => `
       <div class="notification-item-card ${n.type}">
-        <strong>${n.title}</strong>
-        <p>${n.message}</p>
+        <strong>${LinsoraUtils.escapeHTML(n.title)}</strong>
+        <p>${LinsoraUtils.escapeHTML(n.message)}</p>
       </div>
     `).join('');
   }
