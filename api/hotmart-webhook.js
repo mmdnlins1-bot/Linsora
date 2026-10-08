@@ -39,6 +39,7 @@
 'use strict';
 
 const crypto = require('crypto');
+const rateLimit = require('./_rate-limit');
 
 // Tabelas que o service_role pode tocar NESTE endpoint (defesa em profundidade;
 // as tabelas financeiras nunca entram aqui).
@@ -444,6 +445,14 @@ async function hotmartWebhook(req, res, deps) {
       res.setHeader('Allow', 'POST');
       return res.status(405).json({ ok: false, error: 'method_not_allowed' });
     }
+
+    // Rate limiting (SHADOW: só observa, nunca bloqueia). A deduplicação
+    // por hotmart_event_id continua sendo a principal proteção anti-replay.
+    const rlScope = rateLimit.scopeFor(env);
+    await rateLimit.observe({
+      scope: rlScope, endpoint: 'hotmart-webhook', bucket: 'webhookIp',
+      key: 'ip:' + rateLimit.getClientIp(req),
+    });
 
     // Config essencial (sem padrão, nunca hardcoded). Ausente -> 500.
     // URL reutiliza a mesma variável de produção do projeto

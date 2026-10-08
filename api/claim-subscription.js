@@ -31,6 +31,8 @@
  */
 'use strict';
 
+const rateLimit = require('./_rate-limit');
+
 const ALLOWED_WRITE_TABLES = ['subscription_events', 'subscriptions'];
 const ALLOWED_READ_TABLES = ['subscription_events', 'subscriptions'];
 
@@ -260,6 +262,13 @@ async function claimSubscription(req, res, deps) {
       return res.status(405).json({ ok: false, error: 'method_not_allowed' });
     }
 
+    // Rate limiting (SHADOW: só observa, nunca bloqueia).
+    const rlScope = rateLimit.scopeFor(env);
+    await rateLimit.observe({
+      scope: rlScope, endpoint: 'claim-subscription', bucket: 'claimIp',
+      key: 'ip:' + rateLimit.getClientIp(req),
+    });
+
     const supabaseUrl = env.LINSORA_SUPABASE_URL;
     const serviceKey = env.SUPABASE_SERVICE_ROLE_KEY;
     if (!supabaseUrl || !serviceKey) {
@@ -285,6 +294,12 @@ async function claimSubscription(req, res, deps) {
       });
       return res.status(403).json({ ok: false, error: 'email-not-confirmed' });
     }
+
+    // Rate limiting por usuário (SHADOW: só observa, nunca bloqueia).
+    await rateLimit.observe({
+      scope: rlScope, endpoint: 'claim-subscription', bucket: 'claimUser',
+      key: 'user:' + sessionUser.id,
+    });
 
     // Órfãos da sessão autenticada: somente eventos relevantes cujo e-mail
     // (subscriber, senão buyer) coincide com o e-mail validado no token.

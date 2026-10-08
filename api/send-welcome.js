@@ -49,6 +49,7 @@
 'use strict';
 
 const crypto = require('crypto');
+const rateLimit = require('./_rate-limit');
 
 const WELCOME_SUBJECT = 'Bem-vindo ao Linsora! Sua conta foi criada';
 
@@ -384,6 +385,13 @@ async function handler(req, res, ctx) {
     return;
   }
 
+  // Rate limiting (SHADOW: só observa, nunca bloqueia).
+  const rlScope = rateLimit.scopeFor(env);
+  const rlIpKey = 'ip:' + rateLimit.getClientIp(req);
+  await rateLimit.observe({
+    scope: rlScope, endpoint: 'send-welcome', bucket: 'welcomeIp', key: rlIpKey,
+  });
+
   const supabaseUrl = getEnv(env, 'LINSORA_SUPABASE_URL');
   const serviceKey = getEnv(env, 'SUPABASE_SERVICE_ROLE_KEY');
   const hookSecret = getEnv(env, 'WELCOME_HOOK_SECRET');
@@ -417,6 +425,10 @@ async function handler(req, res, ctx) {
   }
   if (providedSecret && !hookAuthed) {
     // Segredo presente porém incorreto: rejeita sem revelar o motivo exato.
+    // Bucket dedicado a tentativas inválidas (SHADOW: só observa).
+    await rateLimit.observe({
+      scope: rlScope, endpoint: 'send-welcome', bucket: 'welcomeBadSecretIp', key: rlIpKey,
+    });
     res.status(401).json({ ok: false, error: 'invalid-credentials' });
     return;
   }
@@ -473,6 +485,12 @@ async function handler(req, res, ctx) {
     }
     account = validated;
   }
+
+  // Rate limiting por usuário revalidado (SHADOW: só observa, nunca bloqueia).
+  await rateLimit.observe({
+    scope: rlScope, endpoint: 'send-welcome', bucket: 'welcomeUser',
+    key: 'user:' + String(account.id),
+  });
 
   const nowIso = new Date().toISOString();
   const leaseCutoffIso = new Date(Date.now() - CLAIM_LEASE_MINUTES * 60 * 1000).toISOString();
