@@ -105,7 +105,7 @@ test.describe('56. UUIDs na origem e sync íntegro', () => {
     expect(seen.size).toBe(5);
   });
 
-  test('3/5. sync nunca envia id legado; legado vira pendência explícita', async () => {
+  test('3/5. legado nunca é enviado; vira legacyPending sem falhar o sync', async () => {
     const { repo } = boot();
     const fake = fakeBackend();
     repo.supabase = fake;
@@ -115,8 +115,69 @@ test.describe('56. UUIDs na origem e sync íntegro', () => {
     const res = await repo.syncToSupabaseRemote(data, UUID_REAL);
     const financial = fake.sent.filter((s) => s.table !== 'profiles');
     expect(financial).toHaveLength(0);
-    expect(res.success).toBe(false);
-    expect(res.errors.join(' | ')).toContain('migração pendente');
+    expect(res.success).toBe(true);
+    expect(res.errors).toHaveLength(0);
+    expect(res.legacyPending.join(' | ')).toContain('migração pendente');
+  });
+
+  test('regressão: UUID novo + 2 legados → synced:true, pendência separada, toast de sucesso', async () => {
+    const { repo, store } = boot();
+    const fake = fakeBackend();
+    repo.supabase = fake;
+    store.state = emptyState(UUID_REAL);
+    store.state.transactions.push(
+      { id: 'tx_legada_1', userId: UUID_REAL, type: 'DESPESA', description: 'Antiga 1', amount: 5, category: 'X', date: '2026-09-01', account: 'C', status: 'CONCLUIDO' },
+      { id: 'tx_legada_2', userId: UUID_REAL, type: 'DESPESA', description: 'Antiga 2', amount: 7, category: 'X', date: '2026-09-02', account: 'C', status: 'CONCLUIDO' }
+    );
+    const res = await store.saveTransaction({ type: 'RECEITA', description: 'Salário', amount: 7500, category: 'Salário', date: '2026-10-08', account: 'Banco' });
+    expect(res.saved).toBe(true);
+    expect(res.synced).toBe(true);
+    expect(res.syncErrors).toHaveLength(0);
+    expect(res.legacyPending.join(' | ')).toContain('migração pendente');
+    // O registro novo chegou; legados, jamais.
+    const txRows = fake.sent.filter((s) => s.table === 'transactions');
+    expect(txRows).toHaveLength(1);
+    expect(UUID_RE.test(txRows[0].id)).toBe(true);
+    // Decisão da UI (mesma condição de app.js): sucesso, sem toast de falha.
+    const backendOn = true;
+    const showPending = res.synced === false && backendOn;
+    expect(showPending).toBe(false);
+  });
+
+  test('regressão: conta e cartão seguem o mesmo contrato', async () => {
+    const { repo, store } = boot();
+    const fake = fakeBackend();
+    repo.supabase = fake;
+    store.state = emptyState(UUID_REAL);
+    store.state.accounts.push({ id: 'acc_legada', userId: UUID_REAL, name: 'Velha', type: 'CORRENTE', balance: 1 });
+    const accRes = await store.addAccount({ name: 'Banco Novo', type: 'CORRENTE', balance: 100 });
+    expect(accRes.synced).toBe(true);
+    expect(accRes.legacyPending.join(' | ')).toContain('accounts');
+    const cardRes = await store.addCard({ name: 'Cartão Novo', brand: 'Visa', limitTotal: 1000, closingDay: 10, dueDay: 20 });
+    expect(cardRes.synced).toBe(true);
+    expect(cardRes.syncErrors).toHaveLength(0);
+  });
+
+  test('erro real: upsert rejeitado → synced:false e toast de falha', async () => {
+    const { repo, store } = boot();
+    repo.supabase = {
+      auth: fakeBackend().auth,
+      from: () => ({
+        select: () => {
+          const p = (async () => ({ data: [], error: null }))();
+          p.order = () => p;
+          return p;
+        },
+        upsert: async () => ({ error: { message: 'negado-pelo-servidor-ficticio' } }),
+      }),
+    };
+    store.state = emptyState(UUID_REAL);
+    const res = await store.saveTransaction({ type: 'RECEITA', description: 'Salário', amount: 100, category: 'X', date: '2026-10-01', account: 'C' });
+    expect(res.saved).toBe(true);
+    expect(res.synced).toBe(false);
+    expect(res.syncErrors.join(' | ')).toContain('negado-pelo-servidor-ficticio');
+    const showPending = res.synced === false && true;
+    expect(showPending).toBe(true);
   });
 
   test('4. registro novo com UUID chega ao Supabase com id válido', async () => {

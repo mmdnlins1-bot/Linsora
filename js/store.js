@@ -119,10 +119,12 @@ class LinsoraStore {
   }
 
   // Aguarda o resultado do sync disparado por notify() e resume em contrato
-  // { saved, synced, syncErrors }. Nunca lança.
+  // { saved, synced, syncErrors, legacyPending }. Pendência legada NÃO é
+  // falha da operação atual. Nunca lança.
   async _notifyAndReport() {
     let synced = true;
     const syncErrors = [];
+    const legacyPending = [];
     try {
       const savePromise = this.notify();
       if (savePromise && typeof savePromise.then === 'function') {
@@ -130,12 +132,13 @@ class LinsoraStore {
         const sr = saved && saved.syncResult;
         synced = !!(sr && sr.success);
         if (sr && Array.isArray(sr.errors)) syncErrors.push(...sr.errors);
+        if (sr && Array.isArray(sr.legacyPending)) legacyPending.push(...sr.legacyPending);
       }
     } catch (e) {
       synced = false;
       syncErrors.push(String((e && e.message) || e));
     }
-    return { saved: true, synced, syncErrors };
+    return { saved: true, synced, syncErrors, legacyPending };
   }
 
   togglePrivacy() {
@@ -237,7 +240,7 @@ class LinsoraStore {
       this.applyTransactionImpact(copy, false);
       return this._notifyAndReport();
     }
-    return { saved: true, synced: true, syncErrors: [] };
+    return { saved: true, synced: true, syncErrors: [], legacyPending: [] };
   }
 
   /* ------------------------------------------------------------------------

@@ -1523,15 +1523,21 @@ class SupabaseRepository {
 
   async syncToSupabaseRemote(data, userId) {
     const localOnlyId = !userId || userId === 'guest' || String(userId).startsWith('usr_');
-    if (localOnlyId) return { success: true, errors: [] };
+    if (localOnlyId) return { success: true, errors: [], legacyPending: [] };
     // Backend esperado mas cliente ausente: falha honesta (nunca "sucesso").
     if (!this.supabase) {
       if (typeof this.backendExpected === 'function' && this.backendExpected()) {
-        return { success: false, errors: ['supabase-nao-inicializado'] };
+        return { success: false, errors: ['supabase-nao-inicializado'], legacyPending: [] };
       }
-      return { success: true, errors: [] };
+      return { success: true, errors: [], legacyPending: [] };
     }
     const errors = [];
+    // Guarda central de UUID: nenhuma tabela com PK UUID recebe id inválido.
+    // Registros legados (ex.: 'tx_*') NÃO sobem e NÃO são renormalizados aqui
+    // (renormalizar a cada sync duplicaria). Vão para `legacyPending`, que
+    // NÃO contamina `errors`/`success`: pendência antiga não pode transformar
+    // uma operação nova bem-sucedida em falha.
+    const legacyPending = [];
     // Guarda central de UUID: nenhuma tabela com PK UUID recebe id inválido.
     // Registros legados (ex.: 'tx_*') NÃO sobem e NÃO são renormalizados aqui
     // (renormalizar a cada sync duplicaria); viram pendência de migração.
@@ -1544,7 +1550,7 @@ class SupabaseRepository {
     });
     const noteLegacy = () => {
       for (const table of Object.keys(legacyCount)) {
-        errors.push(`${table}: ${legacyCount[table]} registro(s) com id legado ignorado(s) (migração pendente)`);
+        legacyPending.push(`${table}: ${legacyCount[table]} registro(s) com id legado ignorado(s) (migração pendente)`);
       }
     };
     try {
@@ -1636,11 +1642,13 @@ class SupabaseRepository {
       errors.push(`sync_exception: ${e?.message || e}`);
     }
     noteLegacy();
+    // O evento representa ERRO REAL de sincronização: pendência legada
+    // sozinha nunca o dispara.
     if (errors.length > 0) {
       if (window.LinsoraLogger) window.LinsoraLogger.error('Erros na sincronização remota (dados salvos localmente)', errors, userId);
-      return { success: false, errors };
+      return { success: false, errors, legacyPending };
     }
-    return { success: true, errors: [] };
+    return { success: true, errors: [], legacyPending };
   }
 
   /* ------------------------------------------------------------------------
