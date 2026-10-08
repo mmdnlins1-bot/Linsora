@@ -45,6 +45,10 @@ const LIMITS = {
   welcomeIp: { max: 60, window: '1 m' },
   welcomeBadSecretIp: { max: 5, window: '1 m' },
   webhookIp: { max: 300, window: '1 m' },
+  // Auth Email Hook (Resend): anti-spam do provedor. Recipient usa HMAC do
+  // e-mail (nunca texto puro) — ver api/send-auth-email.js.
+  authEmailIp: { max: 60, window: '1 m' },
+  authEmailRecipient: { max: 10, window: '1 m' },
 };
 
 function isShadowMode(env) {
