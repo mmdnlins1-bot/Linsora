@@ -16,6 +16,7 @@ class TransactionAIParser {
       { name: 'Serviços', targetType: 'DESPESA', keywords: ['tv box', 'tvbox', 'streaming', 'plano', 'assinatura', 'wifi', 'wi-fi', 'celular', 'barbeiro', 'cabeleireiro', 'salao', 'salão', 'manutencao', 'manutenção', 'tv por assinatura'] },
       { name: 'Salário', targetType: 'RECEITA', keywords: ['salario', 'salário', 'pro-labore', 'pró-labore', 'holerite', 'remuneração', 'contracheque', 'ordenado'] },
       { name: 'Investimentos', targetType: 'AMBOS', keywords: ['aporte', 'acoes', 'ações', 'fii', 'tesouro', 'investimento', 'poupanca', 'poupança', 'crypto', 'cripto', 'cdb'] },
+      { name: 'Transferência', targetType: 'AMBOS', keywords: ['transferi', 'transferir', 'transferência', 'transferencia', 'mandei', 'mandar', 'enviei', 'enviar'] },
       { name: 'Educação', targetType: 'DESPESA', keywords: ['curso', 'faculdade', 'escola', 'livro', 'mensalidade', 'aula', 'treinamento'] },
       { name: 'Compras', targetType: 'DESPESA', keywords: ['roupa', 'sapato', 'loja', 'eletronico', 'eletrônico', 'shopping', 'amazon', 'mercado livre', 'magalu', 'presente'] },
       { name: 'Outros', targetType: 'AMBOS', keywords: ['outros', 'diversos', 'extra', 'taxa', 'tarifa'] }
@@ -29,6 +30,23 @@ class TransactionAIParser {
       'cem': 100, 'cento': 100, 'duzentos': 200, 'trezentos': 300, 'quatrocentos': 400, 'quinhentos': 500,
       'seiscentos': 600, 'setecentos': 700, 'oitocentos': 800, 'novecentos': 900, 'mil': 1000
     };
+
+    // Palavras que indicam estabelecimento (compra/serviço), não destinatário
+    // de transferência. Usadas para NÃO forçar Transferência em "pix no X".
+    this.establishmentWords = [
+      'supermercado', 'mercado', 'posto', 'farmacia', 'drogaria', 'loja',
+      'shopping', 'restaurante', 'padaria', 'pizzaria', 'lanchonete', 'bar',
+      'cinema', 'uber', 'taxi', 'sorveteria', 'acougue', 'feira', 'atacadao',
+      'posto de gasolina'
+    ];
+  }
+
+  mentionsEstablishment(text) {
+    const norm = String(text || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    return this.establishmentWords.some((w) => {
+      const esc = w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      return new RegExp(`(^|[^a-z])(${esc})([^a-z]|$)`, 'i').test(norm);
+    });
   }
 
   /**
@@ -178,6 +196,17 @@ class TransactionAIParser {
              person = originalDeMatch[1].trim();
              person = person.charAt(0).toUpperCase() + person.slice(1);
           }
+      }
+
+      // Pix para estabelecimento = pagamento (método), NÃO transferência:
+      // devolve null para o pipeline normal categorizar pelo contexto
+      // (ex.: "pix no supermercado" → Alimentação). Pix recebido ou com
+      // destinatário pessoa segue como Transferência. "Pix" capturado como
+      // nome (ex.: "... via pix") nunca é destinatário real.
+      const weakPerson = !person || person === 'Desconhecido' ||
+        person.toLowerCase() === 'pix' || this.mentionsEstablishment(person);
+      if (!isReceived && this.mentionsEstablishment(lowerText) && weakPerson) {
+          return null;
       }
 
       return {

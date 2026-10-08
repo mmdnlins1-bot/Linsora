@@ -335,7 +335,8 @@ class LinsoraStore {
       type: 'DESPESA',
       description: `Pix enviado (${pixKey})`,
       amount: numAmount,
-      category: 'Outros',
+      // Pix enviado a destinatário é transferência entre pessoas/contas.
+      category: 'Transferência',
       date: LinsoraUtils.toLocalDateKey(),
       account: accountName || (this.state.accounts[0] ? this.state.accounts[0].name : 'Conta Principal'),
       status: 'CONCLUIDO',

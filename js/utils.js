@@ -445,6 +445,7 @@ const LinsoraUtils = {
       'Saúde': '#EF4444',
       'Salário': '#10B981',
       'Investimentos': '#8B5CF6',
+      'Transferência': '#14B8A6',
       'Outros': '#64748B'
     };
     return map[category] || '#64748B';
