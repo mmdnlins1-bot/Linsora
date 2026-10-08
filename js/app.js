@@ -2244,6 +2244,19 @@ function setupEventListeners() {
   // Categorias clicáveis na análise (delegação nos dois containers que podem
   // exibir a distribuição: principal e cauda após as movimentações).
   // Troca direta: outra categoria substitui a ativa; mesma categoria alterna.
+  // Após aplicar um filtro, rola suavemente até a seção de movimentações
+  // (já renderizada), respeitando o header fixo via scroll-margin-top.
+  const scrollToMovementsResult = () => {
+    try {
+      const target = document.getElementById('extratoMovementsSection');
+      if (!target) return;
+      const doScroll = () => {
+        try { target.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) { /* sem scroll: fluxo intacto */ }
+      };
+      if (typeof window.requestAnimationFrame === 'function') window.requestAnimationFrame(doScroll);
+      else doScroll();
+    } catch (e) { /* sem scroll: fluxo intacto */ }
+  };
   const toggleCategoryFilter = (row) => {
     if (!row || !row.getAttribute) return;
     let cat = null;
@@ -2255,6 +2268,7 @@ function setupEventListeners() {
     if (!cat) return;
     window.linsoraStore.filterCategory = window.linsoraStore.filterCategory === cat ? null : cat;
     renderFilteredTransactions(window.linsoraStore.state);
+    if (window.linsoraStore.filterCategory) scrollToMovementsResult();
   };
   ['extratoAnalysisContainer', 'extratoAnalysisTail'].forEach((containerId) => {
     const containerEl = document.getElementById(containerId);
