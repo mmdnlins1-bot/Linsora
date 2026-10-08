@@ -64,6 +64,28 @@ class LinsoraStore {
     this.notify();
   }
 
+  /**
+   * Retry explícito após falha de carregamento (sem loop automático):
+   * revalida a sessão, tenta o remoto de novo e limpa o loadError.
+   * Retorna true somente se o estado final não tem erro de carga.
+   */
+  async retryLoadData() {
+    try {
+      const repo = window.supabaseRepo;
+      if (!repo || !this.state || !this.state.user || !this.state.user.id) return false;
+      if (typeof repo.checkActiveSession === 'function') {
+        const sessionRes = await repo.checkActiveSession();
+        if (sessionRes && sessionRes.success && sessionRes.user) {
+          await this.loadUserData(sessionRes.user);
+          return !!(this.state && !this.state.loadError);
+        }
+        return false;
+      }
+      await this.loadUserData(this.state.user);
+      return !!(this.state && !this.state.loadError);
+    } catch (e) { return false; }
+  }
+
   clearState() {
     const previousUserId = this.state?.user?.id;
     if (window.LinsoraLogger) {

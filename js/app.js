@@ -602,6 +602,20 @@ async function resolveGuestRecurringConsent(user) {
 function renderAppUI(state) {
   if (!state) return;
 
+  // Erro de carregamento ≠ conta vazia: banner persistente com retry.
+  try {
+    const loadBanner = document.getElementById('loadErrorBanner');
+    if (loadBanner) {
+      if (state.loadError) {
+        const loadText = document.getElementById('loadErrorText');
+        if (loadText) loadText.textContent = 'Não foi possível carregar seus dados.';
+        loadBanner.classList.remove('hidden');
+      } else {
+        loadBanner.classList.add('hidden');
+      }
+    }
+  } catch (e) { /* banner opcional: nunca quebra a renderização */ }
+
   const hideValues = window.linsoraStore.isHideValues;
 
   const userNameHeader = document.getElementById('userNameHeader');
@@ -2126,6 +2140,24 @@ function setupEventListeners() {
   }
 
   document.getElementById('btnTogglePrivacy')?.addEventListener('click', () => window.linsoraStore.togglePrivacy());
+
+  document.getElementById('btnRetryLoad')?.addEventListener('click', async () => {
+    try {
+      const btn = document.getElementById('btnRetryLoad');
+      if (btn) btn.disabled = true;
+      const ok = await window.linsoraStore.retryLoadData();
+      renderAppUI(window.linsoraStore.state);
+      if (ok) {
+        try { LinsoraUI.showToast('Dados carregados com sucesso.', 'success'); } catch (e) {}
+      } else {
+        try { LinsoraUI.showToast('Ainda não foi possível carregar seus dados. Tente novamente.', 'error'); } catch (e) {}
+      }
+    } catch (e) {
+      try { LinsoraUI.showToast('Ainda não foi possível carregar seus dados. Tente novamente.', 'error'); } catch (e2) {}
+    } finally {
+      try { const btn = document.getElementById('btnRetryLoad'); if (btn) btn.disabled = false; } catch (e) {}
+    }
+  });
   
   document.getElementById('btnToggleTheme')?.addEventListener('click', () => {
     window.linsoraStore.toggleTheme();

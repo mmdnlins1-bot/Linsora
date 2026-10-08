@@ -88,6 +88,17 @@ class SupabaseRepository {
   }
 
   /**
+   * Integridade de sessão: indica se o app foi configurado para usar o
+   * backend Supabase. Quando verdadeiro, falha de inicialização NUNCA pode
+   * cair no modo local silencioso (ver signIn/signUp/checkActiveSession).
+   */
+  backendExpected() {
+    try {
+      return !!(this.config && this.config.isConnected);
+    } catch (e) { return false; }
+  }
+
+  /**
    * Acesso unificado ao Capacitor Preferences.
    * Usa a MESMA camada para persistir e recuperar (resolve a divergência
    * entre a API antiga `Capacitor.Plugins.Preferences` e a nova
@@ -468,6 +479,15 @@ class SupabaseRepository {
     // Fallback: sessão local salva (modo offline ou Supabase não configurado)
     const localSession = await this.getActiveLocalSession();
     if (localSession && localSession.id) {
+      // Integridade de sessão: com backend configurado, identidade local
+      // (guest/local) nunca mascara a sessão Supabase. Sem sessão válida no
+      // servidor, volta ao login em vez de adotar um id obsoleto.
+      if (this.backendExpected()) {
+        const rememberedId = String(localSession.id);
+        if (rememberedId === 'guest' || rememberedId === 'usr_guest' || rememberedId.startsWith('usr_')) {
+          return { success: false };
+        }
+      }
       this.currentUserId = localSession.id;
       const db = await this.getDbData(localSession.id, localSession);
       console.log('[LINSORA Auth] Sessão local encontrada para userId:', localSession.id);
@@ -793,6 +813,12 @@ class SupabaseRepository {
       }
     }
 
+    // Integridade de sessão: backend configurado mas cliente ausente é falha
+    // de inicialização — nunca auto-registrar usr_ silenciosamente.
+    if (this.backendExpected()) {
+      return { success: false, message: 'Não foi possível conectar ao Linsora agora. Verifique sua conexão e tente novamente.' };
+    }
+
     const registeredUsers = this.getLocalRegisteredUsers();
     const existing = registeredUsers[cleanEmail];
 
@@ -922,6 +948,12 @@ class SupabaseRepository {
         if (window.LinsoraLogger) window.LinsoraLogger.error('Falha no signUpWithEmail Supabase', errMsg);
         return { success: false, message: errMsg };
       }
+    }
+
+    // Integridade de sessão: idem ao login — sem identidade local silenciosa
+    // quando o backend está configurado.
+    if (this.backendExpected()) {
+      return { success: false, message: 'Não foi possível conectar ao Linsora agora. Verifique sua conexão e tente novamente.' };
     }
 
     const registeredUsers = this.getLocalRegisteredUsers();
@@ -1095,7 +1127,9 @@ class SupabaseRepository {
       fixedBills: [],
       recurringBills: [],
       occurrences: [],
-      transactions: []
+      transactions: [],
+      // Erro de carregamento remoto (nunca confundir com conta vazia).
+      loadError: null
     };
   }
 
@@ -1317,7 +1351,9 @@ class SupabaseRepository {
       }
     }
 
-    // Se estiver conectado ao Supabase remoto, busca via PostgREST/RLS
+    // Se estiver conectado ao Supabase remoto, busca via PostgREST/RLS.
+    // Falha de transporte aqui NÃO vira "conta vazia": marca loadError.
+    let remoteLoadFailed = false;
     if (this.supabase && activeId !== 'guest' && !activeId.startsWith('usr_')) {
       try {
         const [accRes, cardsRes, txRes, goalsRes, pixRes, billsRes, recBillsRes, occRes] = await Promise.all([
@@ -1417,14 +1453,23 @@ class SupabaseRepository {
           this.applyRecordedGuestClaim(mergedData, activeId);
         } catch (e) { /* sem claim */ }
         localStorage.setItem(key, JSON.stringify(mergedData));
+        mergedData.loadError = null;
         if (window.LinsoraLogger) window.LinsoraLogger.read('Supabase Database & Local Cache', { accounts: mergedData.accounts.length, transactions: mergedData.transactions.length }, activeId);
         return mergedData;
       } catch (err) {
+        remoteLoadFailed = true;
         if (window.LinsoraLogger) window.LinsoraLogger.error('Fallback para cache local isolado', err, activeId);
       }
     }
 
     if (localCache) {
+      // Distinção falha × vazio: erro remoto real vira loadError explícito
+      // (nunca "conta vazia"); cache válido é preservado, nunca apagado.
+      if (remoteLoadFailed) {
+        localCache.loadError = { message: 'Não foi possível carregar seus dados.', at: new Date().toISOString() };
+      } else if (localCache.loadError) {
+        delete localCache.loadError;
+      }
       localCache.user.id = activeId;
       if (userObj) {
         if (userObj.name) localCache.user.name = userObj.name;
@@ -1454,6 +1499,9 @@ class SupabaseRepository {
     }
 
     const emptyState = this.getEmptyUserData(userObj);
+    if (remoteLoadFailed) {
+      emptyState.loadError = { message: 'Não foi possível carregar seus dados.', at: new Date().toISOString() };
+    }
     // Claim consentido também vale para conta nova sem cache: registra a
     // partir dos candidatos atuais e aplica antes de persistir.
     try {

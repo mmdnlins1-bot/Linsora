@@ -1583,6 +1583,12 @@
         </div>
       </div>
 
+      <!-- BANNER DE ERRO DE CARREGAMENTO (falha remota ≠ conta vazia) -->
+      <div id="loadErrorBanner" class="hidden" role="alert" style="margin:0 16px 12px;padding:12px 14px;border-radius:12px;background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.5);color:#FCA5A5;font-size:14px;line-height:1.5;">
+        <span id="loadErrorText">Não foi possível carregar seus dados.</span>
+        <button type="button" class="linsora-btn primary sm" id="btnRetryLoad" style="margin-top:8px;">Tentar novamente</button>
+      </div>
+
       <!-- TOAST NOTIFICATION FLOATING BANNER (POSICIONAMENTO PERFEITO NO TOPO) -->
       <div class="toast-container" id="toastContainer"></div>
 
