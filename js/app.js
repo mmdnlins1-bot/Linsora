@@ -1463,9 +1463,14 @@ function setupEventListeners() {
       if (id) txPayload.id = id;
 
       try {
-        await window.linsoraStore.saveTransaction(txPayload);
+        const saveResult = await window.linsoraStore.saveTransaction(txPayload);
         LinsoraUI.closeModal('modalTransactionForm');
-        LinsoraUI.showToast(`${isIncome ? 'Receita' : 'Despesa'} salva com sucesso!`);
+        const backendOn = !!(window.supabaseRepo && typeof window.supabaseRepo.backendExpected === 'function' && window.supabaseRepo.backendExpected());
+        if (saveResult && saveResult.synced === false && backendOn) {
+          LinsoraUI.showToast('Salvo neste dispositivo, mas não foi possível sincronizar com sua conta. Tente novamente.', 'error');
+        } else {
+          LinsoraUI.showToast(`${isIncome ? 'Receita' : 'Despesa'} salva com sucesso!`);
+        }
       } catch (err) {
         console.error('[LINSORA] Erro ao salvar transação:', err);
         LinsoraUI.closeModal('modalTransactionForm');
@@ -1482,10 +1487,15 @@ function setupEventListeners() {
     const balance = LinsoraUtils.parseCurrencyToFloat(document.getElementById('accBalance').value);
     if (!name) return;
 
-    await window.linsoraStore.addAccount({ name, type, balance });
+    const accResult = await window.linsoraStore.addAccount({ name, type, balance });
     LinsoraUI.closeModal('modalAccountForm');
     if (typeof window.refreshTxAccountOptions === 'function') window.refreshTxAccountOptions(true);
-    LinsoraUI.showToast('Conta bancária adicionada com sucesso!');
+    const accBackendOn = !!(window.supabaseRepo && typeof window.supabaseRepo.backendExpected === 'function' && window.supabaseRepo.backendExpected());
+    if (accResult && accResult.synced === false && accBackendOn) {
+      LinsoraUI.showToast('Salvo neste dispositivo, mas não foi possível sincronizar com sua conta. Tente novamente.', 'error');
+    } else {
+      LinsoraUI.showToast('Conta bancária adicionada com sucesso!');
+    }
   });
 
   document.getElementById('btnAddCard')?.addEventListener('click', () => LinsoraUI.openModal('modalCardForm'));
@@ -1498,10 +1508,15 @@ function setupEventListeners() {
     const dueDay = document.getElementById('cardDueInput').value;
     if (!name) return;
 
-    await window.linsoraStore.addCard({ name, brand, limitTotal, closingDay, dueDay });
+    const cardResult = await window.linsoraStore.addCard({ name, brand, limitTotal, closingDay, dueDay });
     LinsoraUI.closeModal('modalCardForm');
     if (typeof window.refreshTxAccountOptions === 'function') window.refreshTxAccountOptions(true);
-    LinsoraUI.showToast('Cartão de crédito adicionado!');
+    const cardBackendOn = !!(window.supabaseRepo && typeof window.supabaseRepo.backendExpected === 'function' && window.supabaseRepo.backendExpected());
+    if (cardResult && cardResult.synced === false && cardBackendOn) {
+      LinsoraUI.showToast('Salvo neste dispositivo, mas não foi possível sincronizar com sua conta. Tente novamente.', 'error');
+    } else {
+      LinsoraUI.showToast('Cartão de crédito adicionado!');
+    }
   });
 
   document.getElementById('btnDeleteCard')?.addEventListener('click', async () => {
@@ -1670,9 +1685,14 @@ function setupEventListeners() {
     const bank = document.getElementById('pixBankSelect').value;
     if (!key) return;
 
-    await window.linsoraStore.addPixKey(type, key, bank);
+    const pixResult = await window.linsoraStore.addPixKey(type, key, bank);
     LinsoraUI.closeModal('modalPixKeyForm');
-    LinsoraUI.showToast('Chave Pix cadastrada!');
+    const pixBackendOn = !!(window.supabaseRepo && typeof window.supabaseRepo.backendExpected === 'function' && window.supabaseRepo.backendExpected());
+    if (pixResult && pixResult.synced === false && pixBackendOn) {
+      LinsoraUI.showToast('Salvo neste dispositivo, mas não foi possível sincronizar com sua conta. Tente novamente.', 'error');
+    } else {
+      LinsoraUI.showToast('Chave Pix cadastrada!');
+    }
   });
 
   document.getElementById('btnDuplicateTx')?.addEventListener('click', async () => {
@@ -1812,10 +1832,10 @@ function setupEventListeners() {
     const amount = LinsoraUtils.parseCurrencyToFloat(amountInput ? amountInput.value : '0');
     const keyText = currentPixMode === 'QR' ? 'QR Code Pix' : (keyInput ? keyInput.value.trim() : 'Chave Padrão');
 
-    const success = await window.linsoraStore.executePixTransfer(keyText, amount);
-    if (success) {
+    const pixTransferResult = await window.linsoraStore.executePixTransfer(keyText, amount);
+    if (pixTransferResult) {
       LinsoraUI.closeModal('modalPixArea');
-      
+
       // Resetar form do modal Pix para o estado inicial
       document.getElementById('pixSummaryStep')?.classList.add('hidden');
       document.getElementById('pixFormStep')?.classList.remove('hidden');
@@ -1824,7 +1844,12 @@ function setupEventListeners() {
       document.getElementById('pixAmountHighlightCard')?.classList.add('hidden');
       updatePixFormValidation();
 
-      LinsoraUI.showToast(`Pix de R$ ${amount.toLocaleString('pt-BR', {minimumFractionDigits: 2})} enviado!`);
+      const pixSyncBackendOn = !!(window.supabaseRepo && typeof window.supabaseRepo.backendExpected === 'function' && window.supabaseRepo.backendExpected());
+      if (pixTransferResult.synced === false && pixSyncBackendOn) {
+        LinsoraUI.showToast('Salvo neste dispositivo, mas não foi possível sincronizar com sua conta. Tente novamente.', 'error');
+      } else {
+        LinsoraUI.showToast(`Pix de R$ ${amount.toLocaleString('pt-BR', {minimumFractionDigits: 2})} enviado!`);
+      }
     }
   });
 
@@ -1960,10 +1985,15 @@ function setupEventListeners() {
       LinsoraUI.showToast(`Pagamento de ${LinsoraUtils.formatBRL(res.paid)} registrado! Restam ${LinsoraUtils.formatBRL(res.remaining)}.`);
       return;
     }
-    const ok = await window.linsoraStore.payCardInvoice(card.id);
-    if (ok) {
+    const payInvoiceResult = await window.linsoraStore.payCardInvoice(card.id);
+    if (payInvoiceResult) {
       LinsoraUI.closeModal('modalPayInvoice');
-      LinsoraUI.showToast('Fatura paga com sucesso!');
+      const payBackendOn = !!(window.supabaseRepo && typeof window.supabaseRepo.backendExpected === 'function' && window.supabaseRepo.backendExpected());
+      if (payInvoiceResult.synced === false && payBackendOn) {
+        LinsoraUI.showToast('Salvo neste dispositivo, mas não foi possível sincronizar com sua conta. Tente novamente.', 'error');
+      } else {
+        LinsoraUI.showToast('Fatura paga com sucesso!');
+      }
     } else {
       LinsoraUI.showToast('Nenhum saldo devedor nesta fatura.', 'info');
     }

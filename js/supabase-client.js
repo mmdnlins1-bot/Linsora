@@ -1522,37 +1522,86 @@ class SupabaseRepository {
   }
 
   async syncToSupabaseRemote(data, userId) {
-    if (!this.supabase || !userId || userId === 'guest' || userId.startsWith('usr_')) return { success: true, errors: [] };
+    const localOnlyId = !userId || userId === 'guest' || String(userId).startsWith('usr_');
+    if (localOnlyId) return { success: true, errors: [] };
+    // Backend esperado mas cliente ausente: falha honesta (nunca "sucesso").
+    if (!this.supabase) {
+      if (typeof this.backendExpected === 'function' && this.backendExpected()) {
+        return { success: false, errors: ['supabase-nao-inicializado'] };
+      }
+      return { success: true, errors: [] };
+    }
     const errors = [];
+    // Guarda central de UUID: nenhuma tabela com PK UUID recebe id inválido.
+    // Registros legados (ex.: 'tx_*') NÃO sobem e NÃO são renormalizados aqui
+    // (renormalizar a cada sync duplicaria); viram pendência de migração.
+    const uuidOk = (v) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(v || ''));
+    const legacyCount = {};
+    const withValidIds = (rows, table) => (Array.isArray(rows) ? rows : []).filter((r) => {
+      if (r && uuidOk(r.id)) return true;
+      legacyCount[table] = (legacyCount[table] || 0) + 1;
+      return false;
+    });
+    const noteLegacy = () => {
+      for (const table of Object.keys(legacyCount)) {
+        errors.push(`${table}: ${legacyCount[table]} registro(s) com id legado ignorado(s) (migração pendente)`);
+      }
+    };
     try {
       if (data.accounts?.length) {
-        const accs = data.accounts.map(a => ({ id: a.id, user_id: userId, name: a.name, type: a.type, balance: a.balance, color: a.color, icon: a.icon }));
-        const { error } = await this.supabase.from('accounts').upsert(accs);
-        if (error) errors.push(`accounts: ${error.message}`);
+        const accs = withValidIds(data.accounts, 'accounts').map(a => ({ id: a.id, user_id: userId, name: a.name, type: a.type, balance: a.balance, color: a.color, icon: a.icon }));
+        if (accs.length) {
+          const { error } = await this.supabase.from('accounts').upsert(accs);
+          if (error) errors.push(`accounts: ${error.message}`);
+        }
       }
       if (data.cards?.length) {
-        const cards = data.cards.map(c => ({ id: c.id, user_id: userId, name: c.name, brand: c.brand, last4: c.last4, limit_total: c.limitTotal, limit_used: c.limitUsed, closing_day: c.closingDay, due_day: c.dueDay }));
-        const { error } = await this.supabase.from('cards').upsert(cards);
-        if (error) errors.push(`cards: ${error.message}`);
+        const cards = withValidIds(data.cards, 'cards').map(c => ({ id: c.id, user_id: userId, name: c.name, brand: c.brand, last4: c.last4, limit_total: c.limitTotal, limit_used: c.limitUsed, closing_day: c.closingDay, due_day: c.dueDay }));
+        if (cards.length) {
+          const { error } = await this.supabase.from('cards').upsert(cards);
+          if (error) errors.push(`cards: ${error.message}`);
+        }
       }
       if (data.goals?.length) {
-        const goals = data.goals.map(g => ({ id: g.id, user_id: userId, title: g.title, target: g.target, current: g.current, category: g.category, deadline: g.deadline, icon: g.icon, color: g.color, monthly_contribution: g.monthlyContribution }));
-        const { error } = await this.supabase.from('goals').upsert(goals);
-        if (error) errors.push(`goals: ${error.message}`);
+        const goals = withValidIds(data.goals, 'goals').map(g => ({ id: g.id, user_id: userId, title: g.title, target: g.target, current: g.current, category: g.category, deadline: g.deadline, icon: g.icon, color: g.color, monthly_contribution: g.monthlyContribution }));
+        if (goals.length) {
+          const { error } = await this.supabase.from('goals').upsert(goals);
+          if (error) errors.push(`goals: ${error.message}`);
+        }
       }
       if (data.transactions?.length) {
-        const txs = data.transactions.map(t => ({ id: t.id, user_id: userId, type: t.type, description: t.description, amount: t.amount, category: t.category, date: t.date, account: t.account, status: t.status, notes: t.notes }));
-        const { error } = await this.supabase.from('transactions').upsert(txs);
-        if (error) errors.push(`transactions: ${error.message}`);
+        const txs = withValidIds(data.transactions, 'transactions').map(t => ({ id: t.id, user_id: userId, type: t.type, description: t.description, amount: t.amount, category: t.category, date: t.date, account: t.account, status: t.status, notes: t.notes }));
+        if (txs.length) {
+          const { error } = await this.supabase.from('transactions').upsert(txs);
+          if (error) errors.push(`transactions: ${error.message}`);
+        }
+      }
+      if (data.pixKeys?.length) {
+        const keys = withValidIds(data.pixKeys, 'pix_keys').map(k => ({ id: k.id, user_id: userId, type: k.type, key: k.key, bank: k.bank }));
+        if (keys.length) {
+          const { error } = await this.supabase.from('pix_keys').upsert(keys);
+          if (error) errors.push(`pix_keys: ${error.message}`);
+        }
+      }
+      if (data.fixedBills?.length) {
+        const bills = withValidIds(data.fixedBills, 'fixed_bills').map(b => ({ id: b.id, user_id: userId, title: b.title, amount: b.amount, due_day: b.dueDay ?? b.due_day }));
+        if (bills.length) {
+          const { error } = await this.supabase.from('fixed_bills').upsert(bills);
+          if (error) errors.push(`fixed_bills: ${error.message}`);
+        }
       }
       // Recorrências: somente linhas com IDs UUID válidos sobem para o
       // Supabase (colunas UUID). Registros legados locais ('rb_*'/'rbocc_*',
       // criados por versões anteriores) permanecem no localStorage e no motor
       // local — nunca são apagados nem enviados (evita derrubar o batch).
-      const isUuidRow = (v) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(v || ''));
+      const isUuidRow = uuidOk;
       if (data.recurringBills?.length) {
         const bills = data.recurringBills
-          .filter(b => isUuidRow(b.id))
+          .filter(b => {
+            if (isUuidRow(b && b.id)) return true;
+            legacyCount.recurring_bills = (legacyCount.recurring_bills || 0) + 1;
+            return false;
+          })
           .map(b => ({ id: b.id, user_id: userId, title: b.title, amount: b.amount, category: b.category, frequency: b.frequency, due_day: b.dueDay, start_date: b.startDate, end_date: b.endDate, active: b.active !== false }));
         if (bills.length) {
           const { error } = await this.supabase.from('recurring_bills').upsert(bills);
@@ -1561,7 +1610,11 @@ class SupabaseRepository {
       }
       if (data.occurrences?.length) {
         const occs = data.occurrences
-          .filter(o => isUuidRow(o.id) && isUuidRow(o.recurringBillId))
+          .filter(o => {
+            if (isUuidRow(o && o.id) && isUuidRow(o && o.recurringBillId)) return true;
+            legacyCount.recurring_bill_occurrences = (legacyCount.recurring_bill_occurrences || 0) + 1;
+            return false;
+          })
           .map(o => ({ id: o.id, recurring_bill_id: o.recurringBillId, user_id: userId, due_date: o.dueDate, expected_amount: o.expectedAmount, paid_amount: o.paidAmount, status: o.status, paid_at: o.paidAt, transaction_id: o.transactionId, skipped_reason: o.skippedReason || null }));
         if (occs.length) {
           const { error } = await this.supabase.from('recurring_bill_occurrences').upsert(occs);
@@ -1582,6 +1635,7 @@ class SupabaseRepository {
     } catch (e) {
       errors.push(`sync_exception: ${e?.message || e}`);
     }
+    noteLegacy();
     if (errors.length > 0) {
       if (window.LinsoraLogger) window.LinsoraLogger.error('Erros na sincronização remota (dados salvos localmente)', errors, userId);
       return { success: false, errors };

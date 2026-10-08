@@ -100,14 +100,42 @@ class LinsoraStore {
   }
 
   notify() {
+    let savePromise = null;
     if (this.state && this.state.user) {
       try {
-        window.supabaseRepo.saveDbData(this.state, this.state.user.id);
+        const maybePromise = window.supabaseRepo.saveDbData(this.state, this.state.user.id);
+        if (maybePromise && typeof maybePromise.then === 'function') {
+          savePromise = maybePromise;
+          maybePromise.catch(() => { /* erro já tratado em saveDbData/sync */ });
+        }
       } catch (err) {
         console.warn('[LINSORA Store] Falha ao salvar estado remoto (modo offline):', err?.message || err);
       }
     }
     this.listeners.forEach(fn => fn(this.state));
+    // Retorna a promise de persistência para que operações de criação possam
+    // aguardar o resultado do sync e informar a UI com precisão.
+    return savePromise;
+  }
+
+  // Aguarda o resultado do sync disparado por notify() e resume em contrato
+  // { saved, synced, syncErrors }. Nunca lança.
+  async _notifyAndReport() {
+    let synced = true;
+    const syncErrors = [];
+    try {
+      const savePromise = this.notify();
+      if (savePromise && typeof savePromise.then === 'function') {
+        const saved = await savePromise;
+        const sr = saved && saved.syncResult;
+        synced = !!(sr && sr.success);
+        if (sr && Array.isArray(sr.errors)) syncErrors.push(...sr.errors);
+      }
+    } catch (e) {
+      synced = false;
+      syncErrors.push(String((e && e.message) || e));
+    }
+    return { saved: true, synced, syncErrors };
   }
 
   togglePrivacy() {
@@ -165,7 +193,8 @@ class LinsoraStore {
       }
     } else {
       const newTx = {
-        id: 'tx_' + Date.now(),
+        // ID UUID v4 (RFC 4122): compatível com transactions.id (UUID).
+        id: LinsoraUtils.generateUUID(),
         userId: this.state?.user?.id || 'usr_guest',
         ...txData,
         status: txData.status || 'CONCLUIDO'
@@ -175,7 +204,7 @@ class LinsoraStore {
       if (window.LinsoraLogger) window.LinsoraLogger.write('Transação', { description: newTx.description, amount: newTx.amount, type: newTx.type }, this.state?.user?.id);
     }
 
-    this.notify();
+    return this._notifyAndReport();
   }
 
   async deleteTransaction(txId) {
@@ -199,14 +228,16 @@ class LinsoraStore {
     if (original) {
       const copy = {
         ...original,
-        id: 'tx_' + Date.now(),
+        // ID UUID v4 (RFC 4122): compatível com transactions.id (UUID).
+        id: LinsoraUtils.generateUUID(),
         description: `${original.description} (Cópia)`,
         date: LinsoraUtils.toLocalDateKey()
       };
       this.state.transactions.unshift(copy);
       this.applyTransactionImpact(copy, false);
-      this.notify();
+      return this._notifyAndReport();
     }
+    return { saved: true, synced: true, syncErrors: [] };
   }
 
   /* ------------------------------------------------------------------------
@@ -261,7 +292,8 @@ class LinsoraStore {
     const colors = ['#820AD1', '#FF7A00', '#EC7000', '#0047BB', '#059669'];
     const icons = ['🟣', '🟠', '🟦', '🏛️', '💰'];
     const newAcc = {
-      id: 'acc_' + Date.now(),
+      // ID UUID v4 (RFC 4122): compatível com accounts.id (UUID).
+      id: LinsoraUtils.generateUUID(),
       userId: this.state?.user?.id || 'usr_guest',
       name: accData.name,
       bank: accData.name,
@@ -272,7 +304,7 @@ class LinsoraStore {
     };
     this.state.accounts.push(newAcc);
     if (window.LinsoraLogger) window.LinsoraLogger.write('Conta Bancária', { name: newAcc.name, balance: newAcc.balance }, this.state?.user?.id);
-    this.notify();
+    return this._notifyAndReport();
   }
 
   async deleteAccount(accId) {
@@ -294,7 +326,8 @@ class LinsoraStore {
     if (isNaN(numAmount) || numAmount <= 0) return false;
 
     const pixTx = {
-      id: 'tx_pix_' + Date.now(),
+      // ID UUID v4 (RFC 4122): compatível com transactions.id (UUID).
+      id: LinsoraUtils.generateUUID(),
       userId: this.state?.user?.id || 'usr_guest',
       type: 'DESPESA',
       description: `Pix enviado (${pixKey})`,
@@ -310,13 +343,13 @@ class LinsoraStore {
     this.state.transactions.unshift(pixTx);
     this.adjustAccountBalance(pixTx.account, -numAmount);
     if (window.LinsoraLogger) window.LinsoraLogger.write('Transferência Pix', { pixKey, amount: numAmount }, this.state?.user?.id);
-    this.notify();
-    return true;
+    return this._notifyAndReport();
   }
 
   async addPixKey(type, key, bank) {
     const newPix = {
-      id: 'pix_' + Date.now(),
+      // ID UUID v4 (RFC 4122): compatível com pix_keys.id (UUID).
+      id: LinsoraUtils.generateUUID(),
       userId: this.state?.user?.id || 'usr_guest',
       type: type.toUpperCase(),
       key,
@@ -324,7 +357,7 @@ class LinsoraStore {
     };
     this.state.pixKeys.push(newPix);
     if (window.LinsoraLogger) window.LinsoraLogger.write('Chave Pix', { type, key }, this.state?.user?.id);
-    this.notify();
+    return this._notifyAndReport();
   }
 
   /* ------------------------------------------------------------------------
@@ -333,7 +366,8 @@ class LinsoraStore {
   async addCard(cardData) {
     const classes = ['nubank', 'inter', 'aurablack'];
     const newCard = {
-      id: 'card_' + Date.now(),
+      // ID UUID v4 (RFC 4122): compatível com cards.id (UUID).
+      id: LinsoraUtils.generateUUID(),
       userId: this.state?.user?.id || 'usr_guest',
       name: cardData.name,
       brand: cardData.brand,
@@ -347,7 +381,7 @@ class LinsoraStore {
     };
     this.state.cards.push(newCard);
     if (window.LinsoraLogger) window.LinsoraLogger.write('Cartão de Crédito', { name: newCard.name, limit: newCard.limitTotal }, this.state?.user?.id);
-    this.notify();
+    return this._notifyAndReport();
   }
 
   async deleteCard(cardId) {
@@ -374,7 +408,8 @@ class LinsoraStore {
       const accountName = this.state.accounts[0] ? this.state.accounts[0].name : 'Conta Principal';
 
       this.state.transactions.unshift({
-        id: 'tx_pay_card_' + Date.now(),
+        // ID UUID v4 (RFC 4122): compatível com transactions.id (UUID).
+        id: LinsoraUtils.generateUUID(),
         userId: this.state?.user?.id || 'usr_guest',
         type: 'DESPESA',
         description: `Pagamento da Fatura ${card.name}`,
@@ -389,8 +424,7 @@ class LinsoraStore {
 
       this.adjustAccountBalance(accountName, -payAmount);
       if (window.LinsoraLogger) window.LinsoraLogger.write('Pagamento Fatura Cartão', { cardName: card.name, amount: payAmount }, this.state?.user?.id);
-      this.notify();
-      return true;
+      return this._notifyAndReport();
     }
     return false;
   }
@@ -1023,7 +1057,8 @@ class LinsoraStore {
   async addGoal(goalData) {
     const icons = ['🎯', '✈️', '🚗', '🏠', '💎', '📈', '🛡️', '💰'];
     const newGoal = {
-      id: 'goal_' + Date.now(),
+      // ID UUID v4 (RFC 4122): compatível com goals.id (UUID).
+      id: LinsoraUtils.generateUUID(),
       userId: (this.state && this.state.user) ? this.state.user.id : 'usr_guest',
       title: goalData.title || 'Nova Meta',
       target: goalData.target !== undefined && goalData.target !== null && goalData.target !== '' ? (parseFloat(goalData.target) || 0) : 1000,
