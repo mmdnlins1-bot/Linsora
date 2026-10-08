@@ -204,6 +204,10 @@ function createDb({ baseUrl, serviceKey, fetchImpl }) {
       const id = user && (asText(user.id) || asText(user.sub));
       const email = user && normalizeEmail(user.email);
       if (!id || !email) return null;
+      // P2: o claim exige e-mail confirmado. A confirmação é lida
+      // server-side na identidade validada pelo token (nunca do body).
+      const confirmedAt = user && (user.email_confirmed_at || user.confirmed_at);
+      if (!confirmedAt) return { id, email, unconfirmed: true };
       return { id, email };
     },
 
@@ -271,6 +275,15 @@ async function claimSubscription(req, res, deps) {
     const sessionUser = await db.validateUserToken(token);
     if (!sessionUser) {
       return res.status(401).json({ ok: false, error: 'invalid_token' });
+    }
+    // P2: usuário ainda não confirmado não pode reivindicar assinatura.
+    // Recusa segura antes de qualquer leitura/vínculo de compra.
+    if (sessionUser.unconfirmed) {
+      safeLog({
+        claimed: false, at: new Date().toISOString(),
+        reason: 'email-not-confirmed',
+      });
+      return res.status(403).json({ ok: false, error: 'email-not-confirmed' });
     }
 
     // Órfãos da sessão autenticada: somente eventos relevantes cujo e-mail

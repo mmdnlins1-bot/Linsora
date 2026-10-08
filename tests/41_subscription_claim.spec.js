@@ -48,7 +48,7 @@ function makeReqRes({ method = 'POST', headers = null, body = undefined } = {}) 
 }
 
 // Mock PostgREST + Auth com store em memória (merge por user_id/event_id).
-function makeSupabaseMock({ orphans = [], badToken = false } = {}) {
+function makeSupabaseMock({ orphans = [], badToken = false, unconfirmed = false } = {}) {
   const state = {
     calls: [],
     upserts: [],
@@ -78,7 +78,10 @@ function makeSupabaseMock({ orphans = [], badToken = false } = {}) {
     state.calls.push({ method, table, path: u.pathname, query: u.search, body });
     if (u.pathname.endsWith('/auth/v1/user')) {
       if (badToken) return jsonBody({ message: 'invalid' }, 401);
-      return jsonBody({ id: TOKEN_USER_ID, email: TOKEN_EMAIL });
+      // Por padrão o usuário do token está CONFIRMADO (fluxo atual).
+      // Com unconfirmed:true, simula e-mail ainda não confirmado.
+      if (unconfirmed) return jsonBody({ id: TOKEN_USER_ID, email: TOKEN_EMAIL });
+      return jsonBody({ id: TOKEN_USER_ID, email: TOKEN_EMAIL, email_confirmed_at: '2026-01-01T00:00:00.000Z' });
     }
     if (table === 'subscription_events' && method === 'GET') {
       const onlyOrphans = u.search.includes('user_id=is.null');
@@ -317,6 +320,34 @@ test.describe('41. Claim de assinatura pos-compra', () => {
     expect(res.statusCode).toBe(200);
     expect(res.payload).toEqual({ ok: true, claimed: false });
     expect(mock.state.upserts).toHaveLength(0);
+  });
+
+  test('14b. usuario NAO confirmado e recusado sem vincular', async () => {
+    const mock = makeSupabaseMock({
+      unconfirmed: true,
+      orphans: [orphanRow({ id: 'evt-ficticio-nao-confirmado', event: 'PURCHASE_APPROVED', email: TOKEN_EMAIL })],
+    });
+    const { req, res } = makeReqRes({});
+    await handler(req, res, { env: testEnv(), fetchImpl: mock.fetchImpl });
+    expect(res.statusCode).toBe(403);
+    expect(res.payload).toEqual({ ok: false, error: 'email-not-confirmed' });
+    expect(mock.state.upserts).toHaveLength(0);
+    expect(mock.state.patches).toHaveLength(0);
+  });
+
+  test('14c. usuario NAO confirmado com body adulterado continua recusado', async () => {
+    const mock = makeSupabaseMock({
+      unconfirmed: true,
+      orphans: [orphanRow({ id: 'evt-ficticio-nao-conf-2', event: 'PURCHASE_APPROVED', email: TOKEN_EMAIL })],
+    });
+    const { req, res } = makeReqRes({
+      body: { user_id: 'atacante-ficticio', email: 'atacante@exemplo.com' },
+    });
+    await handler(req, res, { env: testEnv(), fetchImpl: mock.fetchImpl });
+    expect(res.statusCode).toBe(403);
+    expect(res.payload).toEqual({ ok: false, error: 'email-not-confirmed' });
+    expect(mock.state.upserts).toHaveLength(0);
+    expect(mock.state.patches).toHaveLength(0);
   });
 
   test('15. segredos nunca aparecem no codigo nem nos logs', async () => {
