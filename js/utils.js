@@ -594,7 +594,10 @@ const LinsoraUtils = {
   },
 
   /**
-   * Redimensiona e comprime imagem selecionada via Canvas
+   * Redimensiona e comprime imagem selecionada via Canvas.
+   * Segurança: SEMPRE retorna JPEG re-encodado pelo canvas. Se a imagem
+   * não puder ser decodificada, a Promise é REJEITADA — o arquivo original
+   * nunca é retornado (nenhum byte não validado chega ao upload).
    */
   processAndCompressImage(file, maxWidth = 300, maxHeight = 300, quality = 0.8) {
     return new Promise((resolve, reject) => {
@@ -623,20 +626,22 @@ const LinsoraUtils = {
             canvas.height = height;
             const ctx = canvas.getContext('2d');
             if (!ctx) throw new Error('Failed to get 2d context');
-            
+
             ctx.drawImage(img, 0, 0, width, height);
 
             const dataUrl = canvas.toDataURL('image/jpeg', quality);
-            if (!dataUrl || dataUrl === 'data:,') throw new Error('Canvas failed');
+            // Garantia de re-encode: somente JPEG gerado pelo canvas segue.
+            if (!dataUrl || dataUrl.indexOf('data:image/jpeg;base64,') !== 0) {
+              reject(new Error('Avatar inválido: re-encode JPEG falhou.'));
+              return;
+            }
             resolve(dataUrl);
           } catch (e) {
-            console.warn('Canvas toDataURL failed (Headless?), fallback to original', e);
-            resolve(event.target.result);
+            reject(e instanceof Error ? e : new Error('Falha ao processar imagem.'));
           }
         };
-        img.onerror = (err) => {
-          console.warn('img.onerror triggered (Headless?), fallback to original', err);
-          resolve(event.target.result);
+        img.onerror = () => {
+          reject(new Error('Arquivo não é uma imagem decodificável.'));
         };
         img.src = event.target.result;
       };

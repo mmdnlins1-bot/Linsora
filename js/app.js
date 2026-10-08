@@ -2004,6 +2004,21 @@ function setupEventListeners() {
   });
 
   // FLUXO COMPLETO DE UPLOAD DE FOTO DE PERFIL
+  // Segurança do avatar: allowlist de MIME + teto de tamanho ANTES de
+  // qualquer leitura do arquivo (`accept="image/*"` é só dica de UX).
+  // Somente JPEG re-encodado pelo canvas chega ao Storage.
+  const AVATAR_ALLOWED_MIME = ['image/jpeg', 'image/png', 'image/webp'];
+  const AVATAR_MAX_BYTES = 5 * 1024 * 1024; // 5 MB
+  const AVATAR_ERROR_MESSAGE = 'Não foi possível processar essa imagem. Escolha uma foto JPEG, PNG ou WebP de até 5 MB.';
+
+  const isAvatarFileAllowed = (file) => {
+    if (!file) return false;
+    const mime = String(file.type || '').toLowerCase();
+    if (AVATAR_ALLOWED_MIME.indexOf(mime) === -1) return false;
+    if (!(typeof file.size === 'number' && file.size > 0 && file.size <= AVATAR_MAX_BYTES)) return false;
+    return true;
+  };
+
   const processAndUploadAvatarDataUrl = async (dataUrl) => {
     const spinner = document.getElementById('avatarUploadSpinner');
     if (spinner) spinner.classList.remove('hidden');
@@ -2017,6 +2032,17 @@ function setupEventListeners() {
           const userId = window.supabaseRepo.currentUserId;
           const fileName = `avatar_${userId}_${Date.now()}.jpg`;
           const blob = LinsoraUtils.dataURItoBlob(dataUrl);
+
+          // Garantia de conteúdo: somente JPEG re-encodado (magic bytes
+          // FF D8 FF) chega ao upload. Falha aqui = nada é enviado.
+          let jpegMagicOk = false;
+          try {
+            const head = new Uint8Array(await blob.slice(0, 3).arrayBuffer());
+            jpegMagicOk = head.length === 3 && head[0] === 0xFF && head[1] === 0xD8 && head[2] === 0xFF;
+          } catch (magicErr) {
+            jpegMagicOk = false;
+          }
+          if (!jpegMagicOk) throw new Error('Avatar inválido após re-encode.');
 
           const { data, error } = await window.supabaseRepo.supabase.storage
             .from('avatars')
@@ -2051,7 +2077,7 @@ function setupEventListeners() {
 
     } catch (err) {
       console.error('Erro ao processar foto:', err);
-      LinsoraUI.showToast('Erro ao processar foto. Tente novamente.', 'error');
+      LinsoraUI.showToast('Não foi possível processar essa imagem. Escolha uma foto JPEG, PNG ou WebP de até 5 MB.', 'error');
     } finally {
       if (spinner) spinner.classList.add('hidden');
     }
@@ -2075,6 +2101,13 @@ function setupEventListeners() {
       const file = e.target.files && e.target.files[0];
       if (!file) return;
 
+      // Pré-validação (antes do FileReader): MIME allowlist + tamanho.
+      if (!isAvatarFileAllowed(file)) {
+        LinsoraUI.showToast('Não foi possível processar essa imagem. Escolha uma foto JPEG, PNG ou WebP de até 5 MB.', 'error');
+        profileAvatarInput.value = ''; // Reset do input
+        return;
+      }
+
       const spinner = document.getElementById('avatarUploadSpinner');
       if (spinner) spinner.classList.remove('hidden');
 
@@ -2084,7 +2117,7 @@ function setupEventListeners() {
         await processAndUploadAvatarDataUrl(compressedDataUrl);
       } catch (err) {
         console.error('Erro ao comprimir imagem local:', err);
-        LinsoraUI.showToast('Erro ao processar arquivo.', 'error');
+        LinsoraUI.showToast('Não foi possível processar essa imagem. Escolha uma foto JPEG, PNG ou WebP de até 5 MB.', 'error');
       } finally {
         if (spinner) spinner.classList.add('hidden');
         profileAvatarInput.value = ''; // Reset do input
