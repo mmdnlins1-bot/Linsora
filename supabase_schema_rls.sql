@@ -178,8 +178,15 @@ BEGIN
     COALESCE(NEW.raw_user_meta_data->>'full_name', NEW.raw_user_meta_data->>'name', split_part(NEW.email, '@', 1)),
     NEW.email,
     COALESCE(NEW.raw_user_meta_data->>'avatar_url', 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80')
-  );
+  )
+  -- Idempotência: retry/duplicata do trigger nunca falha por duplicate key
+  -- e nunca sobrescreve o profile existente (apoiado na PRIMARY KEY de id).
+  ON CONFLICT (id) DO NOTHING;
   RETURN NEW;
+EXCEPTION
+  WHEN OTHERS THEN
+    -- O profile nunca pode impedir a criação da conta: falha silenciosa.
+    RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
