@@ -117,7 +117,7 @@
     banner.hidden = true;
 
     var icon = document.createElement('img');
-    icon.src = './assets/icon-maskable-192.png';
+    icon.src = './assets/apple-touch-icon-180.png';
     icon.alt = '';
     icon.setAttribute('aria-hidden', 'true');
     icon.className = 'linsora-install-icon';

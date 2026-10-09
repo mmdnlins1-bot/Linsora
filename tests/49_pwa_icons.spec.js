@@ -1,11 +1,15 @@
 const { test, expect } = require('@playwright/test');
 const fs = require('fs');
 const path = require('path');
+const zlib = require('zlib');
 
 // 49. Icones PWA do Linsora — arquitetura any vs maskable.
-// Garante que o app instalado nao exiba quadrado preto/branco externo:
-// manifest declara any + maskable separados, sizes reais, sem conflitos,
-// SW/cache na versao atual e HTML apontando para os arquivos canonicos.
+// Valida separadamente:
+//  - any: RGBA com transparencia real fora da forma (sem moldura preta no desktop)
+//  - maskable: RGB 100% opaco full-bleed sem cantos pre-arredondados e seguro para cortes de SO
+//  - apple-touch-icon: 180x180 RGB opaco full-bleed (iOS aplica sua propria superelipse)
+//  - favicon: 32x32 dedicado e legivel em abas
+//  - manifest, service worker (linsora-v7) e HTMLs apontando para os icones canonicos
 
 const ROOT = path.resolve(__dirname, '..');
 
@@ -17,6 +21,66 @@ function readPngInfo(absPath) {
   const bitDepth = buf[24];
   const colorType = buf[25];
   return { width, height, bitDepth, colorType };
+}
+
+function decodePngPixels(absPath) {
+  const buf = fs.readFileSync(absPath);
+  const width = buf.readUInt32BE(16);
+  const height = buf.readUInt32BE(20);
+  const colorType = buf[25];
+
+  let pos = 8;
+  const idats = [];
+  while (pos < buf.length) {
+    const len = buf.readUInt32BE(pos);
+    const type = buf.toString('ascii', pos + 4, pos + 8);
+    if (type === 'IDAT') idats.push(buf.slice(pos + 8, pos + 8 + len));
+    pos += 12 + len;
+  }
+  const decompressed = zlib.inflateSync(Buffer.concat(idats));
+  const bpp = colorType === 6 ? 4 : colorType === 2 ? 3 : 1;
+  const stride = 1 + width * bpp;
+
+  const raw = Buffer.alloc(width * height * bpp);
+  let prevRow = Buffer.alloc(width * bpp);
+
+  for (let y = 0; y < height; y++) {
+    const filter = decompressed[y * stride];
+    const row = decompressed.slice(y * stride + 1, (y + 1) * stride);
+    const curRow = Buffer.alloc(width * bpp);
+
+    for (let x = 0; x < width * bpp; x++) {
+      const a = x >= bpp ? curRow[x - bpp] : 0;
+      const b = prevRow[x];
+      const c = x >= bpp ? prevRow[x - bpp] : 0;
+      let val = row[x];
+
+      if (filter === 1) val = (val + a) & 0xff;
+      else if (filter === 2) val = (val + b) & 0xff;
+      else if (filter === 3) val = (val + Math.floor((a + b) / 2)) & 0xff;
+      else if (filter === 4) {
+        const p = a + b - c;
+        const pa = Math.abs(p - a);
+        const pb = Math.abs(p - b);
+        const pc = Math.abs(p - c);
+        const pr = (pa <= pb && pa <= pc) ? a : (pb <= pc) ? b : c;
+        val = (val + pr) & 0xff;
+      }
+      curRow[x] = val;
+    }
+    curRow.copy(raw, y * width * bpp);
+    prevRow = curRow;
+  }
+
+  const sample = (x, y) => {
+    const idx = (y * width + x) * bpp;
+    if (bpp === 4) {
+      return { r: raw[idx], g: raw[idx + 1], b: raw[idx + 2], a: raw[idx + 3] };
+    }
+    return { r: raw[idx], g: raw[idx + 1], b: raw[idx + 2], a: 255 };
+  };
+
+  return { width, height, colorType, sample };
 }
 
 function loadManifest() {
@@ -54,31 +118,87 @@ test.describe('49. Icones PWA do Linsora', () => {
     }
   });
 
-  test('3. PNGs sao opacos (sem alpha que gere moldura branca)', () => {
+  test('3. icones any possuem transparencia externa real (RGBA)', () => {
     const manifest = loadManifest();
-    for (const icon of manifest.icons) {
+    const anyIcons = manifest.icons.filter((i) => i.purpose === 'any');
+    expect(anyIcons.length).toBeGreaterThanOrEqual(2);
+
+    for (const icon of anyIcons) {
       const abs = path.join(ROOT, icon.src.replace(/^\.\//, ''));
-      const info = readPngInfo(abs);
-      // colorType 2 = RGB opaco; 6 = RGBA (proibido aqui pois transparencia
-      // externa faz o SO compor sobre branco/preto).
-      expect(info.colorType, `${icon.src} deve ser RGB opaco (colorType 2)`).toBe(2);
+      const decoded = decodePngPixels(abs);
+      // colorType 6 = RGBA com canal alfa real
+      expect(decoded.colorType, `${icon.src} deve ser RGBA (colorType 6)`).toBe(6);
+
+      // Cantos externos devem ser transparentes (alpha === 0) para nao gerar bloco preto no Desktop
+      const topLeft = decoded.sample(0, 0);
+      const topRight = decoded.sample(decoded.width - 1, 0);
+      const bottomLeft = decoded.sample(0, decoded.height - 1);
+      const bottomRight = decoded.sample(decoded.width - 1, decoded.height - 1);
+
+      expect(topLeft.a, `${icon.src} canto superior esquerdo deve ser transparente`).toBe(0);
+      expect(topRight.a, `${icon.src} canto superior direito deve ser transparente`).toBe(0);
+      expect(bottomLeft.a, `${icon.src} canto inferior esquerdo deve ser transparente`).toBe(0);
+      expect(bottomRight.a, `${icon.src} canto inferior direito deve ser transparente`).toBe(0);
+
+      // Centro deve ser opaco (alpha === 255)
+      const center = decoded.sample(Math.floor(decoded.width / 2), Math.floor(decoded.height / 2));
+      expect(center.a, `${icon.src} centro deve ser opaco`).toBe(255);
     }
-    // apple-touch-icon tambem deve ser opaco e 180x180.
-    const apple = path.join(ROOT, 'assets', 'apple-touch-icon-180.png');
-    const appleInfo = readPngInfo(apple);
-    expect(`${appleInfo.width}x${appleInfo.height}`).toBe('180x180');
-    expect(appleInfo.colorType).toBe(2);
   });
 
-  test('4. sem referencias a icones antigos/conflitantes', () => {
+  test('4. icones maskable sao 100% opacos com fundo full-bleed e safe zone preservada', () => {
+    const manifest = loadManifest();
+    const maskableIcons = manifest.icons.filter((i) => i.purpose === 'maskable');
+    expect(maskableIcons.length).toBeGreaterThanOrEqual(2);
+
+    for (const icon of maskableIcons) {
+      const abs = path.join(ROOT, icon.src.replace(/^\.\//, ''));
+      const decoded = decodePngPixels(abs);
+      // colorType 2 = RGB opaco sem canal alfa (impede halo branco no Android)
+      expect(decoded.colorType, `${icon.src} deve ser RGB opaco (colorType 2)`).toBe(2);
+
+      // Fundo deve ser full-bleed ate os 4 cantos: os cantos possuem cor esmeralda do tema (verde dominante, nao preto puro)
+      const corners = [
+        decoded.sample(0, 0),
+        decoded.sample(decoded.width - 1, 0),
+        decoded.sample(0, decoded.height - 1),
+        decoded.sample(decoded.width - 1, decoded.height - 1),
+      ];
+      for (const [idx, c] of corners.entries()) {
+        expect(c.a, `${icon.src} canto ${idx} deve ser opaco`).toBe(255);
+        expect(c.g, `${icon.src} canto ${idx} deve ter verde dominante (fundo esmeralda full-bleed)`).toBeGreaterThan(20);
+      }
+
+      // Safe zone central (80% de diametro): o centro possui o simbolo Linsora opaco
+      const center = decoded.sample(Math.floor(decoded.width / 2), Math.floor(decoded.height / 2));
+      expect(center.a).toBe(255);
+    }
+  });
+
+  test('5. apple-touch-icon e favicon-32 possuem especificacoes corretas', () => {
+    // apple-touch-icon: 180x180, RGB opaco full-bleed
+    const applePath = path.join(ROOT, 'assets', 'apple-touch-icon-180.png');
+    expect(fs.existsSync(applePath), 'apple-touch-icon-180.png deve existir').toBe(true);
+    const apple = decodePngPixels(applePath);
+    expect(`${apple.width}x${apple.height}`).toBe('180x180');
+    expect(apple.colorType).toBe(2);
+    expect(apple.sample(0, 0).g, 'canto do apple-touch-icon deve ser esmeralda full-bleed').toBeGreaterThan(20);
+
+    // favicon-32: 32x32 dedicado
+    const favPath = path.join(ROOT, 'assets', 'favicon-32.png');
+    expect(fs.existsSync(favPath), 'favicon-32.png deve existir').toBe(true);
+    const fav = readPngInfo(favPath);
+    expect(`${fav.width}x${fav.height}`).toBe('32x32');
+    expect(fav.colorType).toBe(6);
+  });
+
+  test('6. sem referencias a icones antigos/conflitantes', () => {
     const manifest = loadManifest();
     const srcs = manifest.icons.map((i) => i.src);
     for (const src of srcs) {
       expect(src.includes('pwa-icon'), `referencia antiga proibida: ${src}`).toBe(false);
-      // Manifest deve usar apenas o diretorio canonico assets/.
       expect(src.startsWith('./assets/'), `manifest deve apontar para ./assets/: ${src}`).toBe(true);
     }
-    // 192 e 512 devem existir em ambas as finalidades.
     const has = (sizes, purpose) =>
       srcs.some((_, idx) => manifest.icons[idx].sizes === sizes && manifest.icons[idx].purpose === purpose);
     expect(has('192x192', 'any')).toBe(true);
@@ -87,11 +207,13 @@ test.describe('49. Icones PWA do Linsora', () => {
     expect(has('512x512', 'maskable')).toBe(true);
   });
 
-  test('5. service worker com cache versionado incluindo os icones novos', () => {
+  test('7. service worker com cache versionado linsora-v7 incluindo os icones novos', () => {
     const sw = fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8');
-    expect(sw.includes("CACHE_NAME = 'linsora-v6'"), 'SW deve estar na versao linsora-v6').toBe(true);
+    expect(sw.includes("CACHE_NAME = 'linsora-v7'"), 'SW deve estar na versao linsora-v7').toBe(true);
+    expect(sw.includes('linsora-v6'), 'SW nao deve referenciar cache antigo v6').toBe(false);
     expect(sw.includes('linsora-v5'), 'SW nao deve referenciar cache antigo v5').toBe(false);
     for (const expected of [
+      './assets/favicon-32.png',
       './assets/icon-192.png',
       './assets/icon-512.png',
       './assets/icon-maskable-192.png',
@@ -100,7 +222,6 @@ test.describe('49. Icones PWA do Linsora', () => {
     ]) {
       expect(sw.includes(expected), `SW deve cachear ${expected}`).toBe(true);
     }
-    // Nenhum asset do SW pode apontar para arquivo inexistente.
     const listed = sw.match(/'\.\/[^']+\.(png|html|css|js|webmanifest)'/g) || [];
     expect(listed.length).toBeGreaterThan(0);
     for (const quoted of listed) {
@@ -109,10 +230,11 @@ test.describe('49. Icones PWA do Linsora', () => {
     }
   });
 
-  test('6. HTMLs apontam para os icones canonicos', () => {
+  test('8. HTMLs apontam para os icones canonicos incluindo favicon-32', () => {
     const pages = ['index.html', 'landing.html', 'bemvindo.html', 'reset-password.html', 'offline.html'];
     for (const page of pages) {
       const html = fs.readFileSync(path.join(ROOT, page), 'utf8');
+      expect(html.includes('assets/favicon-32.png'), `${page} deve referenciar favicon-32.png`).toBe(true);
       expect(html.includes('assets/apple-touch-icon-180.png'), `${page} deve referenciar apple-touch-icon-180`).toBe(true);
       expect(html.includes('href="./icon-192.png"'), `${page} nao deve referenciar ./icon-192.png como favicon`).toBe(false);
       expect(html.includes('href="icon-192.png"'), `${page} nao deve referenciar icon-192.png como favicon`).toBe(false);
@@ -123,7 +245,7 @@ test.describe('49. Icones PWA do Linsora', () => {
     expect(index.includes('assets/icon-512.png')).toBe(true);
   });
 
-  test('7. manifest servido via HTTP com icones acessiveis', async ({ request }) => {
+  test('9. manifest servido via HTTP com icones acessiveis', async ({ request }) => {
     const manifestRes = await request.get('/manifest.webmanifest');
     expect(manifestRes.ok(), 'GET /manifest.webmanifest deve ser 200').toBe(true);
     const manifest = await manifestRes.json();
@@ -134,5 +256,8 @@ test.describe('49. Icones PWA do Linsora', () => {
       const headers = res.headers();
       expect(headers['content-type'] || '', `content-type de ${url}`).toContain('image/png');
     }
+    // Verifica tambem favicon
+    const favRes = await request.get('/assets/favicon-32.png');
+    expect(favRes.ok(), 'GET /assets/favicon-32.png deve ser 200').toBe(true);
   });
 });

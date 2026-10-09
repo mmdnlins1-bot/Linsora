@@ -1,15 +1,15 @@
 // ============================================================================
-// LINSORA Service Worker — v6 (PWA + Offline Seguro)
-// v6: atualiza apenas os icones PWA (any 192/512 + maskable 192/512 +
-// apple-touch-icon) para corrigir o icone instalado (sem quadrado
-// preto/branco). Nenhuma alteracao em auth/dados/Supabase.
+// LINSORA Service Worker — v7 (PWA + Offline Seguro)
+// v7: atualiza variantes de icones PWA (any com transparencia, maskable
+// full-bleed, apple-touch-icon e favicon-32 dedicado). Nenhuma alteracao
+// em auth/dados/Supabase.
 // Regras:
 //  - NUNCA cachear Supabase / auth / APIs / dados do usuário (network-only).
 //  - Apenas arquivos estáticos same-origin entram em cache.
 //  - Navegação: network-first -> index.html (cache) -> offline.html.
 // ============================================================================
 
-const CACHE_NAME = 'linsora-v6';
+const CACHE_NAME = 'linsora-v7';
 
 const ASSETS_TO_CACHE = [
   './index.html',
@@ -36,6 +36,7 @@ const ASSETS_TO_CACHE = [
   './manifest.webmanifest',
   './icon-192.png',
   './icon-512.png',
+  './assets/favicon-32.png',
   './assets/icon-192.png',
   './assets/icon-512.png',
   './assets/icon-maskable-192.png',
