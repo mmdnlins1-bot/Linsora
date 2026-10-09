@@ -1,12 +1,11 @@
 const { test, expect } = require('@playwright/test');
 
 // 60. Avisos sobre a identificação do remetente dos e-mails de autenticação.
-// Os e-mails transacionais seguem pelos e-mails nativos do provedor de auth
-// (hook Resend desativado por padrão), por isso o texto usa a versão segura
-// e genérica, sem afirmar um nome exato de remetente.
+// Os avisos mencionam explicitamente o serviço de autenticação Supabase Auth.
 // Somente mocks/stubs: nenhum usuário real, nenhum e-mail real, nenhum segredo.
 
 const NOTICE_FRAGMENT = 'identificação diferente de Linsora';
+const SENDER_FRAGMENT = 'Supabase Auth';
 const SPAM_FRAGMENT = 'caixa de spam';
 
 async function gotoFunnel(page) {
@@ -66,6 +65,7 @@ test.describe('60. Avisos de remetente nos e-mails de autenticação', () => {
     const notice = page.locator('#authSenderNotice');
     await expect(notice).toBeVisible();
     await expect(notice).toContainText(NOTICE_FRAGMENT);
+    await expect(notice).toContainText(SENDER_FRAGMENT);
     await expect(notice).toContainText(SPAM_FRAGMENT);
     await expect(page.locator('#toastContainer')).toContainText('e-mail de confirmação');
   });
@@ -77,6 +77,7 @@ test.describe('60. Avisos de remetente nos e-mails de autenticação', () => {
     const notice = page.locator('#recoverySenderNotice');
     await expect(notice).toBeVisible();
     await expect(notice).toContainText(NOTICE_FRAGMENT);
+    await expect(notice).toContainText(SENDER_FRAGMENT);
     await expect(notice).toContainText(SPAM_FRAGMENT);
     await page.evaluate(() => {
       window.supabaseRepo.supabase = {
