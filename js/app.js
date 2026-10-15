@@ -1359,6 +1359,15 @@ function setupEventListeners() {
 
           const res = await window.supabaseRepo.signUpWithEmail(name, email, password);
           if (!res.success) {
+            if (res.rateLimited && !(Number(res.retryAfterSeconds) > 0)) {
+              // Limite sem prazo informado pelo servidor: o estado da conta
+              // NÃO foi confirmado, então nada afirma criação/envio e a caixa
+              // de confirmação pendente permanece oculta (sem reenvio que
+              // pressuporia conta pendente). Só orientação para aguardar e
+              // tentar de novo; sem reenvio automático.
+              LinsoraUI.showToast('O envio de e-mails de confirmação está temporariamente limitado. Aguarde alguns minutos e tente criar sua conta novamente.', 'error');
+              return;
+            }
             LinsoraUI.showToast(res.message, 'error');
             if (res.rateLimited && res.retryAfterSeconds > 0) armResendCooldown(res.retryAfterSeconds);
             return;
