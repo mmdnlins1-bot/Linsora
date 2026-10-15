@@ -153,49 +153,79 @@ document.addEventListener('DOMContentLoaded', async () => {
         } catch (e) { /* URL paramétrica preservada: sem loop, só cosmético */ }
       } else if (funnelParams.get('email_confirmed') === '1') {
         try { localStorage.setItem('LINSORA_SEEN_ONBOARDING', 'true'); } catch (e) { /* segue para o login */ }
-        // Conclusão best-effort do PKCE no mesmo aparelho: sem ela o
-        // usuário confirma no servidor e entra pelo login normal.
-        try {
-          const code = funnelParams.get('code');
-          if (code && window.supabaseRepo && window.supabaseRepo.supabase &&
-              window.supabaseRepo.supabase.auth &&
-              typeof window.supabaseRepo.supabase.auth.exchangeCodeForSession === 'function') {
-            await window.supabaseRepo.supabase.auth.exchangeCodeForSession(code).catch(() => null);
-          }
-        } catch (e) { /* confirmação segue válida no servidor; login manual resolve */ }
-        try {
-          funnelParams.delete('code');
-          funnelParams.delete('email_confirmed');
-          const rest = funnelParams.toString();
-          const cleanUrl = window.location.pathname + (rest ? `?${rest}` : '') + (window.location.hash || '');
-          window.history.replaceState(null, '', cleanUrl);
-        } catch (e) { /* limpeza cosmética */ }
-        try {
-          const fresh = window.supabaseRepo && window.supabaseRepo.supabase
-            ? await window.supabaseRepo.supabase.auth.getSession()
-            : null;
-          const freshSession = fresh && fresh.data ? fresh.data.session : null;
-          if (freshSession && freshSession.user) {
-            const gateConfirm = await window.supabaseRepo.checkSubscriptionAccess(freshSession.user.id);
-            if (gateConfirm.state === 'granted' || gateConfirm.state === 'unavailable') {
-              const userMeta = freshSession.user.user_metadata || {};
-              const confirmedUser = {
-                id: freshSession.user.id,
-                email: freshSession.user.email,
-                name: userMeta.full_name || userMeta.name || String(freshSession.user.email || '').split('@')[0]
-              };
-              const claimConsent = await resolveGuestRecurringConsent(confirmedUser);
-              await window.linsoraStore.loadUserData(confirmedUser, { claimGuestRecurring: claimConsent });
-              window.linsoraStore.ensureCurrentWindowOccurrences();
-              renderAppUI(window.linsoraStore.state);
-              showAppMain();
-              try { renderAccountStatus(gateConfirm); } catch (e) { /* badge visual */ }
-              try { LinsoraUI.showToast('E-mail confirmado com sucesso! Bem-vindo ao Linsora.', 'success'); } catch (e) {}
-              return;
+        // O marcador `email_confirmed=1` NÃO é prova de confirmação: é um
+        // parâmetro estático anexado pelo próprio app ao emailRedirectTo.
+        // A classificação do retorno usa os parâmetros do Supabase
+        // (`code`/`error`/`error_code`) e a sessão efetiva. Detalhes
+        // técnicos nunca são expostos ao usuário.
+        const returnError = funnelParams.get('error');
+        const returnErrorCode = funnelParams.get('error_code');
+        if (returnError || returnErrorCode) {
+          // Link expirado, inválido ou já utilizado: nunca declarar sucesso.
+          // Não há `code` aproveitável; nenhuma troca é tentada.
+          try {
+            funnelParams.delete('code');
+            funnelParams.delete('email_confirmed');
+            funnelParams.delete('error');
+            funnelParams.delete('error_code');
+            funnelParams.delete('error_description');
+            const rest = funnelParams.toString();
+            const cleanUrl = window.location.pathname + (rest ? `?${rest}` : '') + (window.location.hash || '');
+            window.history.replaceState(null, '', cleanUrl);
+          } catch (e) { /* limpeza cosmética */ }
+          window.__linsoraEmailConfirmResult = 'failed';
+        } else {
+          // Conclusão best-effort do PKCE no mesmo aparelho (o cliente usa
+          // `detectSessionInUrl: false`, por isso a troca é manual).
+          // O resultado é examinado: erro na troca não vale como confirmação
+          // e só há sucesso com sessão válida + gate liberado.
+          try {
+            const code = funnelParams.get('code');
+            if (code && window.supabaseRepo && window.supabaseRepo.supabase &&
+                window.supabaseRepo.supabase.auth &&
+                typeof window.supabaseRepo.supabase.auth.exchangeCodeForSession === 'function') {
+              const exch = await window.supabaseRepo.supabase.auth.exchangeCodeForSession(code).catch(() => null);
+              if (!exch || exch.error || !exch.data || !exch.data.session) {
+                try { console.warn('[LINSORA Auth] Troca do código de confirmação sem sessão válida.'); } catch (e) {}
+              }
             }
-          }
-        } catch (e) { /* sem sessão válida: segue para o login abaixo */ }
-        window.__linsoraEmailJustConfirmed = true;
+          } catch (e) { /* confirmação segue válida no servidor; login manual resolve */ }
+          try {
+            funnelParams.delete('code');
+            funnelParams.delete('email_confirmed');
+            const rest = funnelParams.toString();
+            const cleanUrl = window.location.pathname + (rest ? `?${rest}` : '') + (window.location.hash || '');
+            window.history.replaceState(null, '', cleanUrl);
+          } catch (e) { /* limpeza cosmética */ }
+          try {
+            const fresh = window.supabaseRepo && window.supabaseRepo.supabase
+              ? await window.supabaseRepo.supabase.auth.getSession()
+              : null;
+            const freshSession = fresh && fresh.data ? fresh.data.session : null;
+            if (freshSession && freshSession.user) {
+              const gateConfirm = await window.supabaseRepo.checkSubscriptionAccess(freshSession.user.id);
+              if (gateConfirm.state === 'granted' || gateConfirm.state === 'unavailable') {
+                const userMeta = freshSession.user.user_metadata || {};
+                const confirmedUser = {
+                  id: freshSession.user.id,
+                  email: freshSession.user.email,
+                  name: userMeta.full_name || userMeta.name || String(freshSession.user.email || '').split('@')[0]
+                };
+                const claimConsent = await resolveGuestRecurringConsent(confirmedUser);
+                await window.linsoraStore.loadUserData(confirmedUser, { claimGuestRecurring: claimConsent });
+                window.linsoraStore.ensureCurrentWindowOccurrences();
+                renderAppUI(window.linsoraStore.state);
+                showAppMain();
+                try { renderAccountStatus(gateConfirm); } catch (e) { /* badge visual */ }
+                try { LinsoraUI.showToast('E-mail confirmado com sucesso! Bem-vindo ao Linsora.', 'success'); } catch (e) {}
+                return;
+              }
+            }
+          } catch (e) { /* sem sessão válida: segue para o login abaixo */ }
+          // Sem erro explícito, mas também sem sessão que comprove o sucesso:
+          // mensagem neutra, sem afirmar que a confirmação foi concluída.
+          window.__linsoraEmailConfirmResult = 'unverified';
+        }
       } else {
         let seenOnboarding = null;
         try { seenOnboarding = localStorage.getItem('LINSORA_SEEN_ONBOARDING'); } catch (e) { seenOnboarding = null; }
@@ -215,10 +245,21 @@ document.addEventListener('DOMContentLoaded', async () => {
     // com mensagem de sucesso.
     try {
       if (openRegisterMode && window.setAuthMode) window.setAuthMode('register');
-      else if (window.__linsoraEmailJustConfirmed) {
-        window.__linsoraEmailJustConfirmed = false;
+      else if (window.__linsoraEmailConfirmResult) {
+        const confirmResult = window.__linsoraEmailConfirmResult;
+        window.__linsoraEmailConfirmResult = null;
         if (window.setAuthMode) window.setAuthMode('login');
-        try { LinsoraUI.showToast('E-mail confirmado com sucesso! Entre com sua conta para continuar.', 'success'); } catch (e) {}
+        if (confirmResult === 'failed') {
+          // Link expirado/inválido/já utilizado: orienta o reenvio pelo
+          // fluxo existente (caixa com botão), sem chamada automática.
+          if (typeof window.showConfirmationPending === 'function') {
+            window.showConfirmationPending('O link de confirmação expirou ou já foi usado. Solicite um novo e-mail de confirmação para continuar.');
+          }
+          try { LinsoraUI.showToast('O link de confirmação expirou ou já foi usado. Solicite um novo e-mail de confirmação.', 'error'); } catch (e) {}
+        } else {
+          // Sem prova de confirmação: mensagem neutra, sem afirmar sucesso.
+          try { LinsoraUI.showToast('Se você já confirmou seu e-mail, entre com sua conta. Se ainda não conseguir entrar, solicite um novo e-mail de confirmação.', 'info'); } catch (e) {}
+        }
       }
     } catch (e) { /* modo padrão de login preservado */ }
   }
@@ -1216,6 +1257,7 @@ function setupEventListeners() {
     if (box) box.classList.remove('hidden');
   }
   window.setAuthMode = applyAuthMode;
+  window.showConfirmationPending = showConfirmationPending;
   window.resetAuthMode = function() {
     applyAuthMode('login');
   };
