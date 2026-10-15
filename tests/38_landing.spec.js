@@ -215,7 +215,7 @@ test.describe('38. Landing page do Linsora', () => {
   test('18. hero comunica o teste grátis de 24 horas', async ({ page }) => {
     const hero = await page.locator('#hero').innerText();
     expect(hero).toContain('24 horas');
-    expect(hero.toLowerCase()).toContain('gratuit');
+    expect(hero.toLowerCase()).toContain('grátis');
   });
 
   test('19. CTA principal leva à criação de conta (não exige pagamento)', async ({ page }) => {

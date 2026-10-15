@@ -13,6 +13,7 @@
   --lp-border: rgba(255, 255, 255, 0.1);
   --lp-green: #10B981;
   --lp-green-dark: #059669;
+  --lp-green-hi: #34D399;
   --lp-gold: #F59E0B;
   --lp-text: #F8FAFC;
   --lp-muted: #94A3B8;
@@ -224,6 +225,41 @@ h3 { font-size: 1.05rem; font-weight: 700; }
 .lp-card-icon { font-size: 1.6rem; margin-bottom: 10px; }
 .lp-card h3 { margin-bottom: 6px; }
 .lp-card p { margin: 0; color: var(--lp-muted); font-size: 0.93rem; }
+
+/* ---------- Destaques pontuais (marca/oferta) ----------
+   Uso restrito: nome Linsora em verde luminoso e oferta em âmbar,
+   apenas nos pontos definidos no HTML. Títulos seguem brancos. */
+.lp-hl-green { color: var(--lp-green-hi); }
+.lp-hl-gold { color: var(--lp-gold); font-weight: 700; }
+
+/* ---------- Grades específicas por seção ----------
+   Escopo por id: não altera .lp-grid-3 de outras seções (#produto intacto). */
+#beneficios .lp-grid-2 { margin-top: 16px; }
+
+@media (min-width: 760px) {
+  /* #problema: grade 2 x 2 (tablet e desktop), larguras iguais. */
+  #problema .lp-grid { grid-template-columns: repeat(2, 1fr); }
+  /* #beneficios: segunda fileira (2 cards) em grade própria de 2 colunas. */
+  #beneficios .lp-grid-2 { grid-template-columns: repeat(2, 1fr); }
+}
+
+@media (min-width: 760px) and (max-width: 1023px) {
+  /* Tablet: primeira fileira de #beneficios em 2 colunas; o card órfão
+     centraliza em largura de coluna. */
+  #beneficios .lp-grid-3 { grid-template-columns: repeat(2, 1fr); }
+  #beneficios .lp-grid-3 > :last-child:nth-child(odd) {
+    grid-column: 1 / -1;
+    width: 100%;
+    max-width: 360px;
+    margin: 0 auto;
+  }
+}
+
+@media (min-width: 1024px) {
+  /* Desktop: segunda fileira centralizada, com colunas na mesma largura
+     da primeira fileira ((688 - 16) / 2 = 336 = (1040 - 32) / 3). */
+  #beneficios .lp-grid-2 { max-width: min(688px, 100%); margin-left: auto; margin-right: auto; }
+}
 
 /* ---------- Recursos ---------- */
 .lp-features { display: grid; gap: 12px; }
