@@ -1228,8 +1228,44 @@ function setupEventListeners() {
   }
 
   const btnResendConfirmation = document.getElementById('btnResendConfirmation');
+  // Cooldown visível do reenvio: bloqueia o botão durante o prazo REAL
+  // informado pelo Supabase Auth, sem criar nova chamada de envio.
+  // Não há teto que antecipe a liberação: um limite de 180s mantém o
+  // botão bloqueado por 180s (o parser já rejeita valores absurdos).
+  let resendCooldownUntil = 0;
+  let resendCooldownTimer = null;
+  function armResendCooldown(seconds) {
+    const wait = Math.max(Math.ceil(Number(seconds) || 0), 0);
+    if (!btnResendConfirmation || wait <= 0) return;
+    resendCooldownUntil = Date.now() + wait * 1000;
+    const originalText = btnResendConfirmation.dataset.originalText || btnResendConfirmation.innerText;
+    btnResendConfirmation.dataset.originalText = originalText;
+    if (resendCooldownTimer) clearInterval(resendCooldownTimer);
+    const tick = () => {
+      const remaining = Math.ceil((resendCooldownUntil - Date.now()) / 1000);
+      if (remaining <= 0) {
+        clearInterval(resendCooldownTimer);
+        resendCooldownTimer = null;
+        btnResendConfirmation.disabled = false;
+        btnResendConfirmation.innerText = btnResendConfirmation.dataset.originalText || originalText;
+        return;
+      }
+      btnResendConfirmation.disabled = true;
+      btnResendConfirmation.innerText = 'Aguarde ' + remaining + 's para reenviar';
+    };
+    tick();
+    resendCooldownTimer = setInterval(tick, 500);
+  }
+  window.__armResendCooldown__ = armResendCooldown;
+  window.__getResendCooldownRemaining__ = () => Math.max(0, Math.ceil((resendCooldownUntil - Date.now()) / 1000));
   if (btnResendConfirmation) {
     btnResendConfirmation.onclick = async function() {
+      if (btnResendConfirmation.disabled) return;
+      if (Date.now() < resendCooldownUntil) {
+        const remaining = Math.ceil((resendCooldownUntil - Date.now()) / 1000);
+        LinsoraUI.showToast('Por segurança, aguarde ' + remaining + ' segundos antes de solicitar outro e-mail de confirmação.', 'error');
+        return;
+      }
       const email = (document.getElementById('authEmail') || {}).value || '';
       if (!email) {
         LinsoraUI.showToast('Informe seu e-mail para reenviar a confirmação.', 'error');
@@ -1239,40 +1275,52 @@ function setupEventListeners() {
       try {
         const res = await window.supabaseRepo.resendConfirmationEmail(email);
         LinsoraUI.showToast(res.message, res.success ? 'success' : 'error');
+        if (!res.success && res.rateLimited && res.retryAfterSeconds > 0) {
+          armResendCooldown(res.retryAfterSeconds);
+        }
       } catch (e) {
         LinsoraUI.showToast('Não foi possível reenviar agora. Tente novamente.', 'error');
       } finally {
-        btnResendConfirmation.disabled = false;
+        if (!resendCooldownTimer) btnResendConfirmation.disabled = false;
       }
     };
   }
 
   const authForm = document.getElementById('authForm');
+  // Guarda contra envios duplicados (duplo clique / Enter + clique): uma
+  // única chamada de signUp/signIn por vez, sem segundo envio automático.
+  let authSubmitInFlight = false;
+  window.__isAuthSubmitInFlight__ = () => authSubmitInFlight;
   if (authForm) {
     authForm.onsubmit = async function(e) {
       if (e) e.preventDefault();
+      if (authSubmitInFlight) return;
+      const btnSubmit = document.getElementById('btnSubmitAuth');
+      authSubmitInFlight = true;
+      if (btnSubmit) btnSubmit.disabled = true;
+      try {
+        const email = document.getElementById('authEmail').value;
+        const password = document.getElementById('authPassword').value;
+        const name = document.getElementById('authName').value;
+        const confirmPassword = document.getElementById('authConfirmPassword').value;
 
-      const email = document.getElementById('authEmail').value;
-      const password = document.getElementById('authPassword').value;
-      const name = document.getElementById('authName').value;
-      const confirmPassword = document.getElementById('authConfirmPassword').value;
-
-      if (!email || !password) {
-        LinsoraUI.showToast('Preencha o e-mail e a senha.', 'error');
-        return;
-      }
-
-      if (isRegisterMode) {
-        if (password !== confirmPassword) {
-          LinsoraUI.showToast('As senhas não coincidem. Digite novamente.', 'error');
+        if (!email || !password) {
+          LinsoraUI.showToast('Preencha o e-mail e a senha.', 'error');
           return;
         }
 
-        const res = await window.supabaseRepo.signUpWithEmail(name, email, password);
-        if (!res.success) {
-          LinsoraUI.showToast(res.message, 'error');
-          return;
-        }
+        if (isRegisterMode) {
+          if (password !== confirmPassword) {
+            LinsoraUI.showToast('As senhas não coincidem. Digite novamente.', 'error');
+            return;
+          }
+
+          const res = await window.supabaseRepo.signUpWithEmail(name, email, password);
+          if (!res.success) {
+            LinsoraUI.showToast(res.message, 'error');
+            if (res.rateLimited && res.retryAfterSeconds > 0) armResendCooldown(res.retryAfterSeconds);
+            return;
+          }
         // Confirmação pendente: NÃO entra no app, NÃO cria sessão local,
         // NÃO executa gate. Apenas orienta a confirmar o e-mail.
         if (res.needsConfirmation) {
@@ -1322,6 +1370,10 @@ function setupEventListeners() {
       }
 
       showAppMain();
+      } finally {
+        authSubmitInFlight = false;
+        if (btnSubmit) btnSubmit.disabled = false;
+      }
     };
   }
 

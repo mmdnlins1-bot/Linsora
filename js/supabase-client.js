@@ -799,7 +799,7 @@ class SupabaseRepository {
         if (window.LinsoraLogger) window.LinsoraLogger.auth('signInWithEmail Supabase com sucesso', { email: cleanEmail }, data.user.id);
         return { success: true, user: db.user };
       } catch (err) {
-        const errMsg = this.mapAuthErrorMessage(err.message);
+        const errMsg = this.mapAuthErrorMessage(err);
         if (window.LinsoraLogger) window.LinsoraLogger.error('Falha no signInWithEmail Supabase', errMsg);
         const lower = String((err && err.message) || '').toLowerCase();
         if (lower.includes('email not confirmed') || lower.includes('email_not_confirmed') || lower.includes('not confirmed')) {
@@ -944,9 +944,15 @@ class SupabaseRepository {
         if (window.LinsoraLogger) window.LinsoraLogger.auth('signUpWithEmail Supabase com sucesso', { email: cleanEmail }, data.user.id);
         return { success: true, user: db.user };
       } catch (err) {
-        const errMsg = this.mapAuthErrorMessage(err.message);
+        const errMsg = this.mapAuthErrorMessage(err);
         if (window.LinsoraLogger) window.LinsoraLogger.error('Falha no signUpWithEmail Supabase', errMsg);
-        return { success: false, message: errMsg };
+        const rateLimited = this.isAuthRateLimitError(err);
+        return {
+          success: false,
+          message: errMsg,
+          rateLimited,
+          retryAfterSeconds: rateLimited ? this.getAuthRateLimitWaitSeconds(err) : 0,
+        };
       }
     }
 
@@ -1010,7 +1016,13 @@ class SupabaseRepository {
         if (error) throw error;
         return { success: true, message: 'Link de redefinição enviado para o seu e-mail!' };
       } catch (err) {
-        return { success: false, message: this.mapAuthErrorMessage(err.message) };
+        const rateLimited = this.isAuthRateLimitError(err);
+        return {
+          success: false,
+          message: this.mapAuthErrorMessage(err),
+          rateLimited,
+          retryAfterSeconds: rateLimited ? this.getAuthRateLimitWaitSeconds(err) : 0,
+        };
       }
     }
     return { success: true, message: 'Solicitação de recuperação de senha enviada.' };
@@ -1035,7 +1047,13 @@ class SupabaseRepository {
         if (error) throw error;
         return { success: true, message: 'E-mail de confirmação reenviado. Verifique sua caixa de entrada.' };
       } catch (err) {
-        return { success: false, message: this.mapAuthErrorMessage(err.message) };
+        const rateLimited = this.isAuthRateLimitError(err);
+        return {
+          success: false,
+          message: this.mapAuthErrorMessage(err),
+          rateLimited,
+          retryAfterSeconds: rateLimited ? this.getAuthRateLimitWaitSeconds(err) : 0,
+        };
       }
     }
     return { success: true, message: 'E-mail de confirmação reenviado. Verifique sua caixa de entrada.' };
@@ -1088,8 +1106,66 @@ class SupabaseRepository {
     return PROD_RECOVERY_URL;
   }
 
-  mapAuthErrorMessage(msg) {
-    if (!msg) return 'Ocorreu um erro na autenticação.';
+  /**
+   * Detecta o erro de frequência (rate limit) do Supabase Auth sem expor
+   * o texto técnico em inglês ao usuário. Aceita a mensagem (string) ou o
+   * objeto de erro completo ({ message, status, code }).
+   */
+  isAuthRateLimitError(err) {
+    try {
+      if (err && typeof err === 'object') {
+        const status = Number(err.status);
+        if (status === 429) return true;
+        const code = String(err.code || '').toLowerCase();
+        if (code.includes('over_email_send_rate_limit') || code.includes('rate_limit') || code.includes('rate_limited')) return true;
+      }
+      const raw = typeof err === 'string'
+        ? err
+        : (err && (err.message || err.msg || err.error_description)) || '';
+      if (!raw) return false;
+      const lower = String(raw).toLowerCase();
+      if (lower.includes('for security purposes') && lower.includes('only request this after')) return true;
+      if (lower.includes('you can only request this after')) return true;
+      if (lower.includes('over_email_send_rate_limit')) return true;
+      return false;
+    } catch (e) { return false; }
+  }
+
+  /**
+   * Extrai os segundos restantes do erro de frequência do Supabase Auth
+   * ("...after 44 seconds."). Retorna 0 quando o formato não é o esperado
+   * — nesse caso o chamador usa a mensagem genérica em português.
+   */
+  getAuthRateLimitWaitSeconds(err) {
+    try {
+      const raw = typeof err === 'string'
+        ? err
+        : (err && (err.message || err.msg || err.error_description)) || '';
+      if (!raw) return 0;
+      const m = String(raw).match(/after\s+(\d+)\s*seconds?/i);
+      if (!m) return 0;
+      const n = Number.parseInt(m[1], 10);
+      if (!Number.isFinite(n) || n <= 0 || n > 3600) return 0;
+      return n;
+    } catch (e) { return 0; }
+  }
+
+  mapAuthErrorMessage(msgOrErr) {
+    const raw = typeof msgOrErr === 'string'
+      ? msgOrErr
+      : (msgOrErr && (msgOrErr.message || msgOrErr.msg || msgOrErr.error_description)) || '';
+    if (!raw) return 'Ocorreu um erro na autenticação.';
+    // Rate limit do Supabase Auth (ex.: signup/resend em sequência):
+    // "For security purposes, you can only request this after 44 seconds."
+    // Nunca expor o texto técnico em inglês no toast.
+    if (this.isAuthRateLimitError(msgOrErr)) {
+      const wait = this.getAuthRateLimitWaitSeconds(msgOrErr);
+      if (wait > 0) {
+        return 'Por segurança, aguarde ' + wait + ' segundos antes de solicitar outro e-mail de confirmação.';
+      }
+      return 'Por segurança, aguarde alguns instantes antes de solicitar outro e-mail de confirmação.';
+    }
+    const msg = raw;
     const lower = msg.toLowerCase();
     if (lower.includes('email not confirmed') || lower.includes('email_not_confirmed') || lower.includes('not confirmed')) {
       return 'Seu e-mail ainda não foi confirmado. Verifique sua caixa de entrada e confirme o endereço para entrar no Linsora.';
